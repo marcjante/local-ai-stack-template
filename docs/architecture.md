@@ -714,3 +714,38 @@ vale la pena documentar: si `pip install -r requirements.txt` da un
 error de "Cannot uninstall X", normalmente se puede ignorar y seguir
 adelante, comprobando después que el módulo se importa
 (`python3 -c "import jwt"`, etc.).
+
+## Novena ronda: Backup / Restore desde Settings (punto 3 del plan)
+
+Nueva sección en Settings, respaldada por `pg_dump`/`psql` directamente
+— no un formato propio inventado. El `.env` real nunca se incluye
+(puede tener secretos).
+
+- **Export** (`GET /api/settings/backup/export`): genera un `.zip` con
+  `manifest.json` (fecha + recuento de filas por tabla), `services.yaml`,
+  y `db_dump.sql` (con `--clean --if-exists`, para que restaurarlo
+  sobrescriba limpiamente en vez de duplicar filas).
+- **Import/Restore** (`POST /api/settings/backup/import`): sube el
+  `.zip`, valida que contenga `db_dump.sql`, y lo aplica con `psql`
+  sobre la base de datos actual. Opcionalmente restaura también
+  `services.yaml` (validado como YAML antes de escribir, igual que el
+  editor de Settings). **Restaurar sobrescribe la base de datos
+  actual — es lo que significa restaurar un backup**, y la interfaz
+  pide confirmación explícita antes de hacerlo.
+
+### Bug real encontrado en la propia prueba de la funcionalidad
+
+Al probar qué pasaba si alguien sube un fichero que no es un `.zip` de
+verdad, `zipfile.BadZipFile` no estaba capturado — daba un 500 genérico
+en vez de un error entendible. Corregido: ahora da 400 con
+`"el fichero subido no es un .zip válido"`.
+
+**Probado de la forma más convincente para esta función en concreto —
+una prueba destructiva real**: se creó una colección y un documento de
+verdad, se exportó el backup, se **borró el documento** (confirmando
+404), y se **restauró el backup** — el documento volvió, visible en su
+página y de nuevo encontrable por búsqueda. Es exactamente el escenario
+que motiva tener esto: algo se borra o se rompe, y hay vuelta atrás.
+También probados los dos casos de error (fichero corrupto, zip válido
+pero sin `db_dump.sql`) y que restaurar un backup sin pedir tocar
+`services.yaml` lo deja intacto.

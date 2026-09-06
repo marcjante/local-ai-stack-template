@@ -168,3 +168,10 @@ Gestor real de documentos, no solo pegar texto:
 - Subida real de PDF/DOCX/TXT/MD, con extracción de texto automática.
 - Ver chunks, reindexar sin volver a subir el fichero, borrar.
 - Test de retrieval global o acotado a un documento concreto.
+
+## Backup / Restore
+
+Desde Settings: exporta `services.yaml` + toda la base de datos en un
+`.zip` (via `pg_dump`), o restaura uno subiéndolo — pensado para el día
+que algo se rompa y necesites volver atrás. El `.env` real nunca se
+incluye.

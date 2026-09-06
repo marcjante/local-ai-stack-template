@@ -33,7 +33,7 @@ from pathlib import Path
 import psutil
 import requests
 import yaml
-from flask import Flask, jsonify, render_template, request, Response, stream_with_context, redirect
+from flask import Flask, jsonify, render_template, request, Response, stream_with_context, redirect, send_file
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
@@ -53,6 +53,7 @@ from rag.file_parsers import extract_text  # noqa: E402
 from rag.chunking import split_into_chunks  # noqa: E402
 from rag.embeddings import embed_text  # noqa: E402
 from rag.vector_store import add_chunks as vs_add_chunks  # noqa: E402
+from common.backup import export_backup, import_backup  # noqa: E402
 from common.system_checks import run_all_checks, pull_recommended_model  # noqa: E402
 from common.diagnostics import run_diagnostics  # noqa: E402
 
@@ -538,6 +539,44 @@ def settings_save_yaml():
         return jsonify({"error": f"YAML inválido: {e}"}), 400
     CONFIG_PATH.write_text(content)
     return jsonify({"saved": True})
+
+
+# --- Backup / Restore ---
+
+def _db_table_counts():
+    tables = ["tasks", "audit_log", "rag_chunks", "documents", "collections", "n8n_integrations"]
+    counts = {}
+    with get_conn() as conn, conn.cursor() as cur:
+        for t in tables:
+            try:
+                cur.execute(f"SELECT count(*) FROM {t}")
+                counts[t] = cur.fetchone()[0]
+            except Exception:
+                conn.rollback()
+                counts[t] = None
+    return counts
+
+
+@app.route("/api/settings/backup/export")
+def backup_export():
+    try:
+        zip_path = export_backup(CONFIG_PATH, _db_table_counts())
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+    return send_file(zip_path, as_attachment=True, download_name=zip_path.name)
+
+
+@app.route("/api/settings/backup/import", methods=["POST"])
+def backup_import():
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "no se ha recibido ningún fichero"}), 400
+    restore_yaml = request.form.get("restore_yaml") == "true"
+    try:
+        result = import_backup(file, restore_yaml, CONFIG_PATH)
+    except (ValueError, RuntimeError) as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(result)
 
 
 @app.route("/api/status")

@@ -32,6 +32,61 @@
   </table>
 </div>
 
+<h2 class="section-title">Backup / Restore</h2>
+<div class="card">
+  <p style="color:var(--text-muted); font-size:12px; margin-top:0;">
+    Exporta <code>services.yaml</code> + toda la base de datos (tareas, auditoría, colecciones, documentos,
+    integraciones de n8n) en un único .zip. El <code>.env</code> real nunca se incluye — puede tener secretos.
+  </p>
+  <button class="primary" id="exportBtn">Export backup</button>
+  <span id="exportStatus" style="margin-left:10px; font-size:12px; color:var(--text-muted);"></span>
+
+  <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+    <p style="color:var(--amber); font-size:12px; margin-top:0;">
+      <strong>Restaurar sobrescribe la base de datos actual.</strong> Es lo que significa "restaurar un backup" —
+      úsalo solo si es lo que quieres.
+    </p>
+    <input type="file" id="importFile" accept=".zip" style="margin-bottom:10px;">
+    <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+      <input type="checkbox" id="restoreYamlCheck"> Restaurar también <code>services.yaml</code>
+    </label>
+    <button id="importBtn" style="border-color:var(--red); color:var(--red);">Import / Restore</button>
+    <div id="importStatus" style="margin-top:10px; font-size:12px; color:var(--text-muted);"></div>
+  </div>
+</div>
+
+<script>
+document.getElementById('exportBtn').addEventListener('click', () => {
+  document.getElementById('exportStatus').textContent = 'Generando…';
+  window.location.href = '/api/settings/backup/export';
+  setTimeout(() => document.getElementById('exportStatus').textContent = '', 2000);
+});
+
+document.getElementById('importBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('importFile');
+  const status = document.getElementById('importStatus');
+  if (!fileInput.files.length) { status.textContent = 'Elige un fichero .zip primero.'; return; }
+  if (!confirm('Esto SOBRESCRIBE la base de datos actual con el contenido del backup. ¿Continuar?')) return;
+
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  fd.append('restore_yaml', document.getElementById('restoreYamlCheck').checked ? 'true' : 'false');
+  status.textContent = 'Restaurando…';
+  const res = await fetch('/api/settings/backup/import', {method: 'POST', body: fd});
+  const data = await res.json();
+  if (!res.ok) { status.textContent = 'Error: ' + data.error; status.style.color = 'var(--red)'; }
+  else {
+    let msg = 'Restaurado.';
+    if (data.manifest.created_at) msg += ` Backup de: ${data.manifest.created_at}.`;
+    if (data.restored_yaml) msg += ' services.yaml también restaurado.';
+    if (data.warnings && data.warnings.length) msg += ` (${data.warnings.length} avisos, ver consola)`;
+    status.textContent = msg;
+    status.style.color = 'var(--accent)';
+    console.log('Avisos de la restauración:', data.warnings);
+  }
+});
+</script>
+
 <script>
 document.getElementById('saveYamlBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('yamlStatus');
