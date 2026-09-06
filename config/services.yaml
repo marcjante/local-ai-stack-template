@@ -6,18 +6,34 @@
 # El orden de la lista importa: start_stack.sh arranca de arriba a abajo,
 # stop_stack.sh para de abajo a arriba. Coloca cada servicio después de
 # aquello de lo que depende (depends_on).
+#
+# health_endpoint: ruta HTTP que el dashboard comprueba con un GET real
+# (no solo si el puerto está abierto). Déjalo en null para servicios que
+# no hablan HTTP (Redis, Postgres, o los workers de RQ, que son procesos
+# sin servidor HTTP propio — su salud se ve indirectamente por la
+# profundidad de sus colas en el panel).
 
 services:
 
   - id: llm
     name: "Motor LLM local (Ollama)"
-    description: "Sirve los modelos de lenguaje locales usados por el backend y los agentes."
+    description: "Sirve los modelos de lenguaje. Nadie debería llamarlo directamente salvo llm_gateway."
     host: 127.0.0.1
     port: 11434
     health_endpoint: "/api/tags"
     start_command: "ollama serve"
     stop_command: "pkill -f 'ollama serve'"
     depends_on: []
+
+  - id: llm_gateway
+    name: "LLM Gateway"
+    description: "Único punto de acceso al LLM: limita cuántas llamadas concurrentes lo saturan."
+    host: 127.0.0.1
+    port: 8091
+    health_endpoint: "/health"
+    start_command: "python3 llm_gateway/llm_gateway.py"
+    stop_command: "pkill -f 'llm_gateway.py'"
+    depends_on: [llm]
 
   - id: vector_db
     name: "Base de datos vectorial (ChromaDB)"
@@ -31,7 +47,7 @@ services:
 
   - id: queue
     name: "Cola de tareas (Redis)"
-    description: "Cola donde el backend deja tareas y de la que los agentes las recogen para trabajar en paralelo."
+    description: "Backend de RQ: encola tareas, gestiona reintentos, backoff y jobs fallidos."
     host: 127.0.0.1
     port: 6379
     health_endpoint: null
@@ -41,7 +57,7 @@ services:
 
   - id: database
     name: "Base de datos (Postgres)"
-    description: "Persistencia de estado y resultados (tareas, historial, configuración)."
+    description: "Persistencia de tareas con estado (pending/running/completed/failed) y resultados."
     host: 127.0.0.1
     port: 5432
     health_endpoint: null
@@ -51,13 +67,13 @@ services:
 
   - id: backend_api
     name: "Backend API"
-    description: "API principal del proyecto. Orquesta el LLM, la base vectorial y reparte tareas a los agentes vía la cola."
+    description: "Autentica (API key), encola tareas en la cola especializada correcta y expone estado (SSE incluido)."
     host: 127.0.0.1
     port: 8080
     health_endpoint: "/health"
-    start_command: "python backend/main.py"
+    start_command: "python3 backend/main.py"
     stop_command: "pkill -f 'backend/main.py'"
-    depends_on: [llm, vector_db, queue, database]
+    depends_on: [llm_gateway, vector_db, queue, database]
 
   - id: automation
     name: "Automatización (n8n)"
@@ -69,43 +85,43 @@ services:
     stop_command: "pkill -f 'n8n start'"
     depends_on: []
 
-  - id: agent_1
-    name: "Agente 1"
-    description: "Worker genérico que consume tareas de la cola. Duplica este bloque para añadir más agentes."
+  - id: worker_fetch
+    name: "Worker: fetch"
+    description: "Especializado en traer datos externos (APIs, ficheros). Cola 'fetch', con reintento+backoff."
     host: 127.0.0.1
-    port: 9101
-    health_endpoint: "/health"
-    start_command: "python agents/agent_worker.py --id agent-1 --port 9101"
-    stop_command: "pkill -f 'agent_worker.py --id agent-1'"
+    port: null
+    health_endpoint: null
+    start_command: "rq worker fetch --url redis://127.0.0.1:6379/0"
+    stop_command: "pkill -f 'rq worker fetch'"
     depends_on: [queue, database]
 
-  - id: agent_2
-    name: "Agente 2"
-    description: "Segundo worker, idéntico en código al agente 1, procesando tareas en paralelo."
+  - id: worker_process
+    name: "Worker: process"
+    description: "Especializado en trabajo pesado (llama a llm_gateway, nunca a Ollama directo). Cola 'process'."
     host: 127.0.0.1
-    port: 9102
-    health_endpoint: "/health"
-    start_command: "python agents/agent_worker.py --id agent-2 --port 9102"
-    stop_command: "pkill -f 'agent_worker.py --id agent-2'"
-    depends_on: [queue, database]
+    port: null
+    health_endpoint: null
+    start_command: "rq worker process --url redis://127.0.0.1:6379/0"
+    stop_command: "pkill -f 'rq worker process'"
+    depends_on: [queue, database, llm_gateway]
 
-  - id: agent_3
-    name: "Agente 3"
-    description: "Tercer worker, idéntico en código, procesando tareas en paralelo."
+  - id: worker_notify
+    name: "Worker: notify"
+    description: "Especializado en avisar cuando algo termina (webhook, SSE). Cola 'notify', timeout corto."
     host: 127.0.0.1
-    port: 9103
-    health_endpoint: "/health"
-    start_command: "python agents/agent_worker.py --id agent-3 --port 9103"
-    stop_command: "pkill -f 'agent_worker.py --id agent-3'"
+    port: null
+    health_endpoint: null
+    start_command: "rq worker notify --url redis://127.0.0.1:6379/0"
+    stop_command: "pkill -f 'rq worker notify'"
     depends_on: [queue, database]
 
   - id: dashboard
     name: "Panel de control"
-    description: "Interfaz web que muestra el estado de todos los servicios y permite arrancarlos/pararlos."
+    description: "Comprueba salud real (HTTP) de cada servicio, muestra CPU/RAM y profundidad de colas."
     host: 127.0.0.1
     port: 8090
     health_endpoint: "/"
-    start_command: "python dashboard/dashboard_service.py"
+    start_command: "python3 dashboard/dashboard_service.py"
     stop_command: "pkill -f 'dashboard_service.py'"
     depends_on: [backend_api]
 

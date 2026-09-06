@@ -1,22 +1,30 @@
 # Arquitectura del stack
 
-Esta plantilla asume un patrón habitual en proyectos de IA local con varios
-servicios corriendo en paralelo en la misma máquina, cada uno en su puerto,
-más un panel de control que los supervisa a todos.
+Plantilla para proyectos de IA local con trabajo pesado repartido entre
+varios workers especializados, con reintentos, trazabilidad de estado,
+control de concurrencia hacia el LLM y autenticación básica.
 
-## Servicios tipo
+## Servicios
 
-| Servicio              | Puerto | Rol                                                        |
-|-----------------------|--------|-------------------------------------------------------------|
-| LLM local (Ollama)    | 11434  | Sirve los modelos de lenguaje                               |
-| Base vectorial        | 8000   | Embeddings / búsqueda semántica (RAG)                       |
-| Cola de tareas (Redis)| 6379   | Reparte tareas entre agentes, sin que se pisen entre sí     |
-| Base de datos (Postgres)| 5432 | Persiste estado y resultados                                |
-| Backend API           | 8080   | Orquesta LLM + base vectorial y encola tareas para agentes  |
-| Automatización (n8n)  | 5678   | Backups, tareas programadas, integraciones                  |
-| Agente 1 / 2 / 3      | 9101-9103 | Workers idénticos que procesan tareas de la cola en paralelo |
-| Panel de control      | 8090   | Ve el estado de todo y permite arrancar/parar               |
-| Reverse proxy (Nginx) | 80     | Punto de entrada único hacia dashboard + backend            |
+| Servicio               | Puerto | Rol                                                                 |
+|------------------------|--------|----------------------------------------------------------------------|
+| LLM local (Ollama)     | 11434  | Sirve los modelos. Nadie debería llamarlo salvo `llm_gateway`.       |
+| LLM Gateway            | 8091   | Único punto de acceso al LLM: limita llamadas concurrentes.          |
+| Base vectorial         | 8000   | Embeddings / búsqueda semántica (RAG), ver `rag/`.                   |
+| Cola (Redis + RQ)      | 6379   | Encola tareas, gestiona reintentos, backoff y jobs fallidos.         |
+| Base de datos (Postgres)| 5432  | Estado de cada tarea: pending/running/completed/failed.              |
+| Backend API            | 8080   | Autentica, encola en la cola especializada, expone estado (con SSE). |
+| Worker: fetch          | —      | Trae datos externos (APIs, ficheros). Cola `fetch`.                  |
+| Worker: process        | —      | Trabajo pesado, llama a `llm_gateway`. Cola `process`.               |
+| Worker: notify         | —      | Avisa cuando algo termina (webhook/SSE). Cola `notify`.               |
+| Automatización (n8n)   | 5678   | Backups, tareas programadas, integraciones.                          |
+| Panel de control       | 8090   | Salud real (HTTP), CPU/RAM, profundidad de colas.                    |
+| Reverse proxy (Nginx)  | 80     | Punto de entrada único hacia dashboard + backend.                    |
+
+Los workers no tienen puerto HTTP propio (son procesos `rq worker`), así
+que el panel no puede darles un "activo/parado" directo — se supervisan
+indirectamente por la profundidad de sus colas (si crece sin parar, algo
+va mal) y por los logs con `task_id` de `common/logging_setup.py`.
 
 ## Cómo se conectan
 
@@ -25,67 +33,103 @@ más un panel de control que los supervisa a todos.
                             │
                      ┌──────▼──────┐
                      │    Nginx     │  :80
-                     │ (reverse     │
-                     │   proxy)     │
                      └──────┬──────┘
                 ┌───────────┴────────────┐
                 │                        │
-        ┌───────▼────────┐      ┌────────▼────────┐
-        │ Panel de control│      │   Backend API    │  :8080
-        │    :8090        │◄─────┤ (orquesta todo)  │
-        └───────┬─────────┘      └───┬────┬────┬────┘
-                │ supervisa           │    │    │
-                │ (health-check)      │    │    │
-   ┌────────────┼──────────┬──────────┘    │    └───────────┐
-   │            │          │               │                │
-┌──▼───┐  ┌─────▼────┐ ┌───▼────┐   ┌──────▼──────┐  ┌──────▼──────┐
-│ LLM  │  │  Base    │ │Automat.│   │ Cola (Redis) │  │  Postgres    │
-│:11434│  │ vectorial│ │ (n8n)  │   │    :6379     │  │    :5432     │
-└──────┘  │  :8000   │ │ :5678  │   └──────┬───────┘  └──────▲──────┘
-          └──────────┘ └────────┘          │                 │
-                          reparte tareas ───┼─────────────────┘
-                          (BLPOP, atómico)  │  agentes guardan resultados
-                    ┌─────────────┬─────────┴───┬──────────────┐
-              ┌─────▼────┐  ┌─────▼────┐  ┌──────▼───┐
-              │ Agente 1 │  │ Agente 2 │  │ Agente 3 │  :9101-9103
-              │(worker)  │  │(worker)  │  │(worker)  │
-              └──────────┘  └──────────┘  └──────────┘
+        ┌───────▼────────┐      ┌────────▼─────────┐
+        │ Panel de control│      │   Backend API     │  :8080
+        │    :8090        │◄─────┤ (auth X-API-Key)  │
+        └───────┬─────────┘      └─┬──────┬────┬─────┘
+                │ health-check      │      │    │
+                │ HTTP real         │      │    │ encola en la
+   ┌────────────┼────────┐         │      │    │ cola correcta
+   │            │        │         │      │    ▼
+┌──▼───┐  ┌─────▼────┐ ┌─▼──────┐  │      │  ┌──────────────┐
+│Automat│ │  Base    │ │Postgres│  │      │  │ Redis (RQ)   │
+│(n8n)  │ │ vectorial│ │ :5432  │◄─┼──────┼──┤   :6379      │
+│:5678  │ │  :8000   │ │        │  │      │  └──────┬───────┘
+└───────┘ └──────────┘ └────────┘  │      │         │ BLPOP por cola
+                                    │      │  ┌──────┼──────┬─────────┐
+                              ┌─────▼──┐   │  │      │      │         │
+                              │ LLM    │   │┌─▼───┐┌─▼────┐┌▼──────┐
+                              │Gateway │◄──┼┤fetch││process││notify │
+                              │ :8091  │   │└─────┘└──┬───┘└───────┘
+                              └───┬────┘   │          │ llama al gateway,
+                                  │        │          │ nunca a Ollama directo
+                              ┌───▼────┐   │
+                              │ Ollama │◄──┘
+                              │ :11434 │
+                              └────────┘
 ```
 
-- El **backend** es el único punto que habla con el LLM y con la base
-  vectorial directamente, y también el que encola tareas en Redis.
-- Los **agentes** (agent-1/2/3) son procesos idénticos: cada uno hace
-  `BLPOP` sobre la misma cola. Redis garantiza que cada tarea la coge un
-  único agente, así que 3 agentes procesan 3 tareas en paralelo sin
-  configuración extra ni reparto manual. Para tener más agentes, duplica
-  el bloque `agent_N` en `services.yaml` y arráncalo con otro `--id`/`--port`.
-- El **panel de control** solo hace *health-checks* (comprobar si el puerto
-  responde) y lanza los `start_command` / `stop_command` definidos en
-  `config/services.yaml` — no conoce la lógica interna de cada servicio.
-- **Nginx** es opcional en desarrollo (puedes seguir usando los puertos
-  sueltos), pero es el que usarías si despliegas esto en un servidor real:
-  un único puerto público (80/443) hacia fuera.
-- La **automatización** (n8n u otro orquestador) vive aparte y se engancha
-  al backend o a los datos según las tareas programadas del proyecto.
+- El **backend** decide, por endpoint (`/enqueue/<cola>`), a qué worker
+  especializado va cada tarea. Nunca llama al LLM directamente: si necesita
+  generar algo, encola en `process`, que a su vez llama a `llm_gateway`.
+- **Redis + RQ** reemplaza el `BLPOP` manual de la versión anterior:
+  cada tarea tiene reintentos con backoff (3 intentos: 10s/30s/60s) y,
+  si los agota, RQ la deja en su *failed job registry* — no desaparece.
+- **Postgres** guarda el estado real de cada tarea (`db/schema.sql`),
+  así que "¿qué pasó con la tarea X?" tiene siempre una respuesta,
+  incluso después de reiniciar todo el stack.
+- El **LLM Gateway** es la única puerta a Ollama: un semáforo limita
+  cuántas peticiones concurrentes le llegan, así que aunque haya 10
+  tareas de `process` a la vez, Ollama no se satura.
+- El **backend** exige la cabecera `X-API-Key` en los endpoints que
+  escriben (`/enqueue/...`) o leen estado (`/tasks/...`) — cámbialo por
+  JWT si el proyecto lo necesita, el punto de enganche es
+  `require_api_key()` en `backend/main.py`.
+- El **panel de control** ya no se conforma con "el puerto está abierto":
+  para servicios HTTP hace un GET real a su `health_endpoint` y solo
+  cuenta como activo si responde. Además muestra CPU/RAM de la máquina
+  y la profundidad de las 3 colas.
 
-## Probar que los agentes trabajan en paralelo
+## Probarlo de extremo a extremo
 
-Con Redis y los 3 agentes arrancados:
+Con Redis, Postgres, el backend y al menos un worker arrancados:
 
 ```bash
-python agents/enqueue_demo_tasks.py
+# 1. Salud real (no solo "el proceso vive")
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/ready      # comprueba Redis y Postgres de verdad
+
+# 2. Sin API key falla (401)
+curl -X POST http://127.0.0.1:8080/enqueue/fetch -d '{}'
+
+# 3. Con API key, se encola y un worker la recoge
+curl -X POST http://127.0.0.1:8080/enqueue/fetch \
+  -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
+  -d '{"args": ["ejemplo.com"]}'
+
+# 4. Consultar el resultado
+curl http://127.0.0.1:8080/tasks/<task_id> -H "X-API-Key: $API_KEY"
 ```
 
-Esto mete 6 tareas de 2 segundos cada una. Con 3 agentes libres deberían
-tardar ~4 segundos en total (2 tandas), no 12 — eso confirma que se están
-repartiendo el trabajo en vez de procesarlo uno a uno.
+Esto se ha probado en real durante el desarrollo de esta plantilla: la
+tarea pasa por `pending → running → completed` en Postgres, y el log del
+worker muestra el `task_id` en cada línea.
+
+## Con Docker
+
+```bash
+cp .env.example .env    # y ajusta API_KEY, contraseñas, etc.
+docker compose up -d redis postgres          # solo infraestructura
+docker compose up -d                         # todo el stack de Python
+```
+
+Ollama, ChromaDB y Nginx se quedan fuera de `docker-compose.yml` a
+propósito (ver comentarios en el propio fichero) — añádelos si tu
+proyecto los necesita en contenedor.
 
 ## Cómo adaptar esto a un proyecto nuevo
 
-1. Edita `config/services.yaml`: cambia nombres, puertos y comandos reales.
-2. Pon el código real de cada servicio donde corresponda (`backend/`,
-   `dashboard/`, etc. — crea las carpetas que falten).
-3. No toques `dashboard_service.py` ni los scripts de `scripts/` salvo que
-   cambie la lógica de arranque/parada en sí — leen todo de `services.yaml`.
-4. Añade un `.env` (a partir de `.env.example`) con las variables propias
-   del proyecto (rutas de datos, claves de API externas, etc.).
+1. Edita `config/services.yaml` con los servicios reales.
+2. Sustituye la lógica de ejemplo en `workers/*_jobs.py` (ahora mismo
+   `fetch_task` y `notify_task` son placeholders; `process_task` sí llama
+   de verdad al `llm_gateway`).
+3. Si el proyecto necesita RAG, implementa `rag/embeddings.py`,
+   `retrieval.py`, `rerank.py` y `citations.py` — están separados a
+   propósito para poder cambiar cada pieza sin tocar las demás.
+4. Define el esquema real que necesites en `db/schema.sql` (la tabla
+   `tasks` es genérica y reutilizable, añade las tuyas al lado).
+5. No toques `dashboard_service.py` salvo que cambie la lógica de
+   arranque/parada en sí — lee todo de `services.yaml`.

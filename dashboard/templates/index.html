@@ -6,12 +6,19 @@
 <style>
   body { font-family: -apple-system, sans-serif; background:#f4f6f9; margin:0; padding:24px; }
   h1 { font-size:1.3rem; }
+  h2.section { font-size:0.85rem; text-transform:uppercase; color:#6b7480; margin:24px 0 8px; }
   .actions { margin-bottom:16px; }
   button { padding:8px 14px; border-radius:8px; border:1px solid #ccc; background:white; cursor:pointer; margin-right:8px; }
   .card { background:white; border-radius:10px; padding:14px 16px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
   .status { font-weight:700; padding:3px 10px; border-radius:12px; font-size:0.8rem; }
   .status.up { background:#e3f6e8; color:#1c8a4b; }
   .status.down { background:#fdeceb; color:#b3401f; }
+  .status.unknown { background:#f0f1f3; color:#6b7480; }
+  .check-type { font-size:0.7rem; color:#9aa1ab; margin-left:6px; }
+  .metrics-row { display:flex; gap:10px; margin-bottom:8px; }
+  .metric-card { background:white; border-radius:10px; padding:12px 16px; flex:1; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+  .metric-card .value { font-size:1.4rem; font-weight:700; }
+  .metric-card .label { font-size:0.75rem; color:#6b7480; }
 </style>
 </head>
 <body>
@@ -20,14 +27,32 @@
     <button onclick="fetch('/api/start-all',{method:'POST'}).then(()=>location.reload())">Arrancar todo</button>
     <button onclick="fetch('/api/stop-all',{method:'POST'}).then(()=>location.reload())">Parar todo</button>
   </div>
+
+  <h2 class="section">Máquina</h2>
+  <div class="metrics-row">
+    <div class="metric-card"><div class="value">{{ metrics.cpu_percent }}%</div><div class="label">CPU</div></div>
+    <div class="metric-card"><div class="value">{{ metrics.ram_percent }}%</div><div class="label">RAM</div></div>
+  </div>
+
+  {% if queues %}
+  <h2 class="section">Profundidad de colas (RQ)</h2>
+  <div class="metrics-row">
+    {% for name, depth in queues.items() %}
+    <div class="metric-card"><div class="value">{{ depth }}</div><div class="label">{{ name }}</div></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <h2 class="section">Servicios</h2>
   {% for s in services %}
   <div class="card">
     <div>
-      <strong>{{ s.name }}</strong> (puerto {{ s.port }})<br>
+      <strong>{{ s.name }}</strong>{% if s.port %} (puerto {{ s.port }}){% endif %}
+      <span class="check-type">chequeo: {{ s.check_type }}</span><br>
       <span style="color:#6b7480; font-size:0.85rem;">{{ s.description }}</span>
     </div>
     <div>
-      <span class="status {{ s.status }}">{{ 'ACTIVO' if s.status == 'up' else 'PARADO' }}</span>
+      <span class="status {{ s.status }}">{{ {'up': 'ACTIVO', 'down': 'PARADO', 'unknown': 'SIN DATO'}[s.status] }}</span>
     </div>
   </div>
   {% endfor %}

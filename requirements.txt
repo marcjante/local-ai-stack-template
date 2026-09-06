@@ -1,4 +1,7 @@
 flask>=3.0
 pyyaml>=6.0
 redis>=5.0
+rq>=1.16
 psycopg2-binary>=2.9
+requests>=2.31
+psutil>=5.9

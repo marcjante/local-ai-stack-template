@@ -15,7 +15,8 @@ import yaml
 with open("config/services.yaml") as f:
     data = yaml.safe_load(f)
 for s in data["services"]:
-    print(f" - {s['id']}: {s['name']} (puerto {s['port']})")
+    port_txt = f"puerto {s['port']}" if s.get("port") else "sin puerto propio"
+    print(f" - {s['id']}: {s['name']} ({port_txt})")
 PY
 
 echo ""

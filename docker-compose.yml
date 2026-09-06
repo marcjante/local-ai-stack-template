@@ -1,0 +1,103 @@
+# docker-compose.yml
+#
+# Redis y Postgres siempre van en contenedor: es lo que más fricción quita
+# ("instalaciones manuales" del roadmap). El resto de servicios de Python
+# (backend, dashboard, llm_gateway, workers) comparten la misma imagen
+# (ver Dockerfile) y solo cambian en el comando que ejecutan.
+#
+# Ollama, ChromaDB y Nginx no se incluyen aquí a propósito: Ollama suele
+# correr nativo para aprovechar GPU/Metal, y ChromaDB/Nginx varían mucho
+# según el proyecto — añádelos si tu caso los necesita.
+#
+# Uso:
+#   docker compose up -d redis postgres        # solo la infraestructura
+#   docker compose up -d                       # todo el stack de Python también
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-stack_template}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+
+  llm_gateway:
+    build: .
+    command: python3 llm_gateway/llm_gateway.py
+    ports:
+      - "8091:8091"
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  backend:
+    build: .
+    command: python3 backend/main.py
+    ports:
+      - "8080:8080"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: "dbname=${POSTGRES_DB:-stack_template} user=${POSTGRES_USER:-postgres} password=${POSTGRES_PASSWORD:-postgres} host=postgres port=5432"
+      LLM_GATEWAY_URL: http://llm_gateway:8091
+      API_KEY: ${API_KEY:-changeme-in-.env}
+    depends_on:
+      - redis
+      - postgres
+      - llm_gateway
+
+  worker_fetch:
+    build: .
+    command: rq worker fetch --url redis://redis:6379/0
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: "dbname=${POSTGRES_DB:-stack_template} user=${POSTGRES_USER:-postgres} password=${POSTGRES_PASSWORD:-postgres} host=postgres port=5432"
+    depends_on:
+      - redis
+      - postgres
+
+  worker_process:
+    build: .
+    command: rq worker process --url redis://redis:6379/0
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: "dbname=${POSTGRES_DB:-stack_template} user=${POSTGRES_USER:-postgres} password=${POSTGRES_PASSWORD:-postgres} host=postgres port=5432"
+      LLM_GATEWAY_URL: http://llm_gateway:8091
+    depends_on:
+      - redis
+      - postgres
+      - llm_gateway
+
+  worker_notify:
+    build: .
+    command: rq worker notify --url redis://redis:6379/0
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: "dbname=${POSTGRES_DB:-stack_template} user=${POSTGRES_USER:-postgres} password=${POSTGRES_PASSWORD:-postgres} host=postgres port=5432"
+    depends_on:
+      - redis
+      - postgres
+
+  dashboard:
+    build: .
+    command: python3 dashboard/dashboard_service.py
+    ports:
+      - "8090:8090"
+    depends_on:
+      - backend
+
+volumes:
+  redis_data:
+  postgres_data:

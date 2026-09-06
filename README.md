@@ -1,14 +1,13 @@
 # local-ai-stack-template
 
-Plantilla reutilizable para proyectos de IA local con varios servicios
-corriendo a la vez (LLM local, base de datos vectorial, backend, cola de
-tareas, base de datos, 3 agentes trabajando en paralelo, automatización y
-un reverse proxy) más un panel de control web que los supervisa a todos.
+Plantilla reutilizable para proyectos de IA local con trabajo pesado
+repartido entre workers especializados: cola con reintentos (Redis + RQ),
+estado trazable en Postgres, control de concurrencia hacia el LLM,
+autenticación básica y un panel de control con salud real (no solo
+"el puerto está abierto").
 
 No contiene lógica ni datos de ningún proyecto concreto — solo la
-infraestructura (qué servicios hay, en qué puerto, cómo arrancarlos/pararlos
-y cómo se conectan entre ellos). Pensada para clonarla como punto de partida
-de un proyecto nuevo.
+infraestructura. Pensada para clonarla como punto de partida.
 
 ## Estructura
 
@@ -16,50 +15,86 @@ de un proyecto nuevo.
 local-ai-stack-template/
 ├── config/
 │   ├── services.yaml        # inventario de servicios: nombre, puerto, comandos
-│   └── nginx.conf           # reverse proxy de ejemplo (puerto 80)
-├── agents/
-│   ├── agent_worker.py      # worker genérico (usado por agent-1/2/3 en paralelo)
-│   └── enqueue_demo_tasks.py# mete tareas de prueba en la cola Redis
+│   └── nginx.conf           # reverse proxy de ejemplo
+├── backend/
+│   └── main.py              # API: auth, encolado por tipo de tarea, /health /ready /metrics, SSE
+├── workers/
+│   ├── queue_conn.py        # conexión y colas de RQ compartidas (fetch/process/notify)
+│   ├── fetch_jobs.py        # worker especializado: traer datos externos
+│   ├── process_jobs.py      # worker especializado: trabajo pesado, llama a llm_gateway
+│   └── notify_jobs.py       # worker especializado: avisos al terminar
+├── llm_gateway/
+│   └── llm_gateway.py       # único punto de acceso a Ollama, limita concurrencia
+├── rag/
+│   ├── embeddings.py        # texto → vector
+│   ├── retrieval.py         # vector/consulta → documentos candidatos
+│   ├── rerank.py            # documentos candidatos → los N más relevantes
+│   └── citations.py         # documentos finales → formato de cita
+├── db/
+│   ├── schema.sql           # tabla tasks: pending/running/completed/failed
+│   └── db.py                # helpers de conexión y estado
+├── common/
+│   └── logging_setup.py     # logging con task_id, compartido por backend y workers
 ├── dashboard/
-│   ├── dashboard_service.py # panel de control (Flask), puerto 8090
+│   ├── dashboard_service.py # panel (Flask): salud HTTP real, CPU/RAM, profundidad de colas
 │   └── templates/index.html
 ├── scripts/
 │   ├── start_stack.sh
 │   └── stop_stack.sh
 ├── docs/
 │   └── architecture.md      # diagrama y explicación de cómo se conecta todo
+├── docker-compose.yml       # Redis + Postgres + backend + workers + dashboard
+├── Dockerfile
 ├── .env.example
 └── requirements.txt
 ```
 
-## Agentes en paralelo
-
-`agents/agent_worker.py` es un worker genérico. En `services.yaml` hay tres
-instancias (`agent_1`, `agent_2`, `agent_3`) que corren el mismo código con
-`--id` distinto, escuchando la misma cola Redis — cada tarea la procesa un
-único agente, así que se reparten el trabajo automáticamente. Para probarlo:
+## Uso rápido (sin Docker)
 
 ```bash
-python agents/enqueue_demo_tasks.py
+pip install -r requirements.txt
+cp .env.example .env    # y pon una API_KEY real
+
+redis-server --port 6379 &
+# Postgres: crea la base indicada en .env (createdb stack_template)
+
+python3 backend/main.py &
+python3 llm_gateway/llm_gateway.py &     # si tu proyecto usa LLM
+rq worker fetch --url redis://127.0.0.1:6379/0 &
+rq worker process --url redis://127.0.0.1:6379/0 &
+rq worker notify --url redis://127.0.0.1:6379/0 &
+python3 dashboard/dashboard_service.py   # http://localhost:8090
 ```
 
-Ver `docs/architecture.md` para el detalle de cómo se coordinan.
+## Uso rápido (con Docker)
 
-## Uso
+```bash
+cp .env.example .env
+docker compose up -d
+```
 
-1. Clona este repo como base de un proyecto nuevo.
-2. Edita `config/services.yaml` con los servicios reales del proyecto
-   (nombres, puertos, comandos de arranque/parada).
-3. Instala dependencias del panel de control:
-   ```
-   pip install -r requirements.txt
-   ```
-4. Arranca el panel de control:
-   ```
-   python3 dashboard/dashboard_service.py
-   ```
-   y abre `http://localhost:8090` para ver el estado de todos los servicios
-   y arrancarlos/pararlos desde ahí.
+## Probar el flujo completo
 
-Ver `docs/architecture.md` para el detalle de cómo se conectan los servicios
-entre sí y cómo adaptar la plantilla a un proyecto concreto.
+```bash
+curl -X POST http://127.0.0.1:8080/enqueue/fetch \
+  -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
+  -d '{"args": ["ejemplo.com"]}'
+# → {"task_id": "...", "queue": "fetch", "status": "pending"}
+
+curl http://127.0.0.1:8080/tasks/<task_id> -H "X-API-Key: $API_KEY"
+# → status pasa de pending a running a completed
+```
+
+Ver `docs/architecture.md` para el diagrama completo, por qué está
+separado así, y cómo adaptar la plantilla a un proyecto real.
+
+## Qué NO incluye (a propósito)
+
+- Lógica de negocio real: `workers/*_jobs.py` tienen placeholders donde
+  va el trabajo de cada proyecto.
+- RAG funcional: `rag/*.py` están separados por responsabilidad pero
+  lanzan `NotImplementedError` — cada proyecto conecta su propia base
+  vectorial y modelo de embeddings.
+- HTTPS/TLS y JWT: hay una API key simple como base; para producción
+  real, añade TLS delante (Nginx/Caddy) y valora JWT si necesitas
+  usuarios distintos con permisos distintos.
