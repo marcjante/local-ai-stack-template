@@ -136,3 +136,21 @@ def list_integrations():
     with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM n8n_integrations ORDER BY flow_name")
         return cur.fetchall()
+
+
+def list_tasks(status: str = None, limit: int = 50):
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        if status:
+            cur.execute(
+                "SELECT * FROM tasks WHERE status = %s ORDER BY created_at DESC LIMIT %s",
+                (status, limit),
+            )
+        else:
+            cur.execute("SELECT * FROM tasks ORDER BY created_at DESC LIMIT %s", (limit,))
+        return cur.fetchall()
+
+
+def task_counts_by_status():
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT status, count(*) FROM tasks GROUP BY status")
+        return dict(cur.fetchall())

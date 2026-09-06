@@ -45,30 +45,44 @@ _stats_lock = threading.Lock()
 _stats = {"in_flight": 0, "total_requests": 0, "total_rejected_timeout": 0, "by_model": {}, "by_provider": {}}
 
 
-def _call_ollama(model: str, prompt: str, timeout: float) -> str:
-    resp = requests.post(
-        f"{OLLAMA_URL}/api/generate",
-        json={"model": model, "prompt": prompt, "stream": False},
-        timeout=timeout,
-    )
+def _call_ollama(model: str, prompt: str, timeout: float, system: str = None, options: dict = None) -> dict:
+    body = {"model": model, "prompt": prompt, "stream": False}
+    if system:
+        body["system"] = system
+    if options:
+        body["options"] = options
+    resp = requests.post(f"{OLLAMA_URL}/api/generate", json=body, timeout=timeout)
     resp.raise_for_status()
-    return resp.json().get("response", "")
+    data = resp.json()
+    return {
+        "text": data.get("response", ""),
+        "eval_count": data.get("eval_count"),
+        "eval_duration_ns": data.get("eval_duration"),
+    }
 
 
-def _call_openai_compatible(model: str, prompt: str, timeout: float) -> str:
+def _call_openai_compatible(model: str, prompt: str, timeout: float, system: str = None, options: dict = None) -> dict:
     if not OPENAI_COMPAT_URL:
         raise RuntimeError("OPENAI_COMPAT_URL no configurado — pon la URL del servidor compatible con OpenAI en .env")
     headers = {"Content-Type": "application/json"}
     if OPENAI_COMPAT_API_KEY:
         headers["Authorization"] = f"Bearer {OPENAI_COMPAT_API_KEY}"
-    resp = requests.post(
-        f"{OPENAI_COMPAT_URL}/v1/chat/completions",
-        json={"model": model, "messages": [{"role": "user", "content": prompt}]},
-        headers=headers, timeout=timeout,
-    )
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+    body = {"model": model, "messages": messages}
+    if options and "temperature" in options:
+        body["temperature"] = options["temperature"]
+    resp = requests.post(f"{OPENAI_COMPAT_URL}/v1/chat/completions", json=body, headers=headers, timeout=timeout)
     resp.raise_for_status()
     data = resp.json()
-    return data["choices"][0]["message"]["content"]
+    usage = data.get("usage", {})
+    return {
+        "text": data["choices"][0]["message"]["content"],
+        "eval_count": usage.get("completion_tokens"),
+        "eval_duration_ns": None,
+    }
 
 
 PROVIDER_ADAPTERS = {
@@ -119,13 +133,21 @@ def metrics():
 
 @app.route("/generate", methods=["POST"])
 def generate():
+    import time as time_module
     payload = request.get_json(force=True) or {}
     prompt = payload.get("prompt", "")
+    system = payload.get("system")
     task_type = payload.get("task_type", "default")
 
     route = MODEL_ROUTES.get(task_type, MODEL_ROUTES["default"])
     provider = payload.get("provider") or route["provider"]
     model = payload.get("model") or route["model"]
+
+    options = {}
+    if "temperature" in payload:
+        options["temperature"] = payload["temperature"]
+    if "num_ctx" in payload:
+        options["num_ctx"] = payload["num_ctx"]
 
     adapter = PROVIDER_ADAPTERS.get(provider)
     if not adapter:
@@ -142,9 +164,17 @@ def generate():
         _stats["total_requests"] += 1
         _stats["by_model"][model] = _stats["by_model"].get(model, 0) + 1
         _stats["by_provider"][provider] = _stats["by_provider"].get(provider, 0) + 1
+    t0 = time_module.time()
     try:
-        text = adapter(model, prompt, 120)
-        return jsonify({"response": text, "_model_used": model, "_provider_used": provider, "_task_type": task_type})
+        result = adapter(model, prompt, 120, system=system, options=options or None)
+        elapsed = round(time_module.time() - t0, 3)
+        tokens = result.get("eval_count")
+        tok_per_sec = round(tokens / elapsed, 1) if tokens and elapsed > 0 else None
+        return jsonify({
+            "response": result["text"],
+            "_model_used": model, "_provider_used": provider, "_task_type": task_type,
+            "_elapsed_seconds": elapsed, "_tokens": tokens, "_tokens_per_second": tok_per_sec,
+        })
     except requests.RequestException as e:
         return jsonify({"error": f"fallo llamando al proveedor '{provider}': {e}"}), 502
     except RuntimeError as e:

@@ -133,14 +133,19 @@ separado así, y cómo adaptar la plantilla a un proyecto real.
 
 ## Panel de control: Docker, logs en vivo y proveedores de LLM
 
-- El panel (`http://localhost:8090`) puede arrancar/parar/reiniciar cada
-  servicio vía `docker compose` (si tiene `docker_service` en
-  `services.yaml` y Docker está instalado), además del modo nativo.
-- Cada servicio tiene un botón "Ver logs en vivo" (Server-Sent Events,
-  sin recargar la página).
+- El panel (`http://localhost:8090`) ya tiene interfaz propia con
+  sidebar — "Local AI Studio" — con **Dashboard** (servicios interactivos,
+  métricas por proceso, tareas con drill-down) y **Playground** (probar
+  cualquier modelo/proveedor sin escribir código) funcionando de verdad.
+  El resto de secciones (Models, Knowledge, Tasks, Plugins, Integrations,
+  Logs, Evaluation, Settings) están en la barra lateral marcadas como
+  "Próximamente".
+- Cada servicio puede arrancarse/pararse/reiniciarse vía `docker compose`
+  (si tiene `docker_service` en `services.yaml`) o de forma nativa.
+- Logs en vivo por Server-Sent Events, sin recargar la página.
 - El LLM Gateway soporta varios proveedores (`ollama`,
-  `openai_compatible`) — `GET /providers` los lista, y cada `task_type`
-  en `.env` decide cuál usar por defecto.
+  `openai_compatible`), con routing por `task_type`, y ahora acepta
+  `system`, `temperature` y `num_ctx` desde el Playground.
 
 ## Qué NO incluye (a propósito)
 

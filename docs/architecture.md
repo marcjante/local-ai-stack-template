@@ -476,3 +476,57 @@ verificada contra el fragmento exacto del documento) y contra el plugin
   usar n8n de verdad para eso, en vez de reconstruirlo.
 - Nada más queda pendiente de la tabla original de esta fase —las 6
   filas trabajables ya están cubiertas entre esta ronda y la anterior.
+
+## Quinta ronda: interfaz "Local AI Studio" — Dashboard interactivo + Playground
+
+Cambio de enfoque respecto a las rondas anteriores: en vez de más
+backend, esta ronda le pone cara a lo que ya funcionaba. El **repositorio**
+sigue llamándose `local-ai-stack-template` (sigue siendo la plantilla
+técnica reutilizable); el título dentro de la interfaz pasa a ser
+**"Local AI Studio"** — es solo el nombre que ve quien usa el panel, no
+un cambio del repo en sí.
+
+### Dashboard: de tarjetas estáticas a interactivas
+
+- Cada servicio es ahora una tarjeta desplegable. Al abrirla, pide sus
+  métricas reales de proceso (CPU, RAM, uptime) vía `psutil.Process(pid)`
+  — pero solo si el propio panel arrancó ese proceso (guarda el PID en
+  memoria al hacerlo). Si no, lo dice claramente en vez de inventar un
+  dato.
+- El contador **"Failed"** es clicable: abre la lista de tareas con ese
+  estado, con el error exacto de cada una. Nuevos endpoints en el backend:
+  `GET /tasks` (filtro por estado) y `GET /tasks/counts`. El panel lee
+  Postgres directamente para esto (como ya hacía con Redis para las
+  colas), sin pasar por la autenticación del backend — es tráfico
+  interno del propio panel, no una API pública.
+
+Probado con un fallo real (no simulado con datos falsos): encolé una
+tarea con un payload que rompe a propósito
+(`sources: "un string en vez de una lista"`), el contador de Failed subió
+a 1, y al hacer clic apareció el error exacto
+(`'str' object has no attribute 'get'`) en pantalla.
+
+### Playground: probar cualquier proyecto sin escribir una interfaz nueva
+
+Página nueva que llama de verdad al LLM Gateway: selector de
+proveedor/modelo (poblado desde `GET /providers`), system prompt, prompt,
+temperature, contexto, botón RUN. El Gateway se amplió para aceptar y
+reenviar estos parámetros a Ollama (`options: {temperature, num_ctx}`) y
+a proveedores OpenAI-compatible.
+
+Probado de extremo a extremo con Playwright real (no solo con curl):
+cargó los proveedores y modelos del gateway, se rellenó un prompt y un
+system prompt, se pulsó RUN, y la respuesta llegó con tiempo transcurrido,
+nº de tokens y tokens/segundo reales (calculados a partir de lo que
+devuelve Ollama).
+
+### Lo que queda para la siguiente tanda
+
+Del boceto de "Local AI Studio": **Models**, **Knowledge** (con test de
+retrieval visual sobre el RAG ya probado), **Tasks** (vista completa, no
+solo el resumen del dashboard), **Plugins** (usando el autodiscovery ya
+existente), **Integrations** (la tabla `n8n_integrations` ya tiene
+backend, falta la pantalla), **Logs** (vista unificada, ya existe por
+servicio), **Evaluation** (ya existe por terminal, falta la pantalla) y
+**Settings**. Aparecen en la barra lateral marcadas como "Próximamente"
+en vez de ocultarlas o fingir que ya existen.

@@ -26,6 +26,7 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -35,11 +36,22 @@ import yaml
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BASE_DIR))
+from db.db import list_tasks, task_counts_by_status  # noqa: E402
+
 CONFIG_PATH = BASE_DIR / "config" / "services.yaml"
 LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__, template_folder="templates")
+
+# PIDs de los procesos nativos que este panel ha arrancado, para poder
+# darles CPU/RAM reales (no de la máquina entera) al pulsar en la tarjeta.
+# Se pierde si el panel se reinicia — es una cache en memoria, no un
+# registro persistente; para procesos arrancados fuera del panel no hay
+# forma de saber su PID sin más información (por diseño, para no andar
+# escaneando todos los procesos del sistema por nombre).
+_started_pids = {}
 
 
 def load_services():
@@ -126,15 +138,42 @@ def docker_available() -> bool:
     return shutil.which("docker") is not None
 
 
+GATEWAY_URL = os.environ.get("LLM_GATEWAY_URL", "http://127.0.0.1:8091")
+
+
 @app.route("/")
 def index():
     services = load_services()
     statuses = [status_for(s) for s in services]
     return render_template(
-        "index.html", services=statuses, metrics=system_metrics(),
+        "dashboard.html", page="dashboard", services=statuses, metrics=system_metrics(),
         queues=queue_depths(), docker_ok=docker_available(),
-        llm_metrics=llm_gateway_metrics(),
+        llm_metrics=llm_gateway_metrics(), task_summary=task_counts_by_status(),
     )
+
+
+@app.route("/playground")
+def playground_page():
+    return render_template("playground.html", page="playground")
+
+
+@app.route("/api/playground/providers")
+def playground_providers():
+    try:
+        r = requests.get(f"{GATEWAY_URL}/providers", timeout=2)
+        return jsonify(r.json())
+    except requests.RequestException as e:
+        return jsonify({"error": f"no se pudo contactar con el LLM Gateway: {e}"}), 502
+
+
+@app.route("/api/playground/run", methods=["POST"])
+def playground_run():
+    payload = request.get_json(force=True) or {}
+    try:
+        r = requests.post(f"{GATEWAY_URL}/generate", json=payload, timeout=125)
+        return jsonify(r.json()), r.status_code
+    except requests.RequestException as e:
+        return jsonify({"error": f"no se pudo contactar con el LLM Gateway: {e}"}), 502
 
 
 @app.route("/api/status")
@@ -161,8 +200,9 @@ def start_service(service_id):
     if not svc:
         return jsonify({"error": "unknown service"}), 404
     logf = _log_file(service_id)
-    subprocess.Popen(svc["start_command"], shell=True, cwd=BASE_DIR, stdout=logf, stderr=subprocess.STDOUT)
-    return jsonify({"started": service_id})
+    proc = subprocess.Popen(svc["start_command"], shell=True, cwd=BASE_DIR, stdout=logf, stderr=subprocess.STDOUT)
+    _started_pids[service_id] = proc.pid
+    return jsonify({"started": service_id, "pid": proc.pid})
 
 
 @app.route("/api/stop/<service_id>", methods=["POST"])
@@ -172,6 +212,49 @@ def stop_service(service_id):
         return jsonify({"error": "unknown service"}), 404
     subprocess.run(svc["stop_command"], shell=True, cwd=BASE_DIR)
     return jsonify({"stopped": service_id})
+
+
+@app.route("/api/service/<service_id>/metrics")
+def service_metrics(service_id):
+    """
+    CPU/RAM/uptime del proceso concreto, si el panel lo arrancó él mismo
+    (y por tanto conoce su PID). Si no, o si ya no existe, lo dice.
+    """
+    pid = _started_pids.get(service_id)
+    if not pid:
+        return jsonify({"available": False, "reason": "este panel no arrancó este proceso (o se reinició el panel desde entonces)"})
+    try:
+        p = psutil.Process(pid)
+        with p.oneshot():
+            return jsonify({
+                "available": True,
+                "pid": pid,
+                "cpu_percent": p.cpu_percent(interval=0.2),
+                "ram_mb": round(p.memory_info().rss / (1024 * 1024), 1),
+                "uptime_seconds": round(time.time() - p.create_time()),
+                "status": p.status(),
+            })
+    except psutil.NoSuchProcess:
+        return jsonify({"available": False, "reason": "el proceso ya no existe"})
+
+
+@app.route("/api/tasks-summary")
+def tasks_summary():
+    counts = task_counts_by_status()
+    return jsonify({
+        "running": counts.get("running", 0),
+        "pending": counts.get("pending", 0),
+        "completed": counts.get("completed", 0),
+        "failed": counts.get("failed", 0),
+    })
+
+
+@app.route("/api/tasks")
+def tasks_proxy():
+    """El panel lee Postgres directamente (igual que ya hace con Redis para las colas)."""
+    status = request.args.get("status")
+    limit = int(request.args.get("limit", 20))
+    return jsonify(list_tasks(status=status, limit=limit))
 
 
 @app.route("/api/start-all", methods=["POST"])

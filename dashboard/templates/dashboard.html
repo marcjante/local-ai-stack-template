@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar">
+  <h1>Dashboard</h1>
+  <div class="health-badge"><span class="dot"></span> SYSTEM {{ 'HEALTHY' if services|selectattr('status','equalto','down')|list|length == 0 else 'DEGRADED' }}</div>
+</div>
+
+<h2 class="section-title">Máquina</h2>
+<div class="card" style="display:flex; gap:28px;">
+  <div><strong>{{ metrics.cpu_percent }}%</strong><br><span style="color:var(--text-muted); font-size:11px;">CPU</span></div>
+  <div><strong>{{ metrics.ram_percent }}%</strong><br><span style="color:var(--text-muted); font-size:11px;">RAM</span></div>
+</div>
+
+<h2 class="section-title">Tareas</h2>
+<div class="card" style="display:flex; gap:28px; cursor:pointer;" id="tasksSummaryCard">
+  <div><strong>{{ task_summary.get('running', 0) }}</strong><br><span style="color:var(--text-muted); font-size:11px;">Running</span></div>
+  <div><strong>{{ task_summary.get('pending', 0) }}</strong><br><span style="color:var(--text-muted); font-size:11px;">Queued</span></div>
+  <div id="failedCounter" data-status="failed" style="color: {{ 'var(--red)' if task_summary.get('failed', 0) > 0 else 'inherit' }};">
+    <strong>{{ task_summary.get('failed', 0) }}</strong><br><span style="color:var(--text-muted); font-size:11px;">Failed — clic para ver</span>
+  </div>
+  <div><strong>{{ task_summary.get('completed', 0) }}</strong><br><span style="color:var(--text-muted); font-size:11px;">Completed</span></div>
+</div>
+<div id="taskListPanel" style="display:none;" class="card"></div>
+
+{% if queues %}
+<h2 class="section-title">Colas (RQ)</h2>
+<div class="card" style="display:flex; gap:28px;">
+  {% for name, depth in queues.items() %}
+  <div><strong>{{ depth }}</strong><br><span style="color:var(--text-muted); font-size:11px;">{{ name }}</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if llm_metrics %}
+<h2 class="section-title">LLM Gateway</h2>
+<div class="card" style="display:flex; gap:28px; flex-wrap:wrap;">
+  <div><strong>{{ llm_metrics.in_flight }}/{{ llm_metrics.max_concurrent }}</strong><br><span style="color:var(--text-muted); font-size:11px;">en curso</span></div>
+  <div><strong>{{ llm_metrics.total_requests }}</strong><br><span style="color:var(--text-muted); font-size:11px;">peticiones</span></div>
+  <div><strong>{{ llm_metrics.total_rejected_timeout }}</strong><br><span style="color:var(--text-muted); font-size:11px;">rechazadas</span></div>
+  {% for model, count in llm_metrics.by_model.items() %}
+  <div><strong>{{ count }}</strong><br><span style="color:var(--text-muted); font-size:11px;">{{ model }}</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2 class="section-title">Servicios</h2>
+{% if not docker_ok %}
+<p style="color:var(--amber); font-size:12px;">Docker no está disponible en este sistema — los botones de Docker quedarán deshabilitados.</p>
+{% endif %}
+
+{% for s in services %}
+<div class="card service-card" data-id="{{ s.id }}">
+  <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" class="service-header">
+    <div>
+      <span class="status-dot {{ s.status }}"></span>
+      <strong>{{ s.name }}</strong>{% if s.port %} <span style="color:var(--text-muted);">:{{ s.port }}</span>{% endif %}
+    </div>
+    <span style="color:var(--text-muted); font-size:11px;">{{ s.check_type }}</span>
+  </div>
+  <div class="service-detail" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:12.5px;">
+    <p style="color:var(--text-muted); margin:0 0 10px;">{{ s.description }}</p>
+    <div class="proc-metrics" style="margin-bottom:12px; color:var(--text-muted);">cargando métricas del proceso…</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button onclick="event.stopPropagation(); nativeAction('{{ s.id }}','start')">Arrancar (nativo)</button>
+      <button onclick="event.stopPropagation(); nativeAction('{{ s.id }}','stop')">Parar (nativo)</button>
+      {% if s.docker_service %}
+      <button {{ 'disabled' if not docker_ok }} onclick="event.stopPropagation(); dockerAction('{{ s.id }}','start')">▶ Docker</button>
+      <button {{ 'disabled' if not docker_ok }} onclick="event.stopPropagation(); dockerAction('{{ s.id }}','stop')">■ Docker</button>
+      <button {{ 'disabled' if not docker_ok }} onclick="event.stopPropagation(); dockerAction('{{ s.id }}','restart')">↻ Docker</button>
+      {% endif %}
+      <button onclick="event.stopPropagation(); openLogs('{{ s.id }}','{{ s.name }}')">Logs</button>
+    </div>
+    <div id="logbox-{{ s.id }}" style="display:none; margin-top:10px; background:#010409; border-radius:8px; padding:10px; font-family:ui-monospace,monospace; font-size:11px; max-height:200px; overflow-y:auto; white-space:pre-wrap;"></div>
+  </div>
+</div>
+{% endfor %}
+
+<script>
+document.querySelectorAll('.service-header').forEach(header => {
+  header.addEventListener('click', () => {
+    const card = header.closest('.service-card');
+    const detail = card.querySelector('.service-detail');
+    const isOpen = detail.style.display !== 'none';
+    detail.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) loadServiceMetrics(card.dataset.id, detail.querySelector('.proc-metrics'));
+  });
+});
+
+function loadServiceMetrics(id, el) {
+  fetch(`/api/service/${id}/metrics`).then(r => r.json()).then(d => {
+    if (!d.available) { el.textContent = d.reason; return; }
+    el.innerHTML = `PID ${d.pid} · CPU ${d.cpu_percent}% · RAM ${d.ram_mb} MB · uptime ${d.uptime_seconds}s · ${d.status}`;
+  });
+}
+
+function nativeAction(id, action) {
+  fetch(`/api/${action}/${id}`, {method:'POST'}).then(() => setTimeout(() => location.reload(), 800));
+}
+
+function dockerAction(id, action) {
+  fetch(`/api/docker/${id}/${action}`, {method:'POST'}).then(r => r.json()).then(d => {
+    if (!d.ok) alert('Docker: ' + (d.error || d.stderr || 'fallo desconocido'));
+    else setTimeout(() => location.reload(), 1200);
+  });
+}
+
+let currentLogSource = null;
+function openLogs(id, name) {
+  const box = document.getElementById('logbox-' + id);
+  const isOpen = box.style.display !== 'none';
+  if (isOpen) { box.style.display = 'none'; if (currentLogSource) currentLogSource.close(); return; }
+  box.style.display = 'block';
+  box.textContent = '';
+  if (currentLogSource) currentLogSource.close();
+  currentLogSource = new EventSource(`/logs/${id}/stream`);
+  currentLogSource.onmessage = (e) => {
+    box.textContent += JSON.parse(e.data) + '\n';
+    box.scrollTop = box.scrollHeight;
+  };
+}
+
+document.getElementById('tasksSummaryCard').addEventListener('click', () => toggleTaskList());
+document.getElementById('failedCounter').addEventListener('click', (e) => { e.stopPropagation(); toggleTaskList('failed'); });
+
+function toggleTaskList(status) {
+  const panel = document.getElementById('taskListPanel');
+  const url = status ? `/api/tasks?status=${status}&limit=20` : `/api/tasks?limit=20`;
+  fetch(url).then(r => r.json()).then(tasks => {
+    if (tasks.length === 0) {
+      panel.innerHTML = '<p style="color:var(--text-muted); margin:0;">No hay tareas' + (status ? ' con estado ' + status : '') + '.</p>';
+    } else {
+      panel.innerHTML = tasks.map(t => `
+        <div style="padding:8px 0; border-bottom:1px solid var(--border); font-size:12.5px;">
+          <span class="status-dot ${t.status === 'failed' ? 'down' : (t.status === 'completed' ? 'up' : 'unknown')}"></span>
+          <strong>${t.queue}</strong> · ${t.id.slice(0,8)}… · ${t.status}
+          ${t.error ? '<div style="color:var(--red); margin-top:2px;">' + t.error + '</div>' : ''}
+        </div>
+      `).join('');
+    }
+    panel.style.display = 'block';
+  });
+}
+</script>
+{% endblock %}

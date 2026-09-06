@@ -24,7 +24,7 @@ import functools
 from flask import Flask, request, jsonify, Response, stream_with_context
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from db.db import init_schema, create_task, get_task, get_audit_trail, list_integrations, set_integration_enabled  # noqa: E402
+from db.db import init_schema, create_task, get_task, get_audit_trail, list_integrations, set_integration_enabled, list_tasks, task_counts_by_status  # noqa: E402
 from workers.queue_conn import DEFAULT_RETRY, redis_conn, build_queues  # noqa: E402
 from workers.plugin_loader import discover_plugins  # noqa: E402
 from rag.retrieval import index_document, retrieve  # noqa: E402
@@ -203,6 +203,25 @@ def task_status(task_id):
     if not task:
         return jsonify({"error": "tarea no encontrada"}), 404
     return jsonify(task)
+
+
+@app.route("/tasks")
+@require_api_key
+def tasks_list():
+    """
+    Lista de tareas, opcionalmente filtrada por estado
+    (?status=pending|running|completed|failed) y acotada con ?limit=N
+    (por defecto 50). Pensado para el panel — no para volúmenes grandes.
+    """
+    status = request.args.get("status")
+    limit = int(request.args.get("limit", 50))
+    return jsonify(list_tasks(status=status, limit=limit))
+
+
+@app.route("/tasks/counts")
+@require_api_key
+def tasks_counts():
+    return jsonify(task_counts_by_status())
 
 
 @app.route("/tasks/<task_id>/audit")
