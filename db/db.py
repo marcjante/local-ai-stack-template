@@ -241,6 +241,71 @@ def project_recent_errors(project_id: str, limit: int = 5):
         return cur.fetchall()
 
 
+# --- Evaluación por proyecto ---
+
+def record_evaluation_run(project_id: str, target: str, cases_file: str, summary: dict):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO evaluations (project_id, target, cases_file, total, passed, failed, pass_rate, details)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (project_id, target, cases_file, summary["total"], summary["passed"],
+             summary["failed"], summary["pass_rate"], json.dumps(summary)),
+        )
+
+
+def get_latest_evaluation(project_id: str):
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM evaluations WHERE project_id = %s ORDER BY created_at DESC LIMIT 1",
+            (project_id,),
+        )
+        return cur.fetchone()
+
+
+def list_evaluations(project_id: str, limit: int = 20):
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id, target, cases_file, total, passed, failed, pass_rate, created_at "
+            "FROM evaluations WHERE project_id = %s ORDER BY created_at DESC LIMIT %s",
+            (project_id, limit),
+        )
+        return cur.fetchall()
+
+
+# --- Permisos por proyecto ---
+
+def add_project_member(project_id: str, username: str, role: str = "viewer"):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO project_members (project_id, username, role) VALUES (%s, %s, %s)
+            ON CONFLICT (project_id, username) DO UPDATE SET role = EXCLUDED.role
+            """,
+            (project_id, username, role),
+        )
+
+
+def remove_project_member(project_id: str, username: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM project_members WHERE project_id = %s AND username = %s", (project_id, username))
+
+
+def list_project_members(project_id: str):
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM project_members WHERE project_id = %s ORDER BY added_at", (project_id,))
+        return cur.fetchall()
+
+
+def get_project_member_role(project_id: str, username: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT role FROM project_members WHERE project_id = %s AND username = %s",
+                    (project_id, username))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
 # --- Colecciones y documentos (Knowledge) ---
 
 def create_collection(collection_id: str, name: str, project_id: str = "default", description: str = None):

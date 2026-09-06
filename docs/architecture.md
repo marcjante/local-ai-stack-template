@@ -848,3 +848,74 @@ buscable con un score de relevancia real.
   en su dashboard, pero el Playground sigue usando sus propios campos
   sueltos en vez de precargar los valores del proyecto activo. Es el
   siguiente punto de conexión obvio, no construido todavía.
+
+## Undécima ronda: cerrando los 3 huecos identificados (sin más arquitectura)
+
+Tres piezas concretas, sin nada nuevo de fondo — cableado sobre lo que
+ya existía.
+
+### 1. Playground y Evaluation conectados a project_settings
+
+- **Playground**: al abrirlo, precarga el modelo, system prompt y
+  temperature del proyecto activo (`PROJECT_SETTINGS` en el JS de la
+  página, rellenado desde `get_project_settings()`). Seguir usando otro
+  modelo sigue siendo posible — es una precarga, no un bloqueo.
+- **Evaluation**: `scripts/run_evaluation.py` acepta `--project`, que
+  acota el RAG evaluado a los documentos de ESE proyecto (antes evaluaba
+  contra todo lo indexado, mezclando proyectos).
+
+Probado en real: el Playground del proyecto "baloncesto" cargó
+exactamente `llama3.1:8b` / temperature `0.7` / el system prompt de su
+plantilla. La misma evaluación (`cases_rag_example.json` contra `rag`)
+dio 0/3 al ejecutarla en el proyecto "baloncesto" (porque sus documentos
+de referencia — `doc1`/`doc2` — no existen ahí) y resultados distintos
+en "default" (donde sí existen) — la prueba más clara de que el
+aislamiento por proyecto llega hasta la evaluación.
+
+### 2. Métricas de evaluación por proyecto
+
+Tabla `evaluations` nueva: cada ejecución de `run_evaluation.py --project
+X` queda registrada (target, fichero de casos, total/passed/failed,
+pass_rate, el summary completo en JSONB). El Project Dashboard ya
+muestra el "%" real de la última ejecución (no un placeholder) más un
+histórico de las últimas 10.
+
+Probado en real: dos ejecuciones de la misma evaluación contra dos
+proyectos distintos quedaron registradas por separado en la tabla,
+correctamente atribuidas a cada `project_id`.
+
+### 3. Permisos por proyecto (alcance real, no genérico)
+
+**Importante — dónde vive y dónde no**: esto se implementó en el
+**backend** (que ya tenía JWT), no en el panel. El panel (Dashboard,
+Knowledge, Playground...) sigue siendo una herramienta de un solo
+usuario local, sin login — añadirle autenticación es una pieza de
+diseño nueva de verdad, y se deja fuera a propósito, dicho con
+claridad, no escondido.
+
+Lo que sí hay: tabla `project_members` (project_id, username, role —
+admin/editor/viewer) y un decorador `require_project_role()` en
+`backend/auth.py`. Un rol global `admin` en el JWT sigue siendo
+superusuario (pasa siempre); cualquier otro usuario necesita estar en
+`project_members` con el rol suficiente para ese proyecto concreto.
+Aplicado a un endpoint nuevo, `POST /projects/<id>/enqueue/<cola>`
+(alternativa a `/enqueue/<cola>` protegida por proyecto en vez de por
+API key global), y a la gestión de miembros
+(`GET/POST /projects/<id>/members`, `DELETE .../members/<username>`).
+
+**Probado de extremo a extremo, la jerarquía completa**:
+- Usuario sin membresía → 403 con mensaje claro.
+- Añadido como `editor` por un admin global → puede encolar.
+- Un `viewer` → no puede encolar (403), sí puede listar miembros, no
+  puede añadir miembros (eso exige `admin` del proyecto).
+
+Durante la prueba se detectó (y no era un bug del código, sino de mi
+propio método de prueba) que las variables de shell con tokens no
+persisten entre llamadas de terminal separadas — hay que generar y usar
+el token dentro de la misma sesión de shell, algo a tener en cuenta si
+alguien reproduce estas pruebas.
+
+Con esto, los tres huecos señalados quedan cerrados. Las líneas
+"pendiente" que siguen abiertas de rondas anteriores (Qdrant real,
+constructor visual, login del panel) siguen igual — no se ha tocado
+ninguna en esta ronda.

@@ -9,8 +9,20 @@
   <div><strong style="font-size:22px;">{{ n_documents }}</strong> / {{ n_chunks }}<br><span style="color:var(--text-muted); font-size:11px;">documentos / chunks indexados</span></div>
   <div><strong style="font-size:22px;">{{ task_counts.values() | sum }}</strong><br><span style="color:var(--text-muted); font-size:11px;">tareas ejecutadas ({{ task_counts.get('completed', 0) }} ok, {{ task_counts.get('failed', 0) }} fallidas)</span></div>
   <div><strong style="font-size:22px;">{{ settings.default_model }}</strong><br><span style="color:var(--text-muted); font-size:11px;">modelo activo</span></div>
-  <div><strong style="font-size:22px;">—</strong><br><span style="color:var(--text-muted); font-size:11px;">calidad de evaluación (ejecuta una en Evaluation)</span></div>
+  <div><strong style="font-size:22px;">{{ (latest_eval.pass_rate * 100) | round | int if latest_eval else '—' }}{{ '%' if latest_eval }}</strong><br><span style="color:var(--text-muted); font-size:11px;">calidad de evaluación {{ '(' + latest_eval.target + ', ' + latest_eval.created_at.strftime('%d/%m %H:%M') + ')' if latest_eval else '(ejecuta una en Evaluation)' }}</span></div>
 </div>
+
+{% if eval_history %}
+<h2 class="section-title">Histórico de evaluaciones</h2>
+<div class="card">
+  {% for e in eval_history %}
+  <div style="display:flex; justify-content:space-between; padding:6px 0; {{ 'border-top:1px solid var(--border);' if not loop.first }} font-size:12.5px;">
+    <span>{{ e.target }} · {{ e.cases_file }}</span>
+    <span>{{ e.passed }}/{{ e.total }} ({{ (e.pass_rate*100) | round | int }}%) · {{ e.created_at.strftime('%d/%m %H:%M') }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 
 <h2 class="section-title">Errores recientes</h2>
 <div class="card">

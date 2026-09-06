@@ -69,3 +69,50 @@ def require_role(*allowed_roles):
             return fn(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def require_project_role(*allowed_roles):
+    """
+    Como require_role, pero además exige un rol PARA EL PROYECTO concreto
+    de la URL (espera un argumento de ruta `project_id`). Un rol global
+    'admin' siempre pasa (superusuario) — para cualquier otro rol global,
+    hace falta estar en project_members con uno de los roles permitidos.
+
+    Jerarquía dentro de un proyecto: admin > editor > viewer. Si pides
+    'editor', un miembro 'admin' de ese proyecto también vale.
+    """
+    from db.db import get_project_member_role
+
+    _rank = {"viewer": 0, "editor": 1, "admin": 2}
+    min_rank = min(_rank[r] for r in allowed_roles) if allowed_roles else 0
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            header = request.headers.get("Authorization", "")
+            if not header.startswith("Bearer "):
+                return jsonify({"error": "falta cabecera Authorization: Bearer <token>"}), 401
+            token = header.removeprefix("Bearer ").strip()
+            try:
+                claims = decode_token(token)
+            except jwt.ExpiredSignatureError:
+                return jsonify({"error": "token expirado"}), 401
+            except jwt.InvalidTokenError as e:
+                return jsonify({"error": f"token inválido: {e}"}), 401
+
+            if claims.get("role") == "admin":
+                request.jwt_claims = claims
+                return fn(*args, **kwargs)
+
+            project_id = kwargs.get("project_id")
+            member_role = get_project_member_role(project_id, claims.get("sub"))
+            if member_role is None or _rank.get(member_role, -1) < min_rank:
+                return jsonify({
+                    "error": f"sin permiso suficiente en el proyecto '{project_id}' "
+                             f"(tienes: {member_role or 'ninguno'}, hace falta al menos: {allowed_roles})"
+                }), 403
+
+            request.jwt_claims = claims
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator

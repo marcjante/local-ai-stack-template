@@ -191,3 +191,14 @@ como a través de la interfaz real.
 
 Toda instalación previa a esta función queda automáticamente asignada al
 proyecto `default` al actualizar — no se pierde nada.
+
+## Playground/Evaluation por proyecto y permisos
+
+- Playground y Evaluation ya leen `project_settings` del proyecto
+  activo (modelo, prompt, temperature) y acotan el RAG evaluado a ese
+  proyecto.
+- El Project Dashboard muestra la calidad real de la última evaluación
+  y su histórico.
+- Permisos por proyecto (`project_members`: admin/editor/viewer),
+  aplicados en el **backend** vía `require_project_role()` — el panel
+  sigue sin login, eso queda fuera a propósito.

@@ -56,7 +56,7 @@ from rag.vector_store import add_chunks as vs_add_chunks  # noqa: E402
 from common.backup import export_backup, import_backup  # noqa: E402
 from db.db import (  # noqa: E402
     create_project, list_projects, get_project, get_project_settings,
-    update_project_settings, project_recent_errors,
+    update_project_settings, project_recent_errors, list_evaluations, get_latest_evaluation,
 )
 
 from common.system_checks import run_all_checks, pull_recommended_model  # noqa: E402
@@ -141,9 +141,11 @@ def project_dashboard_page(project_id):
     n_chunks = sum(d["n_chunks"] for d in docs)
     task_counts = task_counts_by_status(project_id=project_id)
     errors = project_recent_errors(project_id)
+    latest_eval = get_latest_evaluation(project_id)
     return render_template(
         "project_dashboard.html", page="project_dashboard", project=project, settings=settings,
         n_documents=len(docs), n_chunks=n_chunks, task_counts=task_counts, recent_errors=errors,
+        latest_eval=latest_eval, eval_history=list_evaluations(project_id, limit=10),
     )
 
 
@@ -359,7 +361,9 @@ def diagnostics_start_worker(queue_name):
 
 @app.route("/playground")
 def playground_page():
-    return render_template("playground.html", page="playground")
+    project_id = current_project_id()
+    return render_template("playground.html", page="playground",
+                            project=get_project(project_id), project_settings=get_project_settings(project_id))
 
 
 @app.route("/api/playground/providers")
@@ -596,10 +600,13 @@ def logs_view_page():
 
 @app.route("/evaluation")
 def evaluation_page():
+    project_id = current_project_id()
     eval_dir = BASE_DIR / "evaluation"
     case_files = sorted(f.name for f in eval_dir.glob("*.json")) if eval_dir.exists() else []
     plugin_names = list(discover_plugins().keys())
-    return render_template("evaluation.html", page="evaluation", case_files=case_files, plugin_names=plugin_names)
+    return render_template("evaluation.html", page="evaluation", case_files=case_files,
+                            plugin_names=plugin_names, project=get_project(project_id),
+                            history=list_evaluations(project_id))
 
 
 @app.route("/api/evaluation/run", methods=["POST"])
@@ -615,7 +622,8 @@ def evaluation_run():
         return jsonify({"error": "fichero de casos no encontrado"}), 404
 
     result = subprocess.run(
-        ["python3", "scripts/run_evaluation.py", "--cases", str(cases_path), "--target", target],
+        ["python3", "scripts/run_evaluation.py", "--cases", str(cases_path), "--target", target,
+         "--project", current_project_id()],
         cwd=BASE_DIR, capture_output=True, text=True, timeout=120,
     )
     return jsonify({"returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr})

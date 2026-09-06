@@ -2,7 +2,8 @@
 {% block content %}
 <div class="topbar">
   <h1>Playground</h1>
-  <div>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <span style="font-size:11.5px; color:var(--text-muted);">proyecto: <strong>{{ project.name }}</strong></span>
     <button id="tabSingle" onclick="showTab('single')">Single</button>
     <button id="tabCompare" onclick="showTab('compare')">Compare</button>
   </div>
@@ -87,6 +88,12 @@
 </div>
 
 <script>
+const PROJECT_SETTINGS = {
+  default_model: {{ (project_settings.default_model or '') | tojson }},
+  system_prompt: {{ (project_settings.system_prompt or '') | tojson }},
+  temperature: {{ project_settings.temperature or 0.4 }},
+};
+
 function showTab(tab) {
   document.getElementById('singleView').style.display = tab === 'single' ? 'block' : 'none';
   document.getElementById('compareView').style.display = tab === 'compare' ? 'block' : 'none';
@@ -111,6 +118,15 @@ async function loadProviders() {
   document.getElementById('modelA').innerHTML = modelOpts;
   document.getElementById('providerB').innerHTML = providerOpts;
   document.getElementById('modelB').innerHTML = modelOpts;
+
+  // Precargar los valores del PROYECTO ACTIVO — así seleccionar un
+  // proyecto usa automáticamente su modelo/prompt/temperature, sin
+  // tener que rellenarlo a mano cada vez.
+  if (PROJECT_SETTINGS.default_model && modelOptions.has(PROJECT_SETTINGS.default_model)) {
+    document.getElementById('model').value = PROJECT_SETTINGS.default_model;
+  }
+  document.getElementById('systemPrompt').value = PROJECT_SETTINGS.system_prompt || '';
+  document.getElementById('temperature').value = PROJECT_SETTINGS.temperature;
 }
 
 document.getElementById('runBtn').addEventListener('click', async () => {

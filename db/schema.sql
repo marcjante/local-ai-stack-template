@@ -172,6 +172,24 @@ CREATE TABLE IF NOT EXISTS n8n_integrations (
 );
 
 ALTER TABLE n8n_integrations ADD COLUMN IF NOT EXISTS project_id TEXT NOT NULL DEFAULT 'default';
+
+-- Histórico de ejecuciones de evaluación por proyecto: no solo "se
+-- ejecutó", sino qué calidad dio y cuándo — para que el Project
+-- Dashboard pueda mostrar una tendencia real, no solo el último número.
+CREATE TABLE IF NOT EXISTS evaluations (
+    id          SERIAL PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    target      TEXT NOT NULL,        -- 'rag' o 'plugin:<nombre>'
+    cases_file  TEXT NOT NULL,
+    total       INTEGER NOT NULL,
+    passed      INTEGER NOT NULL,
+    failed      INTEGER NOT NULL,
+    pass_rate   REAL NOT NULL,
+    details     JSONB,                -- el summary completo de run_suite()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_evaluations_project ON evaluations (project_id, created_at DESC);
 DO $$
 BEGIN
     IF EXISTS (
@@ -182,3 +200,16 @@ BEGIN
         ALTER TABLE n8n_integrations ADD PRIMARY KEY (project_id, flow_name);
     END IF;
 END $$;
+
+-- Permisos por proyecto: quién puede hacer qué en cada proyecto. Vive en
+-- el BACKEND (que ya tiene JWT), no en el panel — el panel sigue siendo
+-- una herramienta de un solo usuario local, sin login; extender el login
+-- al propio panel es una pieza de diseño nueva, no un cableado, y queda
+-- fuera de esta ronda a propósito.
+CREATE TABLE IF NOT EXISTS project_members (
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    username    TEXT NOT NULL,        -- el 'sub' del JWT
+    role        TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'editor', 'viewer')),
+    added_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (project_id, username)
+);

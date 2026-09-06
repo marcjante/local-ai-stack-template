@@ -30,7 +30,8 @@ from workers.plugin_loader import discover_plugins  # noqa: E402
 from rag.retrieval import index_document, retrieve  # noqa: E402
 from rag.rerank import rerank  # noqa: E402
 from rag.citations import format_citations  # noqa: E402
-from backend.auth import issue_token, require_role  # noqa: E402
+from backend.auth import issue_token, require_role, require_project_role  # noqa: E402
+from db.db import add_project_member, remove_project_member, list_project_members  # noqa: E402
 
 # Descubrimiento de workers: cualquier fichero en workers/plugins/ con
 # QUEUE_NAME + handle() aparece aquí automáticamente, sin tocar este
@@ -167,6 +168,46 @@ def enqueue(queue_name):
     payload = request.get_json(force=True) or {}
     result, status = _do_enqueue(queue_name, payload)
     return jsonify(result), status
+
+
+@app.route("/projects/<project_id>/enqueue/<queue_name>", methods=["POST"])
+@require_project_role("editor", "admin")
+def project_scoped_enqueue(project_id, queue_name):
+    """
+    Igual que /enqueue/<queue_name>, pero protegido con permisos POR
+    PROYECTO en vez de la API key global: hace falta ser al menos
+    'editor' de este proyecto concreto (o admin global) para encolar
+    tareas en él.
+    """
+    payload = request.get_json(force=True) or {}
+    payload["project_id"] = project_id
+    result, status = _do_enqueue(queue_name, payload)
+    return jsonify(result), status
+
+
+@app.route("/projects/<project_id>/members", methods=["GET"])
+@require_project_role("viewer", "editor", "admin")
+def project_members_list(project_id):
+    return jsonify(list_project_members(project_id))
+
+
+@app.route("/projects/<project_id>/members", methods=["POST"])
+@require_project_role("admin")
+def project_members_add(project_id):
+    payload = request.get_json(force=True) or {}
+    username = payload.get("username")
+    role = payload.get("role", "viewer")
+    if not username or role not in ("admin", "editor", "viewer"):
+        return jsonify({"error": "username obligatorio, role debe ser admin/editor/viewer"}), 400
+    add_project_member(project_id, username, role)
+    return jsonify({"project_id": project_id, "username": username, "role": role}), 201
+
+
+@app.route("/projects/<project_id>/members/<username>", methods=["DELETE"])
+@require_project_role("admin")
+def project_members_remove(project_id, username):
+    remove_project_member(project_id, username)
+    return jsonify({"removed": username})
 
 
 @app.route("/webhooks/n8n/<queue_name>", methods=["POST"])

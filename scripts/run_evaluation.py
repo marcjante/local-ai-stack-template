@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from common.evaluation import run_suite  # noqa: E402
 
 
-def make_rag_handler():
+def make_rag_handler(project_id: str = None):
     from rag.retrieval import retrieve
     from rag.rerank import rerank
     from rag.citations import format_citations
@@ -38,7 +38,7 @@ def make_rag_handler():
     def handler(input_data):
         query = input_data["query"]
         top_k = input_data.get("top_k", 5)
-        candidates = retrieve(query, top_k=20)
+        candidates = retrieve(query, top_k=20, project_id=project_id)
         top = rerank(query, candidates, top_n=top_k)
         return {"results": format_citations(top)}
 
@@ -59,13 +59,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cases", required=True, help="Fichero JSON con la lista de casos")
     parser.add_argument("--target", required=True, help="'rag' o 'plugin:<nombre>'")
+    parser.add_argument("--project", default=None, help="project_id para acotar el RAG y registrar el resultado (opcional)")
     args = parser.parse_args()
 
     with open(args.cases, encoding="utf-8") as f:
         cases = json.load(f)
 
     if args.target == "rag":
-        handler = make_rag_handler()
+        handler = make_rag_handler(project_id=args.project)
     elif args.target.startswith("plugin:"):
         handler = make_plugin_handler(args.target.split(":", 1)[1])
     else:
@@ -83,6 +84,11 @@ def main():
         for c in r.get("checks", []):
             if not c["passed"]:
                 print(f"        falló: {c}")
+
+    if args.project:
+        from db.db import record_evaluation_run
+        record_evaluation_run(args.project, args.target, Path(args.cases).name, summary)
+        print(f"\n(resultado guardado para el proyecto '{args.project}')")
 
     sys.exit(0 if summary["failed"] == 0 else 1)
 
