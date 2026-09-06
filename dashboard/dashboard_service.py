@@ -38,6 +38,13 @@ from flask import Flask, jsonify, render_template, request, Response, stream_wit
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 from db.db import list_tasks, task_counts_by_status  # noqa: E402
+sys.path.insert(0, str(BASE_DIR))
+from db.db import list_integrations, set_integration_enabled, get_audit_trail  # noqa: E402
+from workers.plugin_loader import discover_plugins  # noqa: E402
+from rag.retrieval import index_document, retrieve  # noqa: E402
+from rag.rerank import rerank  # noqa: E402
+from rag.citations import format_citations  # noqa: E402
+from db.db import get_conn  # noqa: E402
 
 CONFIG_PATH = BASE_DIR / "config" / "services.yaml"
 LOGS_DIR = BASE_DIR / "logs"
@@ -174,6 +181,165 @@ def playground_run():
         return jsonify(r.json()), r.status_code
     except requests.RequestException as e:
         return jsonify({"error": f"no se pudo contactar con el LLM Gateway: {e}"}), 502
+
+
+# --- Knowledge (RAG) ---
+
+@app.route("/knowledge")
+def knowledge_page():
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT doc_id, doc_version, count(*) as n_chunks, max(created_at) as indexed_at
+            FROM rag_chunks GROUP BY doc_id, doc_version ORDER BY indexed_at DESC
+        """)
+        docs = [{"doc_id": r[0], "doc_version": r[1], "n_chunks": r[2], "indexed_at": str(r[3])} for r in cur.fetchall()]
+    return render_template("knowledge.html", page="knowledge", docs=docs)
+
+
+@app.route("/api/knowledge/index", methods=["POST"])
+def knowledge_index():
+    payload = request.get_json(force=True) or {}
+    doc_id = payload.get("doc_id", "").strip()
+    text = payload.get("text", "").strip()
+    doc_version = payload.get("doc_version", "v1").strip() or "v1"
+    if not doc_id or not text:
+        return jsonify({"error": "doc_id y text son obligatorios"}), 400
+    n_chunks = index_document(doc_id, text, doc_version=doc_version)
+    return jsonify({"doc_id": doc_id, "doc_version": doc_version, "n_chunks": n_chunks})
+
+
+@app.route("/api/knowledge/search")
+def knowledge_search():
+    query = request.args.get("q", "")
+    top_k = int(request.args.get("top_k", 5))
+    if not query:
+        return jsonify({"error": "falta ?q="}), 400
+    candidates = retrieve(query, top_k=20)
+    top = rerank(query, candidates, top_n=top_k)
+    return jsonify(format_citations(top))
+
+
+# --- Plugins ---
+
+@app.route("/plugins")
+def plugins_page():
+    registry = discover_plugins()
+    active_queues = set()
+    try:
+        from rq import Worker
+        from redis import Redis
+        r = Redis(host="127.0.0.1", port=6379, socket_connect_timeout=0.5)
+        for w in Worker.all(connection=r):
+            active_queues.update(q.name for q in w.queues)
+    except Exception:
+        pass
+    plugins = [
+        {"name": name, "module": info["module_name"], "timeout": info["timeout"], "has_worker": name in active_queues}
+        for name, info in registry.items()
+    ]
+    return render_template("plugins.html", page="plugins", plugins=plugins)
+
+
+# --- Integrations (n8n) ---
+
+@app.route("/integrations")
+def integrations_page():
+    return render_template("integrations.html", page="integrations", integrations=list_integrations())
+
+
+@app.route("/api/integrations/<flow_name>/<action>", methods=["POST"])
+def integrations_toggle(flow_name, action):
+    if action not in ("enable", "disable"):
+        return jsonify({"error": "accion invalida"}), 400
+    set_integration_enabled(flow_name, action == "enable")
+    return jsonify({"flow_name": flow_name, "enabled": action == "enable"})
+
+
+# --- Tasks (vista completa) ---
+
+@app.route("/tasks-view")
+def tasks_view_page():
+    status = request.args.get("status")
+    tasks = list_tasks(status=status, limit=100)
+    return render_template("tasks.html", page="tasks", tasks=tasks, status_filter=status, counts=task_counts_by_status())
+
+
+@app.route("/api/tasks/<task_id>/audit")
+def task_audit_proxy(task_id):
+    return jsonify(get_audit_trail(task_id))
+
+
+# --- Logs unificados ---
+
+@app.route("/logs-view")
+def logs_view_page():
+    services = load_services()
+    return render_template("logs.html", page="logs", services=services)
+
+
+# --- Evaluation ---
+
+@app.route("/evaluation")
+def evaluation_page():
+    eval_dir = BASE_DIR / "evaluation"
+    case_files = sorted(f.name for f in eval_dir.glob("*.json")) if eval_dir.exists() else []
+    plugin_names = list(discover_plugins().keys())
+    return render_template("evaluation.html", page="evaluation", case_files=case_files, plugin_names=plugin_names)
+
+
+@app.route("/api/evaluation/run", methods=["POST"])
+def evaluation_run():
+    payload = request.get_json(force=True) or {}
+    cases_file = payload.get("cases_file")
+    target = payload.get("target")
+    if not cases_file or not target:
+        return jsonify({"error": "cases_file y target son obligatorios"}), 400
+
+    cases_path = BASE_DIR / "evaluation" / cases_file
+    if not cases_path.exists() or cases_path.parent != (BASE_DIR / "evaluation"):
+        return jsonify({"error": "fichero de casos no encontrado"}), 404
+
+    result = subprocess.run(
+        ["python3", "scripts/run_evaluation.py", "--cases", str(cases_path), "--target", target],
+        cwd=BASE_DIR, capture_output=True, text=True, timeout=120,
+    )
+    return jsonify({"returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
+
+
+# --- Settings ---
+
+@app.route("/settings")
+def settings_page():
+    services = load_services()
+    env_example_path = BASE_DIR / ".env.example"
+    env_vars = []
+    if env_example_path.exists():
+        for line in env_example_path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, default = line.partition("=")
+                env_vars.append({"key": key, "default": default})
+    yaml_content = CONFIG_PATH.read_text() if CONFIG_PATH.exists() else ""
+    return render_template("settings.html", page="settings", services=services, env_vars=env_vars, yaml_content=yaml_content)
+
+
+@app.route("/api/settings/services-yaml", methods=["POST"])
+def settings_save_yaml():
+    """
+    Guarda config/services.yaml editado desde la interfaz. Valida que sea
+    YAML válido antes de escribir, para no dejar el fichero roto y tumbar
+    el panel en el siguiente arranque.
+    """
+    payload = request.get_json(force=True) or {}
+    content = payload.get("content", "")
+    try:
+        parsed = yaml.safe_load(content)
+        if not isinstance(parsed, dict) or "services" not in parsed:
+            return jsonify({"error": "el YAML es válido pero no tiene la forma esperada (falta la clave 'services')"}), 400
+    except yaml.YAMLError as e:
+        return jsonify({"error": f"YAML inválido: {e}"}), 400
+    CONFIG_PATH.write_text(content)
+    return jsonify({"saved": True})
 
 
 @app.route("/api/status")

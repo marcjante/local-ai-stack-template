@@ -72,13 +72,13 @@
   <a href="/" class="{{ 'active' if page == 'dashboard' }}">Dashboard</a>
   <a href="/playground" class="{{ 'active' if page == 'playground' }}">Playground</a>
   <a class="disabled" title="Próximamente">Models</a>
-  <a class="disabled" title="Próximamente">Knowledge</a>
-  <a class="disabled" title="Próximamente">Tasks</a>
-  <a class="disabled" title="Próximamente">Plugins</a>
-  <a class="disabled" title="Próximamente">Integrations</a>
-  <a class="disabled" title="Próximamente">Logs</a>
-  <a class="disabled" title="Próximamente">Evaluation</a>
-  <a class="disabled" title="Próximamente">Settings</a>
+  <a href="/knowledge" class="{{ 'active' if page == 'knowledge' }}">Knowledge</a>
+  <a href="/tasks-view" class="{{ 'active' if page == 'tasks' }}">Tasks</a>
+  <a href="/plugins" class="{{ 'active' if page == 'plugins' }}">Plugins</a>
+  <a href="/integrations" class="{{ 'active' if page == 'integrations' }}">Integrations</a>
+  <a href="/logs-view" class="{{ 'active' if page == 'logs' }}">Logs</a>
+  <a href="/evaluation" class="{{ 'active' if page == 'evaluation' }}">Evaluation</a>
+  <a href="/settings" class="{{ 'active' if page == 'settings' }}">Settings</a>
 </nav>
 <main>
   {% block content %}{% endblock %}

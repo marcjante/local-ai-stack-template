@@ -530,3 +530,38 @@ backend, falta la pantalla), **Logs** (vista unificada, ya existe por
 servicio), **Evaluation** (ya existe por terminal, falta la pantalla) y
 **Settings**. Aparecen en la barra lateral marcadas como "Próximamente"
 en vez de ocultarlas o fingir que ya existen.
+
+## Sexta ronda: las 7 secciones restantes de "Local AI Studio"
+
+Completa el boceto de interfaz: todas las secciones de la barra lateral
+ya funcionan (salvo Models, que sigue sin backend real detrás porque no
+hay más "modelo" que gestionar que lo que ya expone el LLM Gateway).
+
+- **Knowledge** — indexar texto y probar retrieval visualmente contra el
+  RAG real. Probado: indexé un documento desde el formulario, lo
+  encontré con una búsqueda, con su cita exacta y su score.
+- **Plugins** — lista automática vía `workers/plugin_loader.discover_plugins()`,
+  con un indicador de si hay un worker de verdad escuchando esa cola
+  ahora mismo (consultando `Worker.all()` de RQ). Probado: los 3 plugins
+  reales aparecen solos.
+- **Integrations** — pantalla sobre la tabla `n8n_integrations` ya
+  existente. Probado: desactivar un flujo cambia el botón a "Activar" al
+  momento.
+- **Tasks** — vista completa con filtro por estado y traza de auditoría
+  desplegable por tarea. Probado con una tarea y su paso de auditoría
+  reales.
+- **Logs** — todos los servicios en una sola pantalla, cada línea
+  etiquetada con su servicio y coloreada. Probado con una línea real
+  añadida a un fichero de log mientras la página estaba abierta.
+- **Evaluation** — envoltorio visual sobre `scripts/run_evaluation.py`
+  (lo ejecuta de verdad, no simula el resultado). Probado: 3/3 casos
+  reales contra el RAG, desde el botón de la interfaz.
+- **Settings** — editor de `config/services.yaml` con validación (YAML
+  inválido, o válido pero sin la forma esperada, ambos rechazados con
+  mensaje claro antes de escribir nada). Las variables de entorno se
+  muestran solo desde `.env.example` — el panel **nunca** lee ni enseña
+  el `.env` real, para no arriesgarse a mostrar un secreto en pantalla.
+
+Con esto, las 8 secciones del boceto original de "Local AI Studio" están
+todas construidas salvo "Models" (que no tiene más contenido real que
+mostrar del que ya da `/providers` del Gateway, visible desde Playground).

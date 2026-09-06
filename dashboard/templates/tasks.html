@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>Tasks</h1></div>
+
+<div class="card" style="display:flex; gap:10px; margin-bottom:14px;">
+  <a href="/tasks-view" style="padding:6px 12px; border-radius:6px; {{ 'background:var(--accent-dim); color:#05230c; font-weight:700;' if not status_filter }}">Todas ({{ counts.values()|sum }})</a>
+  {% for st in ['pending', 'running', 'completed', 'failed'] %}
+  <a href="/tasks-view?status={{ st }}" style="padding:6px 12px; border-radius:6px; {{ 'background:var(--accent-dim); color:#05230c; font-weight:700;' if status_filter == st }}">{{ st }} ({{ counts.get(st, 0) }})</a>
+  {% endfor %}
+</div>
+
+<div class="card">
+  {% for t in tasks %}
+  <div class="task-row" data-id="{{ t.id }}" style="padding:10px 0; {{ 'border-top:1px solid var(--border);' if not loop.first }} cursor:pointer;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <span class="status-dot {{ 'up' if t.status == 'completed' else ('down' if t.status == 'failed' else 'unknown') }}"></span>
+        <strong>{{ t.queue }}</strong>
+        <span style="color:var(--text-muted); font-size:11.5px; margin-left:6px;">{{ t.id[:8] }}…</span>
+      </div>
+      <span style="color:var(--text-muted); font-size:11.5px;">{{ t.status }} · {{ t.updated_at }}</span>
+    </div>
+    {% if t.error %}<div style="color:var(--red); font-size:12px; margin-top:4px;">{{ t.error }}</div>{% endif %}
+    <div class="task-audit" style="display:none; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); font-size:12px;"></div>
+  </div>
+  {% else %}
+  <p style="color:var(--text-muted); margin:0;">No hay tareas.</p>
+  {% endfor %}
+</div>
+
+<script>
+document.querySelectorAll('.task-row').forEach(row => {
+  row.addEventListener('click', () => {
+    const audit = row.querySelector('.task-audit');
+    const isOpen = audit.style.display !== 'none';
+    audit.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen && !audit.dataset.loaded) {
+      fetch(`/api/tasks/${row.dataset.id}/audit`).then(r => r.json()).then(rows => {
+        audit.dataset.loaded = '1';
+        if (rows.length === 0) { audit.innerHTML = '<span style="color:var(--text-muted);">Sin traza de auditoría.</span>'; return; }
+        audit.innerHTML = rows.map(a => `
+          <div style="margin-bottom:6px;">
+            <strong>${a.step}</strong> <span style="color:var(--text-muted);">(${a.subagent})</span> → ${a.verdict || '-'}
+            ${a.confidence != null ? ' · confianza ' + a.confidence : ''}
+          </div>
+        `).join('');
+      });
+    }
+  });
+});
+</script>
+{% endblock %}

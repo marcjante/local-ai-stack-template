@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>Logs</h1></div>
+<p style="color:var(--text-muted); font-size:12.5px; margin-top:-8px;">
+  Streams en vivo de todos los servicios con log nativo, en una sola pantalla. Cada uno se colorea con
+  el nombre del servicio delante.
+</p>
+
+<div class="card">
+  <div style="margin-bottom:10px;">
+    {% for s in services %}
+    <label style="margin-right:14px; font-size:12px; color:var(--text-muted);">
+      <input type="checkbox" class="svc-toggle" value="{{ s.id }}" checked> {{ s.name }}
+    </label>
+    {% endfor %}
+    <button id="clearBtn" style="float:right;">Limpiar</button>
+  </div>
+  <div id="combinedLog" style="background:#010409; border-radius:8px; padding:12px; font-family:ui-monospace,monospace; font-size:11.5px; height:480px; overflow-y:auto; white-space:pre-wrap;"></div>
+</div>
+
+<script>
+const COLORS = ['#58a6ff', '#3fb950', '#d29922', '#f778ba', '#a5a5f5', '#79c0ff', '#ffa657'];
+const sources = {};
+const logBox = document.getElementById('combinedLog');
+
+function colorFor(id) {
+  let hash = 0;
+  for (const c of id) hash = (hash * 31 + c.charCodeAt(0)) % COLORS.length;
+  return COLORS[hash];
+}
+
+function connect(id) {
+  if (sources[id]) return;
+  const es = new EventSource(`/logs/${id}/stream`);
+  es.onmessage = (e) => {
+    const line = JSON.parse(e.data);
+    const span = document.createElement('div');
+    span.innerHTML = `<span style="color:${colorFor(id)};">[${id}]</span> ${line.replace(/</g,'&lt;')}`;
+    logBox.appendChild(span);
+    logBox.scrollTop = logBox.scrollHeight;
+  };
+  sources[id] = es;
+}
+
+function disconnect(id) {
+  if (sources[id]) { sources[id].close(); delete sources[id]; }
+}
+
+document.querySelectorAll('.svc-toggle').forEach(cb => {
+  if (cb.checked) connect(cb.value);
+  cb.addEventListener('change', () => cb.checked ? connect(cb.value) : disconnect(cb.value));
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => logBox.innerHTML = '');
+</script>
+{% endblock %}

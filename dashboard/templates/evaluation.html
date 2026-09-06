@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>Evaluation</h1></div>
+
+<div class="card">
+  <div style="display:flex; gap:10px; margin-bottom:14px;">
+    <select id="casesFile" style="flex:1;">
+      {% for f in case_files %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+    </select>
+    <select id="target">
+      <option value="rag">rag</option>
+      {% for p in plugin_names %}<option value="plugin:{{ p }}">plugin:{{ p }}</option>{% endfor %}
+    </select>
+    <button class="primary" id="runBtn">Ejecutar</button>
+  </div>
+  {% if not case_files %}<p style="color:var(--text-muted); font-size:12px;">No hay ficheros de casos en <code>evaluation/</code> todavía.</p>{% endif %}
+  <div id="output" style="font-family:ui-monospace,monospace; font-size:12px; white-space:pre-wrap; background:#010409; padding:12px; border-radius:8px; display:none;"></div>
+</div>
+
+<script>
+document.getElementById('runBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('runBtn');
+  const output = document.getElementById('output');
+  btn.disabled = true; btn.textContent = 'Ejecutando…';
+  output.style.display = 'block';
+  output.textContent = 'Ejecutando, esto llama de verdad al RAG o al plugin elegido…';
+
+  const res = await fetch('/api/evaluation/run', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      cases_file: document.getElementById('casesFile').value,
+      target: document.getElementById('target').value,
+    }),
+  });
+  const data = await res.json();
+  output.textContent = data.stdout + (data.stderr ? '\n--- stderr ---\n' + data.stderr : '');
+  btn.disabled = false; btn.textContent = 'Ejecutar';
+});
+</script>
+{% endblock %}

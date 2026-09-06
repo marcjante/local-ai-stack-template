@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>Plugins</h1></div>
+<p style="color:var(--text-muted); font-size:12.5px; margin-top:-8px;">
+  Cada fichero en <code>workers/plugins/</code> con <code>QUEUE_NAME</code> y una función
+  <code>handle()</code> aparece aquí solo — no hace falta tocar el backend ni <code>services.yaml</code>.
+</p>
+
+<div class="card">
+  {% for p in plugins %}
+  <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; {{ 'border-top:1px solid var(--border);' if not loop.first }}">
+    <div>
+      <span class="status-dot {{ 'up' if p.has_worker else 'unknown' }}"></span>
+      <strong>{{ p.name }}</strong>
+      <span style="color:var(--text-muted); font-size:11.5px; margin-left:8px;">workers/plugins/{{ p.module }}.py</span>
+    </div>
+    <div style="color:var(--text-muted); font-size:11.5px;">
+      timeout {{ p.timeout }}s · {{ 'worker activo' if p.has_worker else 'sin worker escuchando' }}
+    </div>
+  </div>
+  {% else %}
+  <p style="color:var(--text-muted); margin:0;">No se ha encontrado ningún plugin.</p>
+  {% endfor %}
+</div>
+
+<h2 class="section-title">Añadir uno nuevo</h2>
+<div class="card" style="font-size:12.5px; color:var(--text-muted);">
+  <p style="margin-top:0;">Crea <code>workers/plugins/mi_worker.py</code>:</p>
+  <pre style="background:#010409; padding:10px; border-radius:6px; overflow-x:auto; color:var(--text);">QUEUE_NAME = "mi_cola"
+QUEUE_TIMEOUT = 120
+
+def handle(task_id: str, payload: dict) -> dict:
+    ...</pre>
+  <p style="margin-bottom:0;">Y arráncalo con <code>rq worker mi_cola --url redis://127.0.0.1:6379/0</code>. Reinicia el backend para que lo detecte en <code>/enqueue/mi_cola</code>.</p>
+</div>
+{% endblock %}

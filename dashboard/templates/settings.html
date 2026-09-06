@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>Settings</h1></div>
+
+<h2 class="section-title">config/services.yaml</h2>
+<div class="card">
+  <textarea id="yamlEditor" rows="18" style="width:100%; font-family:ui-monospace,monospace; font-size:12px;">{{ yaml_content }}</textarea>
+  <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+    <button class="primary" id="saveYamlBtn">Guardar</button>
+    <span id="yamlStatus" style="font-size:12px; color:var(--text-muted);"></span>
+  </div>
+  <p style="color:var(--text-muted); font-size:11.5px; margin:10px 0 0;">
+    Se valida como YAML antes de guardar, pero un cambio mal pensado (un puerto duplicado, un comando erróneo)
+    solo se nota al reiniciar el servicio afectado — no hay una validación semántica completa.
+  </p>
+</div>
+
+<h2 class="section-title">Variables de entorno</h2>
+<div class="card">
+  <p style="color:var(--amber); font-size:12px; margin-top:0;">
+    Esto es la <strong>plantilla</strong> de <code>.env.example</code>, no tus valores reales — el panel nunca
+    lee ni muestra tu <code>.env</code> de verdad, para no arriesgarse a enseñar un secreto en pantalla.
+    Edita tu <code>.env</code> directamente con un editor de texto.
+  </p>
+  <table style="width:100%; font-size:12px; border-collapse:collapse;">
+    {% for v in env_vars %}
+    <tr style="border-top:1px solid var(--border);">
+      <td style="padding:5px 8px 5px 0; font-family:ui-monospace,monospace;">{{ v.key }}</td>
+      <td style="color:var(--text-muted);">{{ v.default }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<script>
+document.getElementById('saveYamlBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('yamlStatus');
+  statusEl.textContent = 'Guardando…';
+  const res = await fetch('/api/settings/services-yaml', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({content: document.getElementById('yamlEditor').value}),
+  });
+  const data = await res.json();
+  if (!res.ok) { statusEl.textContent = 'Error: ' + data.error; statusEl.style.color = 'var(--red)'; }
+  else { statusEl.textContent = 'Guardado. Reinicia los servicios afectados para aplicar cambios.'; statusEl.style.color = 'var(--accent)'; }
+});
+</script>
+{% endblock %}

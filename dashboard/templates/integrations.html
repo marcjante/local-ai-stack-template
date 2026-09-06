@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>Integrations</h1></div>
+<p style="color:var(--text-muted); font-size:12.5px; margin-top:-8px;">
+  Flujos de n8n conocidos por el sistema. Un flujo se registra solo la primera vez que un worker lo llama —
+  hasta entonces no aparece aquí.
+</p>
+
+<div class="card">
+  {% for i in integrations %}
+  <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; {{ 'border-top:1px solid var(--border);' if not loop.first }}">
+    <div>
+      <span class="status-dot {{ 'up' if i.enabled else 'down' }}"></span>
+      <strong>{{ i.flow_name }}</strong>
+      {% if i.description %}<span style="color:var(--text-muted); font-size:11.5px; margin-left:8px;">{{ i.description }}</span>{% endif %}
+    </div>
+    <button onclick="toggle('{{ i.flow_name }}', {{ 'false' if i.enabled else 'true' }})">
+      {{ 'Desactivar' if i.enabled else 'Activar' }}
+    </button>
+  </div>
+  {% else %}
+  <p style="color:var(--text-muted); margin:0;">Ningún flujo se ha llamado todavía — se registrará aquí la primera vez.</p>
+  {% endfor %}
+</div>
+
+<script>
+function toggle(flowName, enable) {
+  fetch(`/api/integrations/${flowName}/${enable ? 'enable' : 'disable'}`, {method: 'POST'})
+    .then(() => location.reload());
+}
+</script>
+{% endblock %}
