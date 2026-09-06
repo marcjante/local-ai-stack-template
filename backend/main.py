@@ -29,6 +29,10 @@ from workers.queue_conn import QUEUES_BY_NAME, DEFAULT_RETRY, redis_conn  # noqa
 from workers.fetch_jobs import fetch_task  # noqa: E402
 from workers.process_jobs import process_task  # noqa: E402
 from workers.notify_jobs import notify_task  # noqa: E402
+from rag.retrieval import index_document, retrieve  # noqa: E402
+from rag.rerank import rerank  # noqa: E402
+from rag.citations import format_citations  # noqa: E402
+from backend.auth import issue_token, require_role  # noqa: E402
 
 API_KEY = os.environ.get("API_KEY", "changeme-in-.env")
 N8N_INBOUND_SECRET = os.environ.get("N8N_INBOUND_SECRET", "changeme-in-.env")
@@ -95,6 +99,48 @@ def ready():
 def metrics():
     depths = {name: len(q) for name, q in QUEUES_BY_NAME.items()}
     return jsonify({"queue_depth": depths})
+
+
+@app.route("/auth/token", methods=["POST"])
+@require_api_key
+def auth_token():
+    """
+    Emite un JWT. Protegido con la API key maestra a propósito: quien
+    tenga la API key puede emitir tokens con el rol que pida — es el
+    "administrador raíz" emitiendo credenciales más finas para otros
+    clientes, no un login público.
+    """
+    payload = request.get_json(force=True) or {}
+    subject = payload.get("subject", "anon")
+    role = payload.get("role", "lector")
+    token = issue_token(subject, role)
+    return jsonify({"token": token, "role": role, "expires_in_seconds": 24 * 3600})
+
+
+@app.route("/rag/index", methods=["POST"])
+@require_role("admin", "escritor")
+def rag_index():
+    """Indexa un documento en el RAG. Requiere JWT con rol admin o escritor."""
+    payload = request.get_json(force=True) or {}
+    doc_id = payload.get("doc_id")
+    text = payload.get("text", "")
+    doc_version = payload.get("doc_version", "v1")
+    if not doc_id or not text:
+        return jsonify({"error": "doc_id y text son obligatorios"}), 400
+    n_chunks = index_document(doc_id, text, doc_version=doc_version)
+    return jsonify({"doc_id": doc_id, "doc_version": doc_version, "n_chunks": n_chunks}), 201
+
+
+@app.route("/rag/search")
+@require_role()  # cualquier rol autenticado puede leer
+def rag_search():
+    """Busca en el RAG indexado. Requiere JWT (cualquier rol)."""
+    query = request.args.get("q", "")
+    if not query:
+        return jsonify({"error": "falta el parámetro ?q="}), 400
+    candidates = retrieve(query, top_k=20)
+    top = rerank(query, candidates, top_n=5)
+    return jsonify(format_citations(top))
 
 
 @app.route("/enqueue/<queue_name>", methods=["POST"])

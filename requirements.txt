@@ -5,3 +5,4 @@ rq>=1.16
 psycopg2-binary>=2.9
 requests>=2.31
 psutil>=5.9
+PyJWT>=2.8

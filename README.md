@@ -76,19 +76,31 @@ docker compose up -d
 ## Probar el flujo completo
 
 ```bash
+# Autenticación JWT (además de la API key existente)
+TOKEN=$(curl -s -X POST http://127.0.0.1:8080/auth/token \
+  -H "X-API-Key: $API_KEY" -d '{"subject":"marc","role":"escritor"}' | jq -r .token)
+
+# Indexar un documento real en el RAG
+curl -X POST http://127.0.0.1:8080/rag/index \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"doc_id":"doc1","text":"...","doc_version":"v1"}'
+
+# Buscar en el RAG
+curl "http://127.0.0.1:8080/rag/search?q=..." -H "Authorization: Bearer $TOKEN"
+
+# Lanzar una tarea de 'process': el circuito adaptativo decide de dónde
+# saca las fuentes (doc_id, sources directas, o índice global), si hace
+# falta verificar, y cita afirmación por afirmación
 curl -X POST http://127.0.0.1:8080/enqueue/process \
   -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Explica X",
-    "sources": [{"id": "doc1", "text": "..."}, {"id": "doc2", "text": "..."}]
-  }'
+  -d '{"prompt": "...", "doc_id": "doc1", "task_type": "rapido"}'
 # → {"task_id": "...", "queue": "process", "status": "pending"}
 
 curl http://127.0.0.1:8080/tasks/<task_id> -H "X-API-Key: $API_KEY"
-# → resultado con verdict: "veraz" o "revisar"
+# → verdict: "veraz" / "revisar" / "sin_verificar", con citas exactas por afirmación
 
 curl http://127.0.0.1:8080/tasks/<task_id>/audit -H "X-API-Key: $API_KEY"
-# → traza paso a paso: qué subagente actuó y qué decidió
+# → traza completa: qué modelo respondió, qué chunks se usaron, qué se decidió saltar y por qué
 ```
 
 n8n en las dos direcciones:

@@ -1,16 +1,20 @@
 """
 citations.py
 
-Responsabilidad única: a partir de los documentos finales (ya
-rerankeados), producir el formato de cita que se le muestra al usuario
-junto a la respuesta del LLM. Separado a propósito: cambiar el formato
-de cita no debería tocar retrieval ni rerank.
+Responsabilidad única: producir el formato de cita a partir de los chunks
+finales (ya rerankeados) — con el fragmento EXACTO citado, no un resumen,
+para que la cita se pueda verificar contra el chunk original.
 """
 
 
-def format_citations(documents: list) -> list:
-    """
-    Sustituye esto por el formato real de tu proyecto (autor/año, URL,
-    página del PDF con resaltado como en TBC-IA, etc.).
-    """
-    return [{"source": d.get("source"), "snippet": d.get("text", "")[:200]} for d in documents]
+def format_citations(chunks: list) -> list:
+    return [
+        {
+            "doc_id": c.get("doc_id"),
+            "chunk_id": c.get("chunk_id"),
+            "doc_version": c.get("doc_version"),
+            "quote": c.get("text", "")[:300],
+            "score": round(c.get("combined_score", c.get("score", 0.0)), 4),
+        }
+        for c in chunks
+    ]

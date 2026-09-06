@@ -1,92 +1,105 @@
 """
 verification.py
 
-Subagentes del "circuito de información veraz". Cada uno tiene una
-responsabilidad única y deja su veredicto en audit_log vía db.log_audit().
-Diseñados para poder llamarse en cadena desde cualquier worker, no solo
-desde "process".
+Subagentes del "circuito de información veraz", ahora a nivel de
+AFIRMACIÓN, no de respuesta completa: cada frase de la respuesta del LLM
+se comprueba por separado contra los chunks del RAG, exigiendo una cita
+textual real — no basta con que "algo" de la respuesta se parezca a
+"algo" de las fuentes.
 
-Son heurísticas simples a propósito (esto es una plantilla): sustitúyelas
-por lo que necesite el proyecto real (un segundo LLM como juez, un
-servicio de fact-checking externo, reglas de negocio concretas...).
+Cada subagente deja su veredicto en audit_log vía db.log_audit().
 """
 
+import re
+
 from db.db import log_audit
+from rag.rerank import rerank
 
 
-def cross_check_sources(task_id: str, claim: str, sources: list) -> dict:
+def split_into_claims(answer: str) -> list:
+    """Divide la respuesta en afirmaciones (frases) verificables por separado."""
+    parts = re.split(r'(?<=[.!?])\s+', answer.strip())
+    return [p.strip() for p in parts if len(p.strip()) > 8]
+
+
+def _word_overlap(a: str, b: str) -> float:
+    wa = set(re.findall(r"[a-záéíóúñü0-9]{4,}", a.lower()))
+    wb = set(re.findall(r"[a-záéíóúñü0-9]{4,}", b.lower()))
+    if not wa:
+        return 0.0
+    return len(wa & wb) / len(wa)
+
+
+def verify_claim(claim: str, candidate_chunks: list, quote_threshold: float = 0.6) -> dict:
     """
-    Subagente 1: ¿cuántas fuentes independientes respaldan esta afirmación?
-    `sources` es una lista de dicts con al menos {"id":..., "text":...}.
-
-    Heurística mínima: cuenta en cuántas fuentes aparece literalmente el
-    texto de `claim` (o una porción significativa). Un proyecto real
-    debería usar similitud semántica, no coincidencia de texto.
+    Subagente de una sola afirmación: busca, entre los chunks candidatos,
+    el que mejor la respalda, y exige una cita textual real (no solo
+    'se parece'): al menos `quote_threshold` de las palabras
+    significativas de la afirmación deben aparecer en el chunk citado.
     """
-    claim_lower = claim.lower().strip()
-    supporting = [s for s in sources if claim_lower and claim_lower in s.get("text", "").lower()]
-    n_support = len(supporting)
-    n_total = len(sources)
+    if not candidate_chunks:
+        return {"claim": claim, "verdict": "sin_fuentes", "citation": None, "overlap": 0.0}
 
-    confidence = (n_support / n_total) if n_total else 0.0
-    if n_total == 0:
-        verdict = "sin_fuentes"
-    elif n_support >= 2:
-        verdict = "corroborado"
-    elif n_support == 1:
-        verdict = "una_sola_fuente"
+    ranked = rerank(claim, [dict(c) for c in candidate_chunks], top_n=1)
+    best = ranked[0] if ranked else None
+    if not best:
+        return {"claim": claim, "verdict": "sin_fuentes", "citation": None, "overlap": 0.0}
+
+    overlap = _word_overlap(claim, best.get("text", ""))
+    if overlap >= quote_threshold:
+        verdict = "citado"
+    elif overlap >= 0.3:
+        verdict = "parcial"
     else:
         verdict = "sin_respaldo"
 
-    result = {
+    return {
         "claim": claim,
-        "n_sources_checked": n_total,
-        "n_sources_supporting": n_support,
-        "supporting_ids": [s.get("id") for s in supporting],
         "verdict": verdict,
-        "confidence": confidence,
+        "overlap": round(overlap, 3),
+        "citation": {
+            "doc_id": best.get("doc_id"),
+            "chunk_id": best.get("chunk_id"),
+            "quote": best.get("text", "")[:300],
+        } if verdict != "sin_respaldo" else None,
+    }
+
+
+def cross_check_sources(task_id: str, answer: str, candidate_chunks: list) -> dict:
+    """
+    Subagente agregador: parte la respuesta en afirmaciones, verifica cada
+    una por separado contra los chunks del RAG, y da un veredicto conjunto
+    con la lista de citas exactas — la base real de un "circuito veraz",
+    en vez de una comparación de la respuesta entera contra todo el texto.
+    """
+    claims = split_into_claims(answer)
+    per_claim = [verify_claim(c, candidate_chunks) for c in claims]
+
+    n_total = len(per_claim)
+    n_cited = sum(1 for c in per_claim if c["verdict"] == "citado")
+    n_partial = sum(1 for c in per_claim if c["verdict"] == "parcial")
+    n_unsupported = sum(1 for c in per_claim if c["verdict"] in ("sin_respaldo", "sin_fuentes"))
+
+    confidence = (n_cited + 0.5 * n_partial) / n_total if n_total else 0.0
+
+    if n_total == 0:
+        verdict = "sin_afirmaciones"
+    elif n_unsupported == 0:
+        verdict = "todo_citado"
+    elif n_cited + n_partial >= n_total * 0.5:
+        verdict = "mayoria_citada"
+    else:
+        verdict = "mayoria_sin_citar"
+
+    result = {
+        "verdict": verdict,
+        "confidence": round(confidence, 3),
+        "n_claims": n_total,
+        "n_cited": n_cited,
+        "n_partial": n_partial,
+        "n_unsupported": n_unsupported,
+        "claims": per_claim,
     }
     log_audit(task_id, step="cross_check", subagent="cross_check_sources",
               verdict=verdict, confidence=confidence, details=result)
-    return result
-
-
-def detect_hallucination(task_id: str, answer: str, sources: list) -> dict:
-    """
-    Subagente 2: ¿el texto generado por el LLM se apoya en las fuentes
-    reales, o parece inventado?
-
-    Heurística mínima: solapamiento de palabras significativas (>4
-    letras) entre la respuesta y el conjunto de fuentes. Bajo solapamiento
-    no demuestra que algo esté inventado, pero es una señal barata de
-    alerta temprana — para verificación real, usa un LLM juez comparando
-    afirmación por afirmación contra las fuentes, como hace TBC-IA.
-    """
-    def significant_words(text):
-        return {w.lower() for w in text.split() if len(w) > 4}
-
-    answer_words = significant_words(answer)
-    source_words = set()
-    for s in sources:
-        source_words |= significant_words(s.get("text", ""))
-
-    if not answer_words:
-        overlap_ratio = 0.0
-    else:
-        overlap_ratio = len(answer_words & source_words) / len(answer_words)
-
-    if overlap_ratio >= 0.5:
-        verdict = "respaldado"
-    elif overlap_ratio >= 0.2:
-        verdict = "parcialmente_respaldado"
-    else:
-        verdict = "posible_alucinacion"
-
-    result = {
-        "overlap_ratio": round(overlap_ratio, 3),
-        "verdict": verdict,
-        "n_sources": len(sources),
-    }
-    log_audit(task_id, step="hallucination_check", subagent="detect_hallucination",
-              verdict=verdict, confidence=overlap_ratio, details=result)
     return result

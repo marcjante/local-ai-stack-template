@@ -33,3 +33,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_task_id ON audit_log (task_id);
+
+-- Chunks indexados para RAG. embedding en JSONB (ver rag/vector_store.py
+-- para por qué, y cómo migrar a pgvector si el volumen lo justifica).
+CREATE TABLE IF NOT EXISTS rag_chunks (
+    chunk_id    TEXT PRIMARY KEY,
+    doc_id      TEXT NOT NULL,
+    position    INTEGER NOT NULL,
+    text        TEXT NOT NULL,
+    embedding   JSONB NOT NULL,
+    doc_version TEXT NOT NULL DEFAULT 'v1',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rag_chunks_doc_id ON rag_chunks (doc_id);

@@ -1,16 +1,16 @@
 """
 process_jobs.py
 
-Worker especializado en PROCESAR — pero ya no es un único paso, es un
-circuito de subagentes encadenados, cada uno con su propia responsabilidad
-y su propio veredicto guardado en audit_log:
+Worker especializado en PROCESAR. El circuito ya no es una cadena fija de
+pasos: es ADAPTATIVO — cada tarea decide qué subagentes necesita de
+verdad, y todo queda auditado (qué se decidió, con qué modelo, con qué
+chunks, contra qué versión de documento):
 
-    1. gather_sources()       — reúne las fuentes que respaldarán la respuesta
-    2. generate_answer()      — pide al LLM (vía llm_gateway, nunca directo)
-    3. cross_check_sources()  — ¿cuántas fuentes independientes lo confirman?
-    4. detect_hallucination() — ¿la respuesta se apoya en las fuentes o parece inventada?
-    5. notify via n8n         — dispara un flujo de n8n con el resultado final
-                                 (que puede, a su vez, seguir procesando fuera de Python)
+    1. gather_candidate_chunks()  — fuentes directas, doc_id concreto, o índice global (decisión auditada)
+    2. generate_answer()          — LLM vía el gateway, con routing de modelo por task_type
+    3. decide_need_verification() — ¿hace falta verificar? (no, si no hay fuentes o la respuesta es trivial)
+    4. cross_check_sources()      — si hace falta: verificación por AFIRMACIÓN, con cita textual exacta
+    5. veredicto final + aviso a n8n
 
 Arrancar: rq worker process --url redis://127.0.0.1:6379/0
 """
@@ -22,70 +22,76 @@ import requests
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db.db import set_status, log_audit  # noqa: E402
 from common.logging_setup import get_logger  # noqa: E402
-from common.verification import cross_check_sources, detect_hallucination  # noqa: E402
+from common.verification import cross_check_sources  # noqa: E402
+from common.adaptive_pipeline import gather_candidate_chunks, decide_need_verification  # noqa: E402
 from common.n8n_client import trigger_n8n_flow  # noqa: E402
 
 LLM_GATEWAY_URL = os.environ.get("LLM_GATEWAY_URL", "http://127.0.0.1:8091")
 log = get_logger(__name__)
 
 
-def gather_sources(task_id: str, payload: dict) -> list:
-    """
-    Subagente 0: reúne las fuentes sobre las que se apoyará la respuesta.
-    Sustituye esto por la llamada real a rag/retrieval.py (ChromaDB, etc.).
-    Aquí, de plantilla, acepta las fuentes directamente en el payload si
-    vienen dadas, para poder probar el circuito sin una base vectorial real.
-    """
-    sources = payload.get("sources", [])
-    log_audit(task_id, step="gather", subagent="gather_sources",
-              verdict="ok", details={"n_sources": len(sources)})
-    return sources
-
-
-def generate_answer(task_id: str, prompt: str) -> str:
-    """Subagente: pide la respuesta al LLM, siempre a través del gateway."""
-    resp = requests.post(f"{LLM_GATEWAY_URL}/generate", json={"prompt": prompt}, timeout=90)
+def generate_answer(task_id: str, prompt: str, task_type: str = "default") -> dict:
+    """Subagente: pide la respuesta al LLM, siempre a través del gateway, con routing por task_type."""
+    resp = requests.post(
+        f"{LLM_GATEWAY_URL}/generate",
+        json={"prompt": prompt, "task_type": task_type},
+        timeout=90,
+    )
     resp.raise_for_status()
-    answer = resp.json().get("response", "")
-    log_audit(task_id, step="generate", subagent="generate_answer",
-              verdict="ok", details={"prompt_len": len(prompt), "answer_len": len(answer)})
-    return answer
+    data = resp.json()
+    answer = data.get("response", "")
+
+    # Auditoría enriquecida: qué modelo respondió, con qué prompt y con
+    # qué parámetros — no solo "generó algo".
+    log_audit(task_id, step="generate", subagent="generate_answer", verdict="ok",
+              details={
+                  "model_used": data.get("_model_used"),
+                  "task_type": data.get("_task_type", task_type),
+                  "prompt": prompt,
+                  "answer_len": len(answer),
+              })
+    return {"answer": answer, "model_used": data.get("_model_used")}
 
 
 def process_task(task_id: str, payload: dict) -> dict:
-    log.info("empezando circuito de verificación", extra={"task_id": task_id})
+    log.info("empezando circuito adaptativo", extra={"task_id": task_id})
     set_status(task_id, "running", increment_attempts=True)
     try:
-        sources = gather_sources(task_id, payload)
         prompt = payload.get("prompt", "")
-        answer = generate_answer(task_id, prompt)
+        task_type = payload.get("task_type", "default")
 
-        cross_check = cross_check_sources(task_id, claim=answer, sources=sources)
-        hallucination = detect_hallucination(task_id, answer=answer, sources=sources)
+        chunks, gather_path = gather_candidate_chunks(task_id, payload, query=prompt)
+        gen = generate_answer(task_id, prompt, task_type=task_type)
+        answer = gen["answer"]
 
-        # Veredicto final del circuito: combina ambas comprobaciones.
-        is_trustworthy = (
-            cross_check["verdict"] in ("corroborado", "una_sola_fuente")
-            and hallucination["verdict"] != "posible_alucinacion"
-        )
-        final_verdict = "veraz" if is_trustworthy else "revisar"
+        needs_verification = decide_need_verification(task_id, answer, chunks)
 
-        log_audit(task_id, step="final_verdict", subagent="process_task",
-                  verdict=final_verdict,
-                  details={"cross_check": cross_check, "hallucination": hallucination})
+        if needs_verification:
+            cross_check = cross_check_sources(task_id, answer=answer, candidate_chunks=chunks)
+            final_verdict = "veraz" if cross_check["verdict"] in ("todo_citado", "mayoria_citada") else "revisar"
+        else:
+            cross_check = {"verdict": "omitido", "reason": "sin fuentes o respuesta trivial"}
+            final_verdict = "sin_verificar"
+
+        # Auditoría del contexto documental usado (doc_version, chunks) —
+        # trazabilidad real de qué versión de qué documento respaldó esto.
+        doc_versions = sorted({c.get("doc_version") for c in chunks if c.get("doc_version")})
+        chunk_ids_used = [c.get("chunk_id") for c in chunks[:10]]
+        log_audit(task_id, step="context_used", subagent="process_task", verdict="ok",
+                  details={"gather_path": gather_path, "doc_versions": doc_versions, "chunk_ids": chunk_ids_used})
+
+        log_audit(task_id, step="final_verdict", subagent="process_task", verdict=final_verdict,
+                  details={"cross_check": cross_check})
 
         result = {
             "answer": answer,
+            "model_used": gen["model_used"],
             "verdict": final_verdict,
             "cross_check": cross_check,
-            "hallucination_check": hallucination,
         }
         set_status(task_id, "completed", result=result)
         log.info(f"completada, veredicto={final_verdict}", extra={"task_id": task_id})
 
-        # Aviso a n8n con el resultado final, para que el flujo decida qué
-        # hacer con él (guardarlo, mandarlo a alguien, escalarlo si el
-        # veredicto es 'revisar', etc.) — no es Python quien decide eso.
         n8n_result = trigger_n8n_flow("resultado-tarea", {
             "task_id": task_id, "queue": "process", **result,
         }, task_id=task_id)

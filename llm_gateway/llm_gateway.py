@@ -20,10 +20,19 @@ from flask import Flask, request, jsonify
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 MAX_CONCURRENT = int(os.environ.get("LLM_MAX_CONCURRENT", "2"))
 
+# Routing simple por tipo de tarea: cada proyecto ajusta este mapa a los
+# modelos que tenga descargados en Ollama. "default" cubre lo que no
+# encaje en ninguna categoría específica.
+MODEL_ROUTES = {
+    "default": os.environ.get("LLM_MODEL_DEFAULT", "llama3.1"),
+    "rapido": os.environ.get("LLM_MODEL_FAST", "llama3.1:8b"),
+    "razonamiento": os.environ.get("LLM_MODEL_REASONING", "llama3.1:70b"),
+}
+
 app = Flask(__name__)
 _semaphore = threading.Semaphore(MAX_CONCURRENT)
 _stats_lock = threading.Lock()
-_stats = {"in_flight": 0, "total_requests": 0, "total_rejected_timeout": 0}
+_stats = {"in_flight": 0, "total_requests": 0, "total_rejected_timeout": 0, "by_model": {}}
 
 
 @app.route("/health")
@@ -42,6 +51,11 @@ def ready():
     return jsonify({"ready": ok}), (200 if ok else 503)
 
 
+@app.route("/models")
+def models():
+    return jsonify(MODEL_ROUTES)
+
+
 @app.route("/metrics")
 def metrics():
     with _stats_lock:
@@ -56,6 +70,8 @@ def metrics():
 def generate():
     payload = request.get_json(force=True) or {}
     prompt = payload.get("prompt", "")
+    task_type = payload.get("task_type", "default")
+    model = payload.get("model") or MODEL_ROUTES.get(task_type, MODEL_ROUTES["default"])
 
     acquired = _semaphore.acquire(timeout=30)
     if not acquired:
@@ -66,14 +82,18 @@ def generate():
     with _stats_lock:
         _stats["in_flight"] += 1
         _stats["total_requests"] += 1
+        _stats["by_model"][model] = _stats["by_model"].get(model, 0) + 1
     try:
         resp = requests.post(
             f"{OLLAMA_URL}/api/generate",
-            json={"model": payload.get("model", "llama3.1"), "prompt": prompt, "stream": False},
+            json={"model": model, "prompt": prompt, "stream": False},
             timeout=120,
         )
         resp.raise_for_status()
-        return jsonify(resp.json())
+        data = resp.json()
+        data["_model_used"] = model
+        data["_task_type"] = task_type
+        return jsonify(data)
     finally:
         with _stats_lock:
             _stats["in_flight"] -= 1
