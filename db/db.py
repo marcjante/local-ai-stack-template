@@ -37,10 +37,28 @@ def get_conn():
 
 
 def init_schema():
-    """Crea la tabla tasks si no existe. Llamar una vez al arrancar el backend."""
+    """
+    Crea las tablas núcleo (tasks, audit_log, rag_chunks, n8n_integrations)
+    si no existen. Se llaman siempre, sin depender de nada opcional.
+
+    La parte de pgvector (schema_pgvector.sql) es aparte a propósito: el
+    backend por defecto del RAG (RAG_BACKEND=postgres_json) no necesita
+    la extensión `vector`, así que su ausencia no debe impedir arrancar
+    el resto del proyecto. Si la extensión no está instalada en este
+    Postgres, se avisa por stdout y se sigue — solo falla si luego
+    alguien intenta usar RAG_BACKEND=pgvector de verdad sin haberla
+    instalado.
+    """
     with get_conn() as conn, conn.cursor() as cur:
         with open(os.path.join(os.path.dirname(__file__), "schema.sql")) as f:
             cur.execute(f.read())
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            with open(os.path.join(os.path.dirname(__file__), "schema_pgvector.sql")) as f:
+                cur.execute(f.read())
+    except Exception as e:
+        print(f"[db.init_schema] pgvector no disponible, se omite (normal si usas el backend por defecto): {e}")
 
 
 def create_task(task_id: str, queue: str, payload: dict):
