@@ -680,3 +680,37 @@ texto del PDF, que salió limpia. Probado también: página de detalle,
 ver chunks, reindexar sin re-subir, borrar (confirmando que desaparece
 de la búsqueda), y que dos colecciones distintas mantienen sus
 documentos separados.
+
+## Validación de instalación limpia (punto 2 del plan)
+
+Prueba real, no simulada: se borró toda la base de datos, todo el
+estado de Redis, el `.env`, y todos los ficheros de log, para simular
+una máquina que nunca ha visto este proyecto. Se siguió el flujo exacto
+que seguiría alguien nuevo:
+
+**install → start → cargar documento → preguntar → obtener respuesta+cita**
+
+Resultado: **funciona de punta a punta**. Cada paso, confirmado:
+
+1. `pip install -r requirements.txt` — instala todo lo necesario.
+2. `createdb` + `init_schema()` — crea las tablas núcleo sin pedir nada más.
+3. Arrancar backend, gateway, un worker y el panel — todos responden sanos.
+4. Onboarding — detecta correctamente Python/Postgres/Redis como
+   imprescindibles y Docker/Ollama como opcionales; se completa sin fricción.
+5. Subir un documento real (`.md`) desde Knowledge — indexado correcto.
+6. Preguntar sobre su contenido vía `/enqueue/process` — la respuesta
+   viene con **cita textual exacta** del documento subido, con su
+   `chunk_id` y el fragmento literal.
+
+### Fricción real encontrada (no bloqueante, mejorable)
+
+En sistemas con Python gestionado por el sistema operativo (Debian y
+derivados, y probablemente relacionado con lo visto en macOS con
+Homebrew), `pip install --upgrade` sobre paquetes que el propio sistema
+ya trae instalados (como `PyJWT`) puede fallar con un error de
+desinstalación. No bloquea nada — la versión ya instalada funciona
+igual — pero es un punto de fricción real en la primera instalación que
+vale la pena documentar: si `pip install -r requirements.txt` da un
+error de "Cannot uninstall X", normalmente se puede ignorar y seguir
+adelante, comprobando después que el módulo se importa
+(`python3 -c "import jwt"`, etc.).
