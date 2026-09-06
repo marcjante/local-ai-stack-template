@@ -2,12 +2,16 @@
 # Inventario de servicios del stack local.
 # Cada proyecto que use esta plantilla debe adaptar nombres, puertos y comandos,
 # pero mantener esta estructura para que el dashboard y los scripts funcionen sin cambios.
+#
+# El orden de la lista importa: start_stack.sh arranca de arriba a abajo,
+# stop_stack.sh para de abajo a arriba. Coloca cada servicio después de
+# aquello de lo que depende (depends_on).
 
 services:
 
   - id: llm
     name: "Motor LLM local (Ollama)"
-    description: "Sirve los modelos de lenguaje locales usados por el backend."
+    description: "Sirve los modelos de lenguaje locales usados por el backend y los agentes."
     host: 127.0.0.1
     port: 11434
     health_endpoint: "/api/tags"
@@ -25,15 +29,35 @@ services:
     stop_command: "pkill -f 'chroma run'"
     depends_on: []
 
+  - id: queue
+    name: "Cola de tareas (Redis)"
+    description: "Cola donde el backend deja tareas y de la que los agentes las recogen para trabajar en paralelo."
+    host: 127.0.0.1
+    port: 6379
+    health_endpoint: null
+    start_command: "redis-server --port 6379"
+    stop_command: "redis-cli -p 6379 shutdown"
+    depends_on: []
+
+  - id: database
+    name: "Base de datos (Postgres)"
+    description: "Persistencia de estado y resultados (tareas, historial, configuración)."
+    host: 127.0.0.1
+    port: 5432
+    health_endpoint: null
+    start_command: "pg_ctl -D ./data/pgdata -l ./data/pg.log start"
+    stop_command: "pg_ctl -D ./data/pgdata stop"
+    depends_on: []
+
   - id: backend_api
     name: "Backend API"
-    description: "API principal del proyecto. Orquesta llamadas al LLM y a la base vectorial."
+    description: "API principal del proyecto. Orquesta el LLM, la base vectorial y reparte tareas a los agentes vía la cola."
     host: 127.0.0.1
     port: 8080
     health_endpoint: "/health"
     start_command: "python backend/main.py"
     stop_command: "pkill -f 'backend/main.py'"
-    depends_on: [llm, vector_db]
+    depends_on: [llm, vector_db, queue, database]
 
   - id: automation
     name: "Automatización (n8n)"
@@ -45,6 +69,36 @@ services:
     stop_command: "pkill -f 'n8n start'"
     depends_on: []
 
+  - id: agent_1
+    name: "Agente 1"
+    description: "Worker genérico que consume tareas de la cola. Duplica este bloque para añadir más agentes."
+    host: 127.0.0.1
+    port: 9101
+    health_endpoint: "/health"
+    start_command: "python agents/agent_worker.py --id agent-1 --port 9101"
+    stop_command: "pkill -f 'agent_worker.py --id agent-1'"
+    depends_on: [queue, database]
+
+  - id: agent_2
+    name: "Agente 2"
+    description: "Segundo worker, idéntico en código al agente 1, procesando tareas en paralelo."
+    host: 127.0.0.1
+    port: 9102
+    health_endpoint: "/health"
+    start_command: "python agents/agent_worker.py --id agent-2 --port 9102"
+    stop_command: "pkill -f 'agent_worker.py --id agent-2'"
+    depends_on: [queue, database]
+
+  - id: agent_3
+    name: "Agente 3"
+    description: "Tercer worker, idéntico en código, procesando tareas en paralelo."
+    host: 127.0.0.1
+    port: 9103
+    health_endpoint: "/health"
+    start_command: "python agents/agent_worker.py --id agent-3 --port 9103"
+    stop_command: "pkill -f 'agent_worker.py --id agent-3'"
+    depends_on: [queue, database]
+
   - id: dashboard
     name: "Panel de control"
     description: "Interfaz web que muestra el estado de todos los servicios y permite arrancarlos/pararlos."
@@ -54,3 +108,13 @@ services:
     start_command: "python dashboard/dashboard_service.py"
     stop_command: "pkill -f 'dashboard_service.py'"
     depends_on: [backend_api]
+
+  - id: proxy
+    name: "Reverse proxy (Nginx)"
+    description: "Punto de entrada único: reparte tráfico hacia dashboard/backend en vez de exponer cada puerto suelto."
+    host: 127.0.0.1
+    port: 80
+    health_endpoint: "/"
+    start_command: "nginx -c $(pwd)/config/nginx.conf"
+    stop_command: "nginx -s stop"
+    depends_on: [dashboard, backend_api]
