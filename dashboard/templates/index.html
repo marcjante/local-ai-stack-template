@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Panel de control — Stack local</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background:#f4f6f9; margin:0; padding:24px; }
+  h1 { font-size:1.3rem; }
+  .actions { margin-bottom:16px; }
+  button { padding:8px 14px; border-radius:8px; border:1px solid #ccc; background:white; cursor:pointer; margin-right:8px; }
+  .card { background:white; border-radius:10px; padding:14px 16px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+  .status { font-weight:700; padding:3px 10px; border-radius:12px; font-size:0.8rem; }
+  .status.up { background:#e3f6e8; color:#1c8a4b; }
+  .status.down { background:#fdeceb; color:#b3401f; }
+</style>
+</head>
+<body>
+  <h1>Estado del stack</h1>
+  <div class="actions">
+    <button onclick="fetch('/api/start-all',{method:'POST'}).then(()=>location.reload())">Arrancar todo</button>
+    <button onclick="fetch('/api/stop-all',{method:'POST'}).then(()=>location.reload())">Parar todo</button>
+  </div>
+  {% for s in services %}
+  <div class="card">
+    <div>
+      <strong>{{ s.name }}</strong> (puerto {{ s.port }})<br>
+      <span style="color:#6b7480; font-size:0.85rem;">{{ s.description }}</span>
+    </div>
+    <div>
+      <span class="status {{ s.status }}">{{ 'ACTIVO' if s.status == 'up' else 'PARADO' }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</body>
+</html>

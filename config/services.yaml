@@ -1,0 +1,56 @@
+# services.yaml
+# Inventario de servicios del stack local.
+# Cada proyecto que use esta plantilla debe adaptar nombres, puertos y comandos,
+# pero mantener esta estructura para que el dashboard y los scripts funcionen sin cambios.
+
+services:
+
+  - id: llm
+    name: "Motor LLM local (Ollama)"
+    description: "Sirve los modelos de lenguaje locales usados por el backend."
+    host: 127.0.0.1
+    port: 11434
+    health_endpoint: "/api/tags"
+    start_command: "ollama serve"
+    stop_command: "pkill -f 'ollama serve'"
+    depends_on: []
+
+  - id: vector_db
+    name: "Base de datos vectorial (ChromaDB)"
+    description: "Almacena embeddings para búsqueda semántica (RAG)."
+    host: 127.0.0.1
+    port: 8000
+    health_endpoint: "/api/v1/heartbeat"
+    start_command: "chroma run --path ./data/chroma --port 8000"
+    stop_command: "pkill -f 'chroma run'"
+    depends_on: []
+
+  - id: backend_api
+    name: "Backend API"
+    description: "API principal del proyecto. Orquesta llamadas al LLM y a la base vectorial."
+    host: 127.0.0.1
+    port: 8080
+    health_endpoint: "/health"
+    start_command: "python backend/main.py"
+    stop_command: "pkill -f 'backend/main.py'"
+    depends_on: [llm, vector_db]
+
+  - id: automation
+    name: "Automatización (n8n)"
+    description: "Flujos de automatización: backups, tareas programadas, integraciones."
+    host: 127.0.0.1
+    port: 5678
+    health_endpoint: "/healthz"
+    start_command: "n8n start"
+    stop_command: "pkill -f 'n8n start'"
+    depends_on: []
+
+  - id: dashboard
+    name: "Panel de control"
+    description: "Interfaz web que muestra el estado de todos los servicios y permite arrancarlos/pararlos."
+    host: 127.0.0.1
+    port: 8090
+    health_endpoint: "/"
+    start_command: "python dashboard/dashboard_service.py"
+    stop_command: "pkill -f 'dashboard_service.py'"
+    depends_on: [backend_api]
