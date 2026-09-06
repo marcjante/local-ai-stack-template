@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>Projects</h1></div>
+
+<div class="card">
+  {% for p in projects %}
+  <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; {{ 'border-top:1px solid var(--border);' if not loop.first }}">
+    <div>
+      <strong>{{ p.name }}</strong>
+      {% if p.id == current_project %}<span style="font-size:10px; background:var(--accent-dim); color:#05230c; padding:1px 7px; border-radius:8px; margin-left:6px;">ACTIVO</span>{% endif %}
+      <div style="color:var(--text-muted); font-size:11.5px; margin-top:2px;">
+        {{ p.project_type }} · {{ p.n_collections }} colecciones · {{ p.n_documents }} documentos · {{ p.n_tasks }} tareas
+      </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a href="/projects/{{ p.id }}" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;">Dashboard</a>
+      {% if p.id != current_project %}
+      <button onclick="selectProject('{{ p.id }}')">Switch to</button>
+      {% endif %}
+      <a href="/api/projects/{{ p.id }}/export" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;">Export</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<h2 class="section-title">New Project</h2>
+<div class="card">
+  <div style="display:flex; gap:10px; margin-bottom:10px;">
+    <input id="projName" placeholder="Nombre del proyecto" style="flex:1;">
+  </div>
+  <textarea id="projDescription" rows="2" placeholder="Descripción (opcional)" style="width:100%; margin-bottom:10px;"></textarea>
+  <div style="margin-bottom:12px;">
+    <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:6px;">Plantilla</label>
+    <select id="projTemplate" style="width:100%;">
+      {% for key, t in templates.items() %}
+      <option value="{{ key }}">{{ t.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="primary" id="createBtn">Create project</button>
+  <span id="createStatus" style="margin-left:10px; font-size:12px; color:var(--text-muted);"></span>
+</div>
+
+<h2 class="section-title">Import Project</h2>
+<div class="card">
+  <input type="file" id="importFile" accept=".zip" style="margin-bottom:10px;">
+  <div style="margin-bottom:10px;">
+    <input id="newProjectId" placeholder="id nuevo (opcional, por defecto usa el original)" style="width:100%;">
+  </div>
+  <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+    <input type="checkbox" id="includeDocsCheck" checked> Incluir e indexar los documentos
+  </label>
+  <button id="importBtn">Import Project</button>
+  <span id="importStatus" style="margin-left:10px; font-size:12px; color:var(--text-muted);"></span>
+</div>
+
+<script>
+async function importProject() {
+  const fileInput = document.getElementById('importFile');
+  const status = document.getElementById('importStatus');
+  if (!fileInput.files.length) { status.textContent = 'Elige un fichero .ai-project.zip primero.'; return; }
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  fd.append('new_project_id', document.getElementById('newProjectId').value.trim());
+  fd.append('include_documents', document.getElementById('includeDocsCheck').checked ? 'true' : 'false');
+  status.textContent = 'Importando…';
+  const res = await fetch('/api/projects/import', {method: 'POST', body: fd});
+  const data = await res.json();
+  if (!res.ok) { status.textContent = 'Error: ' + data.error; status.style.color = 'var(--red)'; }
+  else { status.textContent = `Importado "${data.project_id}": ${data.n_documents_imported} documentos, ${data.n_collections} colecciones.`; status.style.color = 'var(--accent)'; setTimeout(() => location.reload(), 1500); }
+}
+document.getElementById('importBtn').addEventListener('click', importProject);
+</script>
+
+<script>
+async function selectProject(projectId) {
+  await fetch(`/projects/${projectId}/select`, {method: 'POST'});
+  window.location.href = '/';
+}
+
+document.getElementById('createBtn').addEventListener('click', async () => {
+  const name = document.getElementById('projName').value.trim();
+  const description = document.getElementById('projDescription').value.trim();
+  const template = document.getElementById('projTemplate').value;
+  const status = document.getElementById('createStatus');
+  if (!name) { status.textContent = 'Pon un nombre primero.'; return; }
+  status.textContent = 'Creando…';
+  const res = await fetch('/api/projects', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name, description, template}),
+  });
+  const data = await res.json();
+  if (!res.ok) { status.textContent = 'Error: ' + data.error; status.style.color = 'var(--red)'; }
+  else { await selectProject(data.id); }
+});
+</script>
+{% endblock %}

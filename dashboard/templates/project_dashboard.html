@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar">
+  <h1>{{ project.name }}</h1>
+  <a href="/projects" style="font-size:12.5px; color:var(--blue);">← Projects</a>
+</div>
+
+<div class="card" style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+  <div><strong style="font-size:22px;">{{ n_documents }}</strong> / {{ n_chunks }}<br><span style="color:var(--text-muted); font-size:11px;">documentos / chunks indexados</span></div>
+  <div><strong style="font-size:22px;">{{ task_counts.values() | sum }}</strong><br><span style="color:var(--text-muted); font-size:11px;">tareas ejecutadas ({{ task_counts.get('completed', 0) }} ok, {{ task_counts.get('failed', 0) }} fallidas)</span></div>
+  <div><strong style="font-size:22px;">{{ settings.default_model }}</strong><br><span style="color:var(--text-muted); font-size:11px;">modelo activo</span></div>
+  <div><strong style="font-size:22px;">—</strong><br><span style="color:var(--text-muted); font-size:11px;">calidad de evaluación (ejecuta una en Evaluation)</span></div>
+</div>
+
+<h2 class="section-title">Errores recientes</h2>
+<div class="card">
+  {% if recent_errors %}
+  {% for e in recent_errors %}
+  <div style="padding:8px 0; {{ 'border-top:1px solid var(--border);' if not loop.first }} font-size:12.5px;">
+    <span class="status-dot down"></span><strong>{{ e.queue }}</strong> · {{ e.id[:8] }}… · {{ e.updated_at }}
+    <div style="color:var(--red); margin-top:2px;">{{ e.error }}</div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <p style="color:var(--text-muted); margin:0;">Sin errores recientes.</p>
+  {% endif %}
+</div>
+
+<h2 class="section-title">Settings del proyecto</h2>
+<div class="card">
+  <table style="width:100%; font-size:13px;">
+    <tr><td style="color:var(--text-muted); width:160px; padding:6px 0;">Modelo principal</td><td><input id="defaultModel" value="{{ settings.default_model }}" style="width:100%;"></td></tr>
+    <tr><td style="color:var(--text-muted); padding:6px 0;">Modelo fallback</td><td><input id="fallbackModel" value="{{ settings.fallback_model or '' }}" style="width:100%;"></td></tr>
+    <tr><td style="color:var(--text-muted); padding:6px 0;">Modelo embeddings</td><td><input id="embeddingModel" value="{{ settings.embedding_model }}" style="width:100%;" disabled></td></tr>
+    <tr><td style="color:var(--text-muted); padding:6px 0; vertical-align:top;">System prompt</td><td><textarea id="systemPrompt" rows="3" style="width:100%;">{{ settings.system_prompt or '' }}</textarea></td></tr>
+    <tr><td style="color:var(--text-muted); padding:6px 0;">Temperature</td><td><input id="temperature" type="number" step="0.1" value="{{ settings.temperature }}" style="width:100px;"></td></tr>
+    <tr><td style="color:var(--text-muted); padding:6px 0;">Top-K retrieval</td><td><input id="topK" type="number" value="{{ settings.top_k }}" style="width:100px;"></td></tr>
+    <tr><td style="color:var(--text-muted); padding:6px 0;">Chunk size / overlap</td><td><input id="chunkSize" type="number" value="{{ settings.chunk_size }}" style="width:90px;"> / <input id="chunkOverlap" type="number" value="{{ settings.chunk_overlap }}" style="width:90px;"></td></tr>
+  </table>
+  <button class="primary" id="saveSettingsBtn" style="margin-top:14px;">Save settings</button>
+  <span id="saveStatus" style="margin-left:10px; font-size:12px; color:var(--text-muted);"></span>
+</div>
+
+<script>
+document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
+  const status = document.getElementById('saveStatus');
+  status.textContent = 'Guardando…';
+  const res = await fetch(`/api/projects/{{ project.id }}/settings`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      default_model: document.getElementById('defaultModel').value,
+      fallback_model: document.getElementById('fallbackModel').value || null,
+      system_prompt: document.getElementById('systemPrompt').value,
+      temperature: parseFloat(document.getElementById('temperature').value),
+      top_k: parseInt(document.getElementById('topK').value),
+      chunk_size: parseInt(document.getElementById('chunkSize').value),
+      chunk_overlap: parseInt(document.getElementById('chunkOverlap').value),
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) { status.textContent = 'Error: ' + data.error; status.style.color = 'var(--red)'; }
+  else { status.textContent = 'Guardado.'; status.style.color = 'var(--accent)'; }
+});
+</script>
+{% endblock %}

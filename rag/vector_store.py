@@ -51,17 +51,34 @@ def add_chunks(chunks: list, embeddings: list, doc_version: str = "v1"):
             )
 
 
-def search(query_embedding: list, top_k: int = 5, doc_id: str = None) -> list:
+def search(query_embedding: list, top_k: int = 5, doc_id: str = None, project_id: str = None) -> list:
     if RAG_BACKEND == "pgvector":
-        return _search_pgvector(query_embedding, top_k, doc_id)
+        return _search_pgvector(query_embedding, top_k, doc_id, project_id)
     if RAG_BACKEND != "postgres_json":
         raise NotImplementedError(f"Backend '{RAG_BACKEND}' no implementado en esta plantilla (ver docstring)")
 
     with get_conn() as conn, conn.cursor() as cur:
+        # JOIN con documents para acotar por proyecto — rag_chunks no
+        # lleva project_id propio (se hereda vía doc_id -> documents),
+        # así que dos proyectos nunca se mezclan en una búsqueda aunque
+        # tengan chunks con contenido parecido.
+        clauses, params = [], []
         if doc_id:
-            cur.execute("SELECT chunk_id, doc_id, position, text, embedding, doc_version FROM rag_chunks WHERE doc_id = %s", (doc_id,))
-        else:
-            cur.execute("SELECT chunk_id, doc_id, position, text, embedding, doc_version FROM rag_chunks")
+            clauses.append("rc.doc_id = %s")
+            params.append(doc_id)
+        if project_id:
+            clauses.append("d.project_id = %s")
+            params.append(project_id)
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        cur.execute(
+            f"""
+            SELECT rc.chunk_id, rc.doc_id, rc.position, rc.text, rc.embedding, rc.doc_version
+            FROM rag_chunks rc
+            LEFT JOIN documents d ON d.doc_id = rc.doc_id
+            {where}
+            """,
+            params,
+        )
         rows = cur.fetchall()
 
     scored = []
@@ -105,32 +122,30 @@ def _add_chunks_pgvector(chunks: list, embeddings: list, doc_version: str = "v1"
             )
 
 
-def _search_pgvector(query_embedding: list, top_k: int = 5, doc_id: str = None) -> list:
+def _search_pgvector(query_embedding: list, top_k: int = 5, doc_id: str = None, project_id: str = None) -> list:
     query_lit = _vector_literal(query_embedding)
+    clauses, params = [], [query_lit]
+    if doc_id:
+        clauses.append("rc.doc_id = %s")
+        params.append(doc_id)
+    if project_id:
+        clauses.append("d.project_id = %s")
+        params.append(project_id)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    params += [query_lit, top_k]
     with get_conn() as conn, conn.cursor() as cur:
-        if doc_id:
-            cur.execute(
-                """
-                SELECT chunk_id, doc_id, position, text, doc_version,
-                       1 - (embedding <=> %s::vector) AS score
-                FROM rag_chunks_pgvector
-                WHERE doc_id = %s
-                ORDER BY embedding <=> %s::vector
-                LIMIT %s
-                """,
-                (query_lit, doc_id, query_lit, top_k),
-            )
-        else:
-            cur.execute(
-                """
-                SELECT chunk_id, doc_id, position, text, doc_version,
-                       1 - (embedding <=> %s::vector) AS score
-                FROM rag_chunks_pgvector
-                ORDER BY embedding <=> %s::vector
-                LIMIT %s
-                """,
-                (query_lit, query_lit, top_k),
-            )
+        cur.execute(
+            f"""
+            SELECT rc.chunk_id, rc.doc_id, rc.position, rc.text, rc.doc_version,
+                   1 - (rc.embedding <=> %s::vector) AS score
+            FROM rag_chunks_pgvector rc
+            LEFT JOIN documents d ON d.doc_id = rc.doc_id
+            {where}
+            ORDER BY rc.embedding <=> %s::vector
+            LIMIT %s
+            """,
+            params,
+        )
         rows = cur.fetchall()
 
     return [

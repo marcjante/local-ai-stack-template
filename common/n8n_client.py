@@ -22,23 +22,24 @@ N8N_OUTBOUND_TOKEN = os.environ.get("N8N_OUTBOUND_TOKEN", "")
 log = get_logger(__name__)
 
 
-def trigger_n8n_flow(flow_path: str, payload: dict, task_id: str = None, timeout: float = 10) -> dict:
+def trigger_n8n_flow(flow_path: str, payload: dict, task_id: str = None, project_id: str = "default", timeout: float = 10) -> dict:
     """
     Llama a un webhook de n8n (Webhook node) y devuelve su respuesta.
     flow_path es la parte final de la URL configurada en el nodo Webhook
     de n8n, ej. "notificar-resultado" -> POST {N8N_BASE_URL}/webhook/notificar-resultado
 
-    Antes de llamar, comprueba si la integración está ACTIVADA
-    (tabla n8n_integrations, gestionable desde /integrations en el
-    backend). Si está desactivada, no hace la llamada HTTP en absoluto
+    Antes de llamar, comprueba si la integración está ACTIVADA PARA ESE
+    PROYECTO (tabla n8n_integrations, gestionable desde /integrations en
+    el backend). Si está desactivada, no hace la llamada HTTP en absoluto
     y lo deja registrado como 'omitido' — el proyecto puede apagar un
-    flujo sin tocar código ni reiniciar nada.
+    flujo sin tocar código ni reiniciar nada, y sin afectar a otros
+    proyectos que sí lo tengan activado.
 
     No lanza excepción si n8n no responde: un fallo en la notificación no
     debería tumbar la tarea principal — se registra y se sigue.
     """
-    if not is_integration_enabled(flow_path):
-        log.info(f"n8n flow '{flow_path}' desactivado, se omite", extra={"task_id": task_id})
+    if not is_integration_enabled(flow_path, project_id=project_id):
+        log.info(f"n8n flow '{flow_path}' desactivado para el proyecto '{project_id}', se omite", extra={"task_id": task_id})
         return {"ok": False, "skipped": True, "reason": "integración desactivada"}
 
     url = f"{N8N_BASE_URL}/webhook/{flow_path}"

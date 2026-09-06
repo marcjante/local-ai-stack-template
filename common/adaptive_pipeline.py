@@ -47,12 +47,13 @@ def gather_candidate_chunks(task_id: str, payload: dict, query: str) -> tuple:
     elif doc_id:
         # Documento concreto ya indexado antes (POST /rag/index): busca
         # solo dentro de él, no en todo el corpus.
-        chunks = retrieve(query, top_k=10, doc_id=doc_id)
+        chunks = retrieve(query, top_k=10, doc_id=doc_id, project_id=payload.get("project_id", "default"))
         path = "indice_doc_id"
 
     else:
-        # Sin pistas: busca en todo lo indexado hasta ahora.
-        chunks = retrieve(query, top_k=10)
+        # Sin pistas: busca en todo lo indexado del proyecto de esta tarea
+        # (nunca en el corpus completo de todos los proyectos).
+        chunks = retrieve(query, top_k=10, project_id=payload.get("project_id", "default"))
         path = "indice_global"
 
     log_audit(task_id, step="gather", subagent="gather_candidate_chunks",

@@ -69,6 +69,9 @@
 <body>
 <nav class="sidebar">
   <div class="brand">LOCAL AI STUDIO<span class="sub">local-ai-stack-template</span></div>
+  <a href="/projects" style="display:block; margin:0 12px 14px; padding:8px 10px; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:6px; font-size:12px;">
+    📁 {{ session.get('project_id', 'default') }} <span style="color:var(--text-muted);">· switch</span>
+  </a>
   <a href="/" class="{{ 'active' if page == 'dashboard' }}">Dashboard</a>
   <a href="/diagnostics" class="{{ 'active' if page == 'diagnostics' }}">Diagnostics</a>
   <a href="/playground" class="{{ 'active' if page == 'playground' }}">Playground</a>

@@ -33,7 +33,7 @@ from pathlib import Path
 import psutil
 import requests
 import yaml
-from flask import Flask, jsonify, render_template, request, Response, stream_with_context, redirect, send_file
+from flask import Flask, jsonify, render_template, request, Response, stream_with_context, redirect, send_file, session
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
@@ -54,6 +54,11 @@ from rag.chunking import split_into_chunks  # noqa: E402
 from rag.embeddings import embed_text  # noqa: E402
 from rag.vector_store import add_chunks as vs_add_chunks  # noqa: E402
 from common.backup import export_backup, import_backup  # noqa: E402
+from db.db import (  # noqa: E402
+    create_project, list_projects, get_project, get_project_settings,
+    update_project_settings, project_recent_errors,
+)
+
 from common.system_checks import run_all_checks, pull_recommended_model  # noqa: E402
 from common.diagnostics import run_diagnostics  # noqa: E402
 
@@ -78,6 +83,110 @@ LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__, template_folder="templates")
+app.secret_key = os.environ.get("DASHBOARD_SECRET_KEY", "dev-only-change-in-prod")
+
+PROJECT_TEMPLATES = {
+    "blank": {"label": "Blank project", "system_prompt": ""},
+    "rag_qa": {"label": "RAG / Document Q&A", "system_prompt": "Responde solo con lo que digan los documentos indexados, citando la fuente."},
+    "research": {"label": "Research assistant", "system_prompt": "Eres un asistente de investigación. Sintetiza y contrasta fuentes."},
+    "support": {"label": "Customer support", "system_prompt": "Responde de forma breve y orientada a resolver el problema del cliente."},
+    "clinical": {"label": "Clinical/health project", "system_prompt": "Responde con precisión clínica, citando siempre la fuente, y deja claro cuándo la información no es concluyente."},
+    "kb": {"label": "Knowledge base", "system_prompt": "Actúa como una base de conocimiento interna: respuestas concisas con referencia al documento de origen."},
+    "doc_analysis": {"label": "Document analysis", "system_prompt": "Analiza el documento indicado y extrae los puntos clave solicitados."},
+    "agent": {"label": "Agent workflow", "system_prompt": "Actúa como agente autónomo: decide qué pasos seguir para completar la tarea."},
+}
+
+
+def current_project_id() -> str:
+    return session.get("project_id", "default")
+
+
+@app.route("/projects")
+def projects_page():
+    return render_template("projects.html", page="projects", projects=list_projects(),
+                            templates=PROJECT_TEMPLATES, current_project=current_project_id())
+
+
+@app.route("/projects/<project_id>/select", methods=["POST"])
+def projects_select(project_id):
+    if not get_project(project_id):
+        return jsonify({"error": "proyecto desconocido"}), 404
+    session["project_id"] = project_id
+    return jsonify({"selected": project_id})
+
+
+@app.route("/api/projects", methods=["POST"])
+def projects_create():
+    payload = request.get_json(force=True) or {}
+    name = payload.get("name", "").strip()
+    template = payload.get("template", "blank")
+    if not name:
+        return jsonify({"error": "el nombre es obligatorio"}), 400
+    if template not in PROJECT_TEMPLATES:
+        return jsonify({"error": f"plantilla desconocida '{template}'"}), 400
+    project_id = payload.get("id") or name.lower().replace(" ", "-")
+    create_project(project_id, name, payload.get("description"), template)
+    update_project_settings(project_id, system_prompt=PROJECT_TEMPLATES[template]["system_prompt"])
+    ensure_default_collection(project_id=project_id)
+    return jsonify({"id": project_id, "name": name}), 201
+
+
+@app.route("/projects/<project_id>")
+def project_dashboard_page(project_id):
+    project = get_project(project_id)
+    if not project:
+        return "Proyecto no encontrado", 404
+    settings = get_project_settings(project_id)
+    docs = list_documents(project_id=project_id)
+    n_chunks = sum(d["n_chunks"] for d in docs)
+    task_counts = task_counts_by_status(project_id=project_id)
+    errors = project_recent_errors(project_id)
+    return render_template(
+        "project_dashboard.html", page="project_dashboard", project=project, settings=settings,
+        n_documents=len(docs), n_chunks=n_chunks, task_counts=task_counts, recent_errors=errors,
+    )
+
+
+@app.route("/api/projects/<project_id>/settings", methods=["POST"])
+def project_settings_save(project_id):
+    if not get_project(project_id):
+        return jsonify({"error": "proyecto desconocido"}), 404
+    payload = request.get_json(force=True) or {}
+    allowed = {"default_model", "fallback_model", "embedding_model", "system_prompt",
+               "temperature", "top_k", "chunk_size", "chunk_overlap"}
+    fields = {k: v for k, v in payload.items() if k in allowed}
+    if not fields:
+        return jsonify({"error": "nada que guardar"}), 400
+    update_project_settings(project_id, **fields)
+    return jsonify({"saved": True})
+
+
+from common.project_export import export_project, import_project  # noqa: E402
+
+
+@app.route("/api/projects/<project_id>/export")
+def project_export_route(project_id):
+    if not get_project(project_id):
+        return jsonify({"error": "proyecto desconocido"}), 404
+    try:
+        zip_path = export_project(project_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return send_file(zip_path, as_attachment=True, download_name=zip_path.name)
+
+
+@app.route("/api/projects/import", methods=["POST"])
+def project_import_route():
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "no se ha recibido ningún fichero"}), 400
+    new_id = request.form.get("new_project_id") or None
+    include_docs = request.form.get("include_documents", "true") == "true"
+    try:
+        result = import_project(file, new_project_id=new_id, include_documents=include_docs)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(result), 201
 
 # PIDs de los procesos nativos que este panel ha arrancado, para poder
 # darles CPU/RAM reales (no de la máquina entera) al pulsar en la tarjeta.
@@ -299,24 +408,26 @@ def playground_compare():
 EMBEDDING_MODEL_NAME = "hashing_trick_256"
 
 
-def _index_and_register(doc_id, text, collection_id, filename=None, content_type=None, doc_version="v1"):
+def _index_and_register(doc_id, text, collection_id, filename=None, content_type=None, doc_version="v1", project_id="default"):
     chunks = split_into_chunks(doc_id, text)
     embeddings = [embed_text(c["text"]) for c in chunks]
     if chunks:
         vs_add_chunks(chunks, embeddings, doc_version=doc_version)
     register_document(doc_id, collection_id, filename, content_type, doc_version,
-                       EMBEDDING_MODEL_NAME, text, len(chunks))
+                       EMBEDDING_MODEL_NAME, text, len(chunks), project_id=project_id)
     return len(chunks)
 
 
 @app.route("/knowledge")
 def knowledge_page():
-    ensure_default_collection()
+    project_id = current_project_id()
+    ensure_default_collection(project_id=project_id)
     collection_id = request.args.get("collection", "default")
-    collections = list_collections()
-    documents = list_documents(collection_id)
+    collections = list_collections(project_id=project_id)
+    documents = list_documents(collection_id, project_id=project_id)
     return render_template("knowledge.html", page="knowledge", collections=collections,
-                            current_collection=collection_id, documents=documents)
+                            current_collection=collection_id, documents=documents,
+                            project=get_project(project_id))
 
 
 @app.route("/knowledge/<doc_id>")
@@ -334,7 +445,7 @@ def knowledge_create_collection():
     if not name:
         return jsonify({"error": "el nombre es obligatorio"}), 400
     collection_id = payload.get("id") or name.lower().replace(" ", "-")
-    create_collection(collection_id, name, payload.get("description"))
+    create_collection(collection_id, name, project_id=current_project_id(), description=payload.get("description"))
     return jsonify({"id": collection_id, "name": name}), 201
 
 
@@ -349,7 +460,8 @@ def knowledge_index():
     if not doc_id or not text:
         return jsonify({"error": "doc_id y text son obligatorios"}), 400
     n_chunks = _index_and_register(doc_id, text, collection_id, filename=None,
-                                    content_type="text/plain", doc_version=doc_version)
+                                    content_type="text/plain", doc_version=doc_version,
+                                    project_id=current_project_id())
     return jsonify({"doc_id": doc_id, "doc_version": doc_version, "n_chunks": n_chunks})
 
 
@@ -375,7 +487,8 @@ def knowledge_upload():
         return jsonify({"error": f"'{file.filename}' se procesó pero no se extrajo ningún texto (¿PDF escaneado sin OCR?)"}), 400
 
     n_chunks = _index_and_register(doc_id, text, collection_id, filename=file.filename,
-                                    content_type=file.content_type, doc_version=doc_version)
+                                    content_type=file.content_type, doc_version=doc_version,
+                                    project_id=current_project_id())
     return jsonify({"doc_id": doc_id, "filename": file.filename, "n_chunks": n_chunks}), 201
 
 
@@ -389,7 +502,7 @@ def knowledge_reindex(doc_id):
         return jsonify({"error": "este documento no tiene texto guardado para reindexar (indexado antes de esta función)"}), 400
     n_chunks = _index_and_register(doc_id, doc["raw_text"], doc["collection_id"],
                                     filename=doc["filename"], content_type=doc["content_type"],
-                                    doc_version=doc["doc_version"])
+                                    doc_version=doc["doc_version"], project_id=doc["project_id"])
     return jsonify({"doc_id": doc_id, "n_chunks": n_chunks})
 
 
@@ -413,7 +526,7 @@ def knowledge_search():
     doc_id = request.args.get("doc_id")
     if not query:
         return jsonify({"error": "falta ?q="}), 400
-    candidates = retrieve(query, top_k=20, doc_id=doc_id)
+    candidates = retrieve(query, top_k=20, doc_id=doc_id, project_id=current_project_id())
     top = rerank(query, candidates, top_n=top_k)
     return jsonify(format_citations(top))
 
@@ -443,14 +556,15 @@ def plugins_page():
 
 @app.route("/integrations")
 def integrations_page():
-    return render_template("integrations.html", page="integrations", integrations=list_integrations())
+    return render_template("integrations.html", page="integrations",
+                            integrations=list_integrations(project_id=current_project_id()))
 
 
 @app.route("/api/integrations/<flow_name>/<action>", methods=["POST"])
 def integrations_toggle(flow_name, action):
     if action not in ("enable", "disable"):
         return jsonify({"error": "accion invalida"}), 400
-    set_integration_enabled(flow_name, action == "enable")
+    set_integration_enabled(flow_name, action == "enable", project_id=current_project_id())
     return jsonify({"flow_name": flow_name, "enabled": action == "enable"})
 
 
@@ -459,8 +573,10 @@ def integrations_toggle(flow_name, action):
 @app.route("/tasks-view")
 def tasks_view_page():
     status = request.args.get("status")
-    tasks = list_tasks(status=status, limit=100)
-    return render_template("tasks.html", page="tasks", tasks=tasks, status_filter=status, counts=task_counts_by_status())
+    project_id = current_project_id()
+    tasks = list_tasks(status=status, limit=100, project_id=project_id)
+    return render_template("tasks.html", page="tasks", tasks=tasks, status_filter=status,
+                            counts=task_counts_by_status(project_id=project_id))
 
 
 @app.route("/api/tasks/<task_id>/audit")

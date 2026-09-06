@@ -749,3 +749,102 @@ que motiva tener esto: algo se borra o se rompe, y hay vuelta atrás.
 También probados los dos casos de error (fichero corrupto, zip válido
 pero sin `db_dump.sql`) y que restaurar un backup sin pedir tocar
 `services.yaml` lo deja intacto.
+
+## Décima ronda: multi-proyecto — la capa que faltaba para ser una plataforma genérica
+
+Antes de esta ronda, "Local AI Studio" era, en la práctica, el panel de
+un único proyecto. Esta ronda añade `projects` como entidad de primer
+nivel: cada proyecto tiene sus propias colecciones, documentos, tareas,
+integraciones de n8n y configuración (modelo, system prompt,
+temperature, top-k, chunking), sin mezclarse con los demás.
+
+### Esquema
+
+- `projects` (id, name, description, project_type) y `project_settings`
+  (1 fila por proyecto: modelo principal/fallback, embeddings, system
+  prompt, temperature, top_k, chunk_size/overlap).
+- `collections` y `n8n_integrations` pasan a tener **clave primaria
+  compuesta** `(project_id, id)` / `(project_id, flow_name)` — así dos
+  proyectos pueden tener cada uno su colección "default" sin chocar.
+- `tasks` y `documents` llevan `project_id` directo.
+- `rag_chunks` y `audit_log` NO llevan `project_id` propio a propósito:
+  lo heredan vía `doc_id -> documents.project_id` y `task_id ->
+  tasks.project_id` respectivamente — evita duplicar la columna en las
+  dos tablas que más crecen.
+- El proyecto `default` se crea siempre, y toda instalación previa a
+  esta ronda queda asignada a él automáticamente al migrar.
+
+### Bugs de migración reales, encontrados migrando una base con datos de verdad
+
+Se probó la migración contra una base con datos reales de rondas
+anteriores (3 colecciones, 1 tarea), no contra una base vacía — y
+aparecieron dos problemas que una base vacía nunca hubiera revelado:
+
+1. Cambiar la PK de `collections` de `(id)` a `(project_id, id)` falló
+   la primera vez: una restricción de clave foránea huérfana en
+   `documents.collection_id` (de una ronda anterior) dependía del índice
+   de la PK antigua. Solución: `DROP CONSTRAINT IF EXISTS` de esa FK
+   antes de tocar la PK.
+2. Tras eso, la migración sí completó — y se confirmó que las 3
+   colecciones y la tarea existentes quedaron asignadas al proyecto
+   `default` sin perder ni un dato.
+
+### La prueba que de verdad importa: aislamiento real entre proyectos
+
+Probado en dos capas:
+
+- **A nivel de base de datos**: dos proyectos con documentos de
+  contenido claramente distinto (baloncesto / ajedrez) — una búsqueda en
+  el proyecto A nunca devuelve nada del proyecto B, y viceversa.
+- **A través de la interfaz web real** (no solo funciones Python):
+  se crearon dos proyectos desde el wizard, se subió un documento
+  distinto a cada uno, y se confirmó que la pantalla Knowledge y el
+  buscador de retrieval, tras cambiar de proyecto con el selector del
+  sidebar, **solo** muestran/encuentran los documentos de ese proyecto.
+
+### New Project Wizard
+
+`/projects` — formulario con nombre, descripción y una de las 8
+plantillas pedidas (Blank, RAG/Document Q&A, Research assistant,
+Customer support, Clinical/health, Knowledge base, Document analysis,
+Agent workflow). Cada plantilla solo predefine el `system_prompt` inicial
+en `project_settings` — no fuerza nada, se puede cambiar después desde
+el dashboard del proyecto.
+
+### Project Dashboard
+
+`/projects/<id>` — exactamente los 5 datos pedidos: documentos/chunks
+indexados, tareas ejecutadas (con desglose completadas/fallidas), modelo
+activo, calidad de evaluación (placeholder hasta que se ejecute una
+evaluación real — no se inventa un número), y errores recientes con el
+mensaje de error real de cada tarea fallida. Debajo, edición de
+`project_settings` con guardado probado.
+
+### Export / Import de proyecto individual
+
+Distinto del backup global (que exporta TODA la instalación vía
+`pg_dump`): `common/project_export.py` exporta un `.ai-project.zip` con
+un `manifest.json` — proyecto, settings, colecciones, documentos
+(incluido el texto extraído completo) e integraciones — de UN proyecto
+concreto. Al importar, los documentos se re-indexan (chunking +
+embeddings) en el destino, no se copian los chunks tal cual, para no
+depender de qué backend de embeddings tenga configurado el otro lado.
+
+**Probado de extremo a extremo**: se exportó el proyecto "Baloncesto",
+se importó con un id distinto ("baloncesto-copia"), y el documento
+apareció en Knowledge del proyecto nuevo, correctamente indexado y
+buscable con un score de relevancia real.
+
+### Lo que queda fuera de esta ronda, explícitamente
+
+- **Permisos por proyecto** — el JWT con roles sigue siendo global, no
+  por proyecto. Añadirlo es una pieza de diseño nueva (roles ×
+  proyectos), no una extensión directa.
+- **Métricas de evaluación por proyecto** — el Project Dashboard tiene
+  el hueco para ello, pero no se ha conectado con un histórico real de
+  ejecuciones de `Evaluation` todavía.
+- **Playground y Evaluation aún no leen `project_settings`** — el
+  modelo/temperature/system prompt de un proyecto se guardan y se ven
+  en su dashboard, pero el Playground sigue usando sus propios campos
+  sueltos en vez de precargar los valores del proyecto activo. Es el
+  siguiente punto de conexión obvio, no construido todavía.

@@ -187,7 +187,7 @@ def _do_enqueue(queue_name: str, payload: dict):
         return {"error": f"cola desconocida '{queue_name}'", "colas_validas": list(QUEUES_BY_NAME)}, 400
 
     task_id = str(uuid.uuid4())
-    create_task(task_id, queue_name, payload)
+    create_task(task_id, queue_name, payload, project_id=payload.get("project_id", "default"))
 
     queue = QUEUES_BY_NAME[queue_name]
     job_fn = JOB_FUNCS[queue_name]

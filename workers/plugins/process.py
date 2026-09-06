@@ -98,7 +98,7 @@ def handle(task_id: str, payload: dict) -> dict:
 
         n8n_result = trigger_n8n_flow("resultado-tarea", {
             "task_id": task_id, "queue": "process", **result,
-        }, task_id=task_id)
+        }, task_id=task_id, project_id=payload.get("project_id", "default"))
         if n8n_result.get("skipped"):
             n8n_verdict = "omitido_desactivado"
         elif n8n_result.get("ok"):

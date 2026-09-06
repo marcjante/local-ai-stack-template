@@ -175,3 +175,19 @@ Desde Settings: exporta `services.yaml` + toda la base de datos en un
 `.zip` (via `pg_dump`), o restaura uno subiéndolo — pensado para el día
 que algo se rompa y necesites volver atrás. El `.env` real nunca se
 incluye.
+
+## Multi-proyecto
+
+Cada proyecto tiene sus propias colecciones, documentos, tareas,
+integraciones de n8n y configuración (modelo, system prompt, temperature,
+chunking) — aislados de verdad, probado tanto a nivel de base de datos
+como a través de la interfaz real.
+
+- `/projects` — lista, selector, **New Project Wizard** (8 plantillas)
+- `/projects/<id>` — dashboard del proyecto (documentos/chunks, tareas,
+  modelo activo, evaluación, errores recientes) + su configuración
+- Export/import de un proyecto individual (`.ai-project.zip`), distinto
+  del backup global de toda la instalación
+
+Toda instalación previa a esta función queda automáticamente asignada al
+proyecto `default` al actualizar — no se pierde nada.
