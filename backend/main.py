@@ -24,15 +24,20 @@ import functools
 from flask import Flask, request, jsonify, Response, stream_with_context
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from db.db import init_schema, create_task, get_task, get_audit_trail  # noqa: E402
-from workers.queue_conn import QUEUES_BY_NAME, DEFAULT_RETRY, redis_conn  # noqa: E402
-from workers.fetch_jobs import fetch_task  # noqa: E402
-from workers.process_jobs import process_task  # noqa: E402
-from workers.notify_jobs import notify_task  # noqa: E402
+from db.db import init_schema, create_task, get_task, get_audit_trail, list_integrations, set_integration_enabled  # noqa: E402
+from workers.queue_conn import DEFAULT_RETRY, redis_conn, build_queues  # noqa: E402
+from workers.plugin_loader import discover_plugins  # noqa: E402
 from rag.retrieval import index_document, retrieve  # noqa: E402
 from rag.rerank import rerank  # noqa: E402
 from rag.citations import format_citations  # noqa: E402
 from backend.auth import issue_token, require_role  # noqa: E402
+
+# Descubrimiento de workers: cualquier fichero en workers/plugins/ con
+# QUEUE_NAME + handle() aparece aquí automáticamente, sin tocar este
+# fichero. Se descubre una vez al arrancar el backend.
+PLUGIN_REGISTRY = discover_plugins()
+QUEUES_BY_NAME = build_queues(PLUGIN_REGISTRY)
+JOB_FUNCS = {name: info["handle"] for name, info in PLUGIN_REGISTRY.items()}
 
 API_KEY = os.environ.get("API_KEY", "changeme-in-.env")
 N8N_INBOUND_SECRET = os.environ.get("N8N_INBOUND_SECRET", "changeme-in-.env")
@@ -58,13 +63,6 @@ def require_n8n_secret(fn):
             return jsonify({"error": "secreto inválido o ausente (cabecera X-N8N-Secret)"}), 401
         return fn(*args, **kwargs)
     return wrapper
-
-
-JOB_FUNCS = {
-    "fetch": fetch_task,
-    "process": process_task,
-    "notify": notify_task,
-}
 
 
 @app.route("/health")
@@ -141,6 +139,26 @@ def rag_search():
     candidates = retrieve(query, top_k=20)
     top = rerank(query, candidates, top_n=5)
     return jsonify(format_citations(top))
+
+
+@app.route("/integrations")
+def integrations_list():
+    """Lista los flujos de n8n conocidos y si están activados. Público de lectura."""
+    return jsonify(list_integrations())
+
+
+@app.route("/integrations/<flow_name>/enable", methods=["POST"])
+@require_role("admin")
+def integration_enable(flow_name):
+    set_integration_enabled(flow_name, True)
+    return jsonify({"flow_name": flow_name, "enabled": True})
+
+
+@app.route("/integrations/<flow_name>/disable", methods=["POST"])
+@require_role("admin")
+def integration_disable(flow_name):
+    set_integration_enabled(flow_name, False)
+    return jsonify({"flow_name": flow_name, "enabled": False})
 
 
 @app.route("/enqueue/<queue_name>", methods=["POST"])

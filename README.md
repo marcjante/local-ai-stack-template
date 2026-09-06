@@ -107,6 +107,26 @@ n8n en las dos direcciones:
 - El worker `process` avisa a un flujo de n8n al terminar (`common/n8n_client.py`).
 - n8n puede disparar una tarea llamando a `POST /webhooks/n8n/<queue>`
   con la cabecera `X-N8N-Secret`.
+- Cada flujo se puede activar/desactivar sin tocar código: `GET
+  /integrations`, `POST /integrations/<flow>/enable|disable` (rol admin).
+
+## Workers como plugins
+
+`fetch`, `process` y `notify` viven en `workers/plugins/` y se descubren
+solos. Añadir un worker nuevo es crear un fichero ahí con `QUEUE_NAME` y
+una función `handle(task_id, payload)` — el backend lo detecta al
+arrancar, sin tocar `backend/main.py` ni `config/services.yaml`.
+
+## Evaluación
+
+```bash
+python3 scripts/run_evaluation.py --cases evaluation/cases_rag_example.json --target rag
+python3 scripts/run_evaluation.py --cases mis_casos.json --target plugin:process
+```
+
+Framework genérico (`common/evaluation.py`): compara la salida real de
+cualquier función contra comprobaciones declaradas en JSON
+(`expect_contains`, `expect_field`, `expect_min_score`).
 
 Ver `docs/architecture.md` para el diagrama completo, por qué está
 separado así, y cómo adaptar la plantilla a un proyecto real.

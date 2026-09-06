@@ -390,3 +390,89 @@ simulado a la vez: `task_type: "default"` fue a Ollama, `task_type:
 "razonamiento"` fue al servidor OpenAI-compatible, un override manual de
 `provider`/`model` en la misma llamada funcionó, y pedir un proveedor
 inexistente dio un 400 con la lista de proveedores válidos.
+
+## Cuarta ronda: métricas del gateway en el panel, pgvector real, plugins, n8n activable, evaluación
+
+### Métricas del LLM Gateway en el panel (🟡9)
+
+El dashboard ahora pinta en vivo lo que `/metrics` del gateway ya
+exponía: peticiones en curso/totales/rechazadas y desglose por modelo
+usado. Probado en real: tras una llamada de prueba al gateway, el panel
+mostró exactamente esa llamada reflejada en `by_model`.
+
+### pgvector real, con un bug real encontrado y corregido (🟠5)
+
+Se activó la extensión `vector` en Postgres y se implementó el backend
+completo en `rag/vector_store.py` (antes era un stub con
+`NotImplementedError`). Durante las pruebas apareció un problema real:
+el índice `ivfflat`, si se crea ANTES de insertar ningún dato (como pasa
+al inicializar el esquema en una base vacía), queda mal calibrado y las
+búsquedas devuelven **cero resultados, sin ningún error** — un fallo
+silencioso especialmente peligroso porque no hay forma de notar que algo
+va mal salvo probándolo con datos reales, que es justo lo que se hizo
+aquí. Solución: se cambió a índice **HNSW**, que no necesita
+"entrenarse" con datos previos. Verificado con los mismos documentos de
+prueba de siempre, dando resultados idénticos al backend por defecto.
+
+Activar este backend: `RAG_BACKEND=pgvector` en `.env` (requiere
+`CREATE EXTENSION vector;` en la base, ver `db/schema.sql`).
+
+Qdrant se queda sin implementar (sigue siendo un stub) — a diferencia de
+pgvector, exige levantar un servicio nuevo, y no tiene sentido añadir esa
+pieza operativa hasta que el volumen de un proyecto concreto lo justifique.
+
+### Sistema de plugins para workers
+
+Este es el cambio más grande de la ronda. `fetch`, `process` y `notify`
+ya no son ficheros sueltos importados a mano en `backend/main.py` — son
+plugins en `workers/plugins/`, descubiertos automáticamente por
+`workers/plugin_loader.py`. Cualquier fichero ahí con:
+
+```python
+QUEUE_NAME = "mi_cola"
+def handle(task_id: str, payload: dict) -> dict:
+    ...
+```
+
+aparece solo en `/enqueue/mi_cola`, sin tocar `backend/main.py` ni
+`config/services.yaml`. Se arranca con `rq worker mi_cola`.
+
+**Probado de la forma más convincente posible**: se creó un plugin de
+prueba (`echo.py`) sin tocar ningún otro fichero, se reinició el backend,
+y ya estaba disponible; se encoló una tarea, un worker genérico la
+procesó, y se pudo consultar el resultado — todo antes de borrar el
+plugin de prueba.
+
+### n8n con integraciones activables, no fijas por código
+
+Nueva tabla `n8n_integrations` (flow_name, enabled). `n8n_client.py`
+comprueba el estado antes de llamar a cualquier flujo — si no existe
+todavía, se autorregistra como activado (para no romper nada por
+defecto). Endpoints: `GET /integrations` (público), `POST
+/integrations/<flow>/enable` y `/disable` (rol admin).
+
+Probado en real: se desactivó `resultado-tarea`, se lanzó una tarea de
+`process`, y **n8n no recibió ninguna llamada HTTP** (quedó auditado como
+`omitido_desactivado`, no como fallo). Se reactivó, se lanzó otra tarea,
+y esta vez n8n sí recibió el resultado completo.
+
+### Framework de evaluación/benchmarks, genérico
+
+`common/evaluation.py` no sabe nada de ningún dominio: compara la salida
+de cualquier función contra comprobaciones simples (`expect_contains`,
+`expect_field`, `expect_min_score`) declaradas en JSON.
+`scripts/run_evaluation.py` lo ejecuta desde terminal contra dos tipos de
+objetivo: `--target rag` (el pipeline de RAG real) o `--target
+plugin:<nombre>` (el `handle()` real de cualquier worker, con lectura/
+escritura real en Postgres).
+
+Probado en real dos veces: contra el RAG (3/3 casos, incluida una cita
+verificada contra el fragmento exacto del documento) y contra el plugin
+`notify` (1/1). Ejemplo incluido en `evaluation/cases_rag_example.json`.
+
+### Lo que sigue sin construir
+
+- **Constructor visual de pipelines** — mantenida la recomendación de
+  usar n8n de verdad para eso, en vez de reconstruirlo.
+- Nada más queda pendiente de la tabla original de esta fase —las 6
+  filas trabajables ya están cubiertas entre esta ronda y la anterior.

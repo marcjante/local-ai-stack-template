@@ -1,0 +1,18 @@
+[
+  {
+    "id": "hockey_encuentra_doc_correcto",
+    "input": {"query": "hockey patines deporte regional", "top_k": 3},
+    "expect_field": {"path": "results.0.doc_id", "equals": "doc1"},
+    "expect_min_score": {"path": "results.0.score", "min": 0.3}
+  },
+  {
+    "id": "futbol_encuentra_doc_correcto",
+    "input": {"query": "futbol balon porteria", "top_k": 3},
+    "expect_field": {"path": "results.0.doc_id", "equals": "doc2"}
+  },
+  {
+    "id": "cita_incluye_fragmento_real_del_documento",
+    "input": {"query": "hockey patines deporte regional", "top_k": 1},
+    "expect_contains": "patines de cuatro ruedas"
+  }
+]

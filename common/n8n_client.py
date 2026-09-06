@@ -14,6 +14,7 @@ import os
 import requests
 
 from common.logging_setup import get_logger
+from db.db import is_integration_enabled
 
 N8N_BASE_URL = os.environ.get("N8N_BASE_URL", "http://127.0.0.1:5678")
 N8N_OUTBOUND_TOKEN = os.environ.get("N8N_OUTBOUND_TOKEN", "")
@@ -27,9 +28,19 @@ def trigger_n8n_flow(flow_path: str, payload: dict, task_id: str = None, timeout
     flow_path es la parte final de la URL configurada en el nodo Webhook
     de n8n, ej. "notificar-resultado" -> POST {N8N_BASE_URL}/webhook/notificar-resultado
 
+    Antes de llamar, comprueba si la integración está ACTIVADA
+    (tabla n8n_integrations, gestionable desde /integrations en el
+    backend). Si está desactivada, no hace la llamada HTTP en absoluto
+    y lo deja registrado como 'omitido' — el proyecto puede apagar un
+    flujo sin tocar código ni reiniciar nada.
+
     No lanza excepción si n8n no responde: un fallo en la notificación no
     debería tumbar la tarea principal — se registra y se sigue.
     """
+    if not is_integration_enabled(flow_path):
+        log.info(f"n8n flow '{flow_path}' desactivado, se omite", extra={"task_id": task_id})
+        return {"ok": False, "skipped": True, "reason": "integración desactivada"}
+
     url = f"{N8N_BASE_URL}/webhook/{flow_path}"
     headers = {"Content-Type": "application/json"}
     if N8N_OUTBOUND_TOKEN:

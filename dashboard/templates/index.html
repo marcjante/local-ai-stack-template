@@ -54,6 +54,22 @@
   </div>
   {% endif %}
 
+  {% if llm_metrics %}
+  <h2 class="section">LLM Gateway</h2>
+  <div class="metrics-row">
+    <div class="metric-card"><div class="value">{{ llm_metrics.in_flight }}/{{ llm_metrics.max_concurrent }}</div><div class="label">en curso</div></div>
+    <div class="metric-card"><div class="value">{{ llm_metrics.total_requests }}</div><div class="label">peticiones totales</div></div>
+    <div class="metric-card"><div class="value">{{ llm_metrics.total_rejected_timeout }}</div><div class="label">rechazadas (saturado)</div></div>
+  </div>
+  {% if llm_metrics.by_model %}
+  <div class="metrics-row">
+    {% for model, count in llm_metrics.by_model.items() %}
+    <div class="metric-card"><div class="value">{{ count }}</div><div class="label">{{ model }}</div></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endif %}
+
   <h2 class="section">Servicios</h2>
   {% for s in services %}
   <div class="card">

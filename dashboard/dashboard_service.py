@@ -105,6 +105,16 @@ def queue_depths():
         return None
 
 
+def llm_gateway_metrics():
+    try:
+        r = requests.get("http://127.0.0.1:8091/metrics", timeout=1)
+        if r.status_code == 200:
+            return r.json()
+    except requests.RequestException:
+        pass
+    return None
+
+
 def system_metrics():
     return {
         "cpu_percent": psutil.cpu_percent(interval=0.1),
@@ -123,6 +133,7 @@ def index():
     return render_template(
         "index.html", services=statuses, metrics=system_metrics(),
         queues=queue_depths(), docker_ok=docker_available(),
+        llm_metrics=llm_gateway_metrics(),
     )
 
 
@@ -134,6 +145,7 @@ def api_status():
         "metrics": system_metrics(),
         "queues": queue_depths(),
         "docker_available": docker_available(),
+        "llm_gateway": llm_gateway_metrics(),
     })
 
 

@@ -98,3 +98,41 @@ def get_audit_trail(task_id: str):
     with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM audit_log WHERE task_id = %s ORDER BY created_at", (task_id,))
         return cur.fetchall()
+
+
+def is_integration_enabled(flow_name: str) -> bool:
+    """
+    Comprueba si un flujo de n8n está activado. Si no existe todavía en
+    la tabla, lo registra como activado por defecto (para no romper el
+    comportamiento de quien no ha tocado nada) y devuelve True.
+    """
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT enabled FROM n8n_integrations WHERE flow_name = %s", (flow_name,))
+        row = cur.fetchone()
+        if row is not None:
+            return row[0]
+        cur.execute(
+            "INSERT INTO n8n_integrations (flow_name, enabled) VALUES (%s, true) ON CONFLICT DO NOTHING",
+            (flow_name,),
+        )
+        return True
+
+
+def set_integration_enabled(flow_name: str, enabled: bool, description: str = None):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO n8n_integrations (flow_name, enabled, description, updated_at)
+            VALUES (%s, %s, %s, now())
+            ON CONFLICT (flow_name) DO UPDATE
+            SET enabled = EXCLUDED.enabled, updated_at = now(),
+                description = COALESCE(EXCLUDED.description, n8n_integrations.description)
+            """,
+            (flow_name, enabled, description),
+        )
+
+
+def list_integrations():
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM n8n_integrations ORDER BY flow_name")
+        return cur.fetchall()
