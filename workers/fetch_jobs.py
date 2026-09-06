@@ -21,11 +21,12 @@ from common.logging_setup import get_logger  # noqa: E402
 log = get_logger(__name__)
 
 
-def fetch_task(task_id: str, source: str) -> dict:
+def fetch_task(task_id: str, payload: dict) -> dict:
     """
     Ejemplo: sustituye esto por la llamada real (HTTP request, lectura de
     un bucket, consulta a otro servicio...).
     """
+    source = payload.get("source", "")
     log.info(f"empezando, source={source}", extra={"task_id": task_id})
     set_status(task_id, "running", increment_attempts=True)
     try:

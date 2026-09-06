@@ -75,3 +75,26 @@ def get_task(task_id: str):
     with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
         return cur.fetchone()
+
+
+def log_audit(task_id: str, step: str, subagent: str, verdict: str = None,
+              confidence: float = None, details: dict = None):
+    """
+    Deja constancia de qué subagente actuó, qué decidió y con qué confianza.
+    Es la base del 'circuito de información veraz': cualquier tarea se puede
+    reconstruir paso a paso después, viendo qué comprobó cada subagente.
+    """
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO audit_log (task_id, step, subagent, verdict, confidence, details)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (task_id, step, subagent, verdict, confidence, json.dumps(details) if details else None),
+        )
+
+
+def get_audit_trail(task_id: str):
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM audit_log WHERE task_id = %s ORDER BY created_at", (task_id,))
+        return cur.fetchall()

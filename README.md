@@ -76,14 +76,25 @@ docker compose up -d
 ## Probar el flujo completo
 
 ```bash
-curl -X POST http://127.0.0.1:8080/enqueue/fetch \
+curl -X POST http://127.0.0.1:8080/enqueue/process \
   -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
-  -d '{"args": ["ejemplo.com"]}'
-# → {"task_id": "...", "queue": "fetch", "status": "pending"}
+  -d '{
+    "prompt": "Explica X",
+    "sources": [{"id": "doc1", "text": "..."}, {"id": "doc2", "text": "..."}]
+  }'
+# → {"task_id": "...", "queue": "process", "status": "pending"}
 
 curl http://127.0.0.1:8080/tasks/<task_id> -H "X-API-Key: $API_KEY"
-# → status pasa de pending a running a completed
+# → resultado con verdict: "veraz" o "revisar"
+
+curl http://127.0.0.1:8080/tasks/<task_id>/audit -H "X-API-Key: $API_KEY"
+# → traza paso a paso: qué subagente actuó y qué decidió
 ```
+
+n8n en las dos direcciones:
+- El worker `process` avisa a un flujo de n8n al terminar (`common/n8n_client.py`).
+- n8n puede disparar una tarea llamando a `POST /webhooks/n8n/<queue>`
+  con la cabecera `X-N8N-Secret`.
 
 Ver `docs/architecture.md` para el diagrama completo, por qué está
 separado así, y cómo adaptar la plantilla a un proyecto real.

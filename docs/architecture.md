@@ -133,3 +133,68 @@ proyecto los necesita en contenedor.
    `tasks` es genérica y reutilizable, añade las tuyas al lado).
 5. No toques `dashboard_service.py` salvo que cambie la lógica de
    arranque/parada en sí — lee todo de `services.yaml`.
+
+## El circuito de información veraz (dentro de `process`)
+
+El worker `process` ya no es un único paso: es una cadena de subagentes,
+cada uno con su propia responsabilidad y su veredicto guardado en
+`audit_log` (tabla nueva en Postgres):
+
+```
+payload (prompt + fuentes)
+        │
+        ▼
+┌───────────────────┐
+│ gather_sources     │  reúne las fuentes que respaldarán la respuesta
+└─────────┬──────────┘
+          ▼
+┌───────────────────┐
+│ generate_answer    │  pide la respuesta al LLM (vía llm_gateway)
+└─────────┬──────────┘
+          ▼
+┌───────────────────┐     ┌───────────────────────────┐
+│ cross_check_sources │───►│ ¿cuántas fuentes           │
+│ (common/verification)    │  independientes lo dicen?  │
+└─────────┬──────────┘    └───────────────────────────┘
+          ▼
+┌───────────────────┐     ┌───────────────────────────┐
+│ detect_hallucination│──►│ ¿la respuesta se apoya      │
+│ (common/verification)   │  en las fuentes reales?     │
+└─────────┬──────────┘    └───────────────────────────┘
+          ▼
+   veredicto final: 'veraz' o 'revisar'
+          │
+          ▼
+┌───────────────────┐
+│ trigger_n8n_flow   │  avisa a n8n con el resultado (saliente)
+│ (common/n8n_client)│
+└────────────────────┘
+```
+
+Cada paso queda en `audit_log` con `task_id`, `step`, `subagent`,
+`verdict` y `confidence` — se puede reconstruir exactamente qué pasó con
+cualquier tarea llamando a `GET /tasks/<id>/audit`.
+
+**Importante:** `cross_check_sources` y `detect_hallucination` son
+heurísticas simples (coincidencia de texto / solapamiento de palabras) a
+propósito, porque esto es una plantilla. Para un proyecto real, sustitúyelas
+por comparación semántica de verdad o un segundo LLM actuando de juez.
+
+Probado en real durante el desarrollo: se montó un Ollama y un n8n de
+mentira (mocks) para verificar el circuito completo de punta a punta —
+los 6 pasos quedaron en `audit_log` y el mock de n8n recibió el resultado
+final con su veredicto.
+
+## n8n en las dos direcciones
+
+- **Worker → n8n (saliente):** `common/n8n_client.trigger_n8n_flow()`
+  llama a `{N8N_BASE_URL}/webhook/<flow>`. Úsalo para todo lo que no sea
+  puramente Python: mandar un email, escribir en una hoja de cálculo,
+  avisar por Slack... Un fallo aquí no tumba la tarea, solo queda
+  registrado en `audit_log` como `fallo_notificacion`.
+
+- **n8n → backend (entrante):** un flujo de n8n puede hacer un HTTP
+  Request a `POST /webhooks/n8n/<queue>` (con la cabecera
+  `X-N8N-Secret`, ver `.env`) para encolar una tarea, igual que haría el
+  propio backend. Probado: sin el secreto da 401, con él encola
+  correctamente.

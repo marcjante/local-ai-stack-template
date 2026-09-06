@@ -7,4 +7,3 @@ venv/
 .venv/
 *.rdb
 pgdata/
-dump.rdb

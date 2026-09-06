@@ -53,6 +53,10 @@ services:
       DATABASE_URL: "dbname=${POSTGRES_DB:-stack_template} user=${POSTGRES_USER:-postgres} password=${POSTGRES_PASSWORD:-postgres} host=postgres port=5432"
       LLM_GATEWAY_URL: http://llm_gateway:8091
       API_KEY: ${API_KEY:-changeme-in-.env}
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://host.docker.internal:5678}
+      N8N_INBOUND_SECRET: ${N8N_INBOUND_SECRET:-changeme-in-.env}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - redis
       - postgres
@@ -75,6 +79,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: "dbname=${POSTGRES_DB:-stack_template} user=${POSTGRES_USER:-postgres} password=${POSTGRES_PASSWORD:-postgres} host=postgres port=5432"
       LLM_GATEWAY_URL: http://llm_gateway:8091
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://host.docker.internal:5678}
+      N8N_OUTBOUND_TOKEN: ${N8N_OUTBOUND_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - redis
       - postgres
