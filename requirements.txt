@@ -6,3 +6,5 @@ psycopg2-binary>=2.9
 requests>=2.31
 psutil>=5.9
 PyJWT>=2.8
+pypdf>=4.0
+python-docx>=1.1

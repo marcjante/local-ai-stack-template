@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Local AI Studio · Bienvenida</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-muted: #8b949e;
+    --accent: #3fb950; --accent-dim: #2ea043;
+    --amber: #d29922; --red: #f85149; --blue: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  .wizard { width: 480px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 32px; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  p.sub { color: var(--text-muted); font-size: 13px; margin: 0 0 24px; }
+  .check-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  .check-row:last-child { border-bottom: none; }
+  .mark { font-weight: 700; }
+  .mark.ok { color: var(--accent); }
+  .mark.fail { color: var(--red); }
+  .detail { color: var(--text-muted); font-size: 11.5px; }
+  button { font-family: inherit; font-size: 13px; background: #0d1117; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 9px 16px; cursor: pointer; width: 100%; margin-top: 18px; }
+  button.primary { background: var(--accent-dim); border-color: var(--accent-dim); color: #05230c; font-weight: 700; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .mode-option { display: block; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+  .mode-option.selected { border-color: var(--blue); background: rgba(88,166,255,0.08); }
+  .mode-option .title { font-weight: 600; font-size: 13.5px; }
+  .mode-option .desc { color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
+  #step2 { display: none; }
+  .status-line { font-size: 12px; color: var(--text-muted); margin-top: 10px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="wizard">
+  <div id="step1">
+    <h1>Welcome to Local AI Studio</h1>
+    <p class="sub">System check</p>
+    <div id="checksList"></div>
+    <div id="modelRow" style="display:none;" class="check-row">
+      <span>Modelo recomendado</span>
+      <button id="installModelBtn" style="width:auto; margin:0;">Instalar llama3.1</button>
+    </div>
+    <div class="status-line" id="statusLine"></div>
+    <button class="primary" id="continueBtn" disabled>Continue</button>
+  </div>
+
+  <div id="step2">
+    <h1>Choose how you want to use Local AI Studio</h1>
+    <p class="sub">Esto solo guarda una preferencia, no bloquea nada — se puede cambiar luego desde Settings.</p>
+    <div class="mode-option" data-mode="local_only">
+      <div class="title">Local only</div>
+      <div class="desc">Solo Ollama y lo que corra en tu máquina. Nada sale fuera.</div>
+    </div>
+    <div class="mode-option" data-mode="local_and_external">
+      <div class="title">Local models + external APIs</div>
+      <div class="desc">Ollama para lo local, más un proveedor OpenAI-compatible configurado en .env.</div>
+    </div>
+    <div class="mode-option" data-mode="development">
+      <div class="title">Development mode</div>
+      <div class="desc">Sin restricciones — para trastear y probar mientras desarrollas.</div>
+    </div>
+    <button class="primary" id="finishBtn" disabled>Continue</button>
+  </div>
+</div>
+
+<script>
+let lastChecks = null;
+
+async function loadChecks() {
+  const res = await fetch('/api/onboarding/checks');
+  const data = await res.json();
+  lastChecks = data;
+  const list = document.getElementById('checksList');
+  list.innerHTML = data.checks.map(c => `
+    <div class="check-row">
+      <span>${c.name}${!c.required ? ' <span class="detail">(opcional)</span>' : ''}</span>
+      <span>
+        <span class="mark ${c.ok ? 'ok' : (c.required ? 'fail' : '')}" style="${!c.required && !c.ok ? 'color:var(--amber);' : ''}">${c.ok ? '✓' : '✕'}</span>
+        <span class="detail">${c.detail}</span>
+      </span>
+    </div>
+  `).join('');
+
+  const ollama = data.checks.find(c => c.name === 'Ollama');
+  const modelRow = document.getElementById('modelRow');
+  if (ollama && ollama.ok && !data.has_model) {
+    modelRow.style.display = 'flex';
+  } else {
+    modelRow.style.display = 'none';
+  }
+
+  document.getElementById('continueBtn').disabled = !data.all_ok;
+  document.getElementById('statusLine').textContent = data.all_ok
+    ? '' : 'Arregla lo marcado en rojo y refresca esta página.';
+}
+
+document.getElementById('installModelBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('installModelBtn');
+  btn.disabled = true; btn.textContent = 'Instalando…';
+  const res = await fetch('/api/onboarding/install-model', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({model: 'llama3.1'}),
+  });
+  const data = await res.json();
+  if (!data.started) {
+    document.getElementById('statusLine').textContent = 'Error: ' + data.error;
+  } else {
+    document.getElementById('statusLine').textContent = 'Descargando en segundo plano — puede tardar varios minutos. Refresca cuando termine.';
+  }
+  btn.disabled = false; btn.textContent = 'Instalar llama3.1';
+});
+
+document.getElementById('continueBtn').addEventListener('click', () => {
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = 'block';
+});
+
+let selectedMode = null;
+document.querySelectorAll('.mode-option').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.mode-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedMode = el.dataset.mode;
+    document.getElementById('finishBtn').disabled = false;
+  });
+});
+
+document.getElementById('finishBtn').addEventListener('click', async () => {
+  await fetch('/api/onboarding/complete', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mode: selectedMode}),
+  });
+  window.location.href = '/';
+});
+
+loadChecks();
+</script>
+</body>
+</html>

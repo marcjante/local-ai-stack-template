@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>System Diagnostics</h1></div>
+
+<div class="card" style="display:flex; align-items:center; gap:10px;">
+  <span>Overall status:</span>
+  <strong id="overallStatus">cargando…</strong>
+  <button id="refreshBtn" style="margin-left:auto;">Actualizar</button>
+</div>
+
+<h2 class="section-title">Servicios</h2>
+<div class="card" id="servicesList"></div>
+
+<h2 class="section-title">Problemas detectados</h2>
+<div class="card" id="problemsList"></div>
+
+<script>
+const STATUS_COLORS = {healthy: 'var(--accent)', degraded: 'var(--amber)', critical: 'var(--red)'};
+const STATUS_LABELS = {healthy: 'HEALTHY', degraded: 'DEGRADED', critical: 'CRITICAL'};
+
+async function loadDiagnostics() {
+  document.getElementById('overallStatus').textContent = 'comprobando…';
+  const res = await fetch('/api/diagnostics');
+  const data = await res.json();
+
+  const overallEl = document.getElementById('overallStatus');
+  overallEl.textContent = '● ' + STATUS_LABELS[data.overall];
+  overallEl.style.color = STATUS_COLORS[data.overall];
+
+  const svcList = document.getElementById('servicesList');
+  svcList.innerHTML = Object.entries(data.services).map(([name, status]) => {
+    const icon = status === 'up' ? '✓' : (status === 'slow' ? '⚠' : '✕');
+    const color = status === 'up' ? 'var(--accent)' : (status === 'slow' ? 'var(--amber)' : 'var(--red)');
+    return `<div style="display:flex; justify-content:space-between; padding:6px 0; border-top:1px solid var(--border); font-size:13px;">
+      <span>${name}</span><span style="color:${color}; font-weight:700;">${icon} ${status}</span>
+    </div>`;
+  }).join('');
+
+  const probList = document.getElementById('problemsList');
+  if (data.problems.length === 0) {
+    probList.innerHTML = '<p style="color:var(--text-muted); margin:0;">Ningún problema detectado.</p>';
+  } else {
+    probList.innerHTML = data.problems.map(p => `
+      <div style="padding:10px 0; border-top:1px solid var(--border); font-size:13px;">
+        <div style="color:${p.severity === 'high' ? 'var(--red)' : 'var(--amber)'};">Problem detected: ${p.message}</div>
+        <div style="margin-top:8px; display:flex; gap:8px;">
+          ${p.action === 'start_worker' ? `<button onclick="startWorker('${p.action_target}')">Start worker</button>` : ''}
+          <a href="/logs-view" style="padding:7px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px;">View logs</a>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+async function startWorker(queueName) {
+  await fetch(`/api/diagnostics/start-worker/${queueName}`, {method: 'POST'});
+  setTimeout(loadDiagnostics, 1500);
+}
+
+document.getElementById('refreshBtn').addEventListener('click', loadDiagnostics);
+loadDiagnostics();
+</script>
+{% endblock %}

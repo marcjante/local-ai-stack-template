@@ -172,3 +172,81 @@ def task_counts_by_status():
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT status, count(*) FROM tasks GROUP BY status")
         return dict(cur.fetchall())
+
+
+# --- Colecciones y documentos (Knowledge) ---
+
+def create_collection(collection_id: str, name: str, description: str = None):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO collections (id, name, description) VALUES (%s, %s, %s)
+            ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description
+            """,
+            (collection_id, name, description),
+        )
+
+
+def list_collections():
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT c.*, count(d.doc_id) as n_documents
+            FROM collections c LEFT JOIN documents d ON d.collection_id = c.id
+            GROUP BY c.id ORDER BY c.created_at
+        """)
+        return cur.fetchall()
+
+
+def ensure_default_collection():
+    """La colección 'default' siempre existe, para no obligar a crear una antes de poder subir nada."""
+    create_collection("default", "Default", "Colección por defecto")
+
+
+def register_document(doc_id: str, collection_id: str, filename: str, content_type: str,
+                       doc_version: str, embedding_model: str, raw_text: str, n_chunks: int):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO documents (doc_id, collection_id, filename, content_type, doc_version,
+                                    embedding_model, raw_text, n_chunks, indexed_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+            ON CONFLICT (doc_id) DO UPDATE SET
+                collection_id = EXCLUDED.collection_id, filename = EXCLUDED.filename,
+                content_type = EXCLUDED.content_type, doc_version = EXCLUDED.doc_version,
+                embedding_model = EXCLUDED.embedding_model, raw_text = EXCLUDED.raw_text,
+                n_chunks = EXCLUDED.n_chunks, indexed_at = now()
+            """,
+            (doc_id, collection_id, filename, content_type, doc_version, embedding_model, raw_text, n_chunks),
+        )
+
+
+def list_documents(collection_id: str = None):
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        if collection_id:
+            cur.execute("SELECT doc_id, filename, content_type, doc_version, embedding_model, n_chunks, indexed_at "
+                        "FROM documents WHERE collection_id = %s ORDER BY indexed_at DESC", (collection_id,))
+        else:
+            cur.execute("SELECT doc_id, collection_id, filename, content_type, doc_version, embedding_model, n_chunks, indexed_at "
+                        "FROM documents ORDER BY indexed_at DESC")
+        return cur.fetchall()
+
+
+def get_document(doc_id: str):
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM documents WHERE doc_id = %s", (doc_id,))
+        return cur.fetchone()
+
+
+def delete_document(doc_id: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM rag_chunks WHERE doc_id = %s", (doc_id,))
+        cur.execute("SELECT to_regclass('public.rag_chunks_pgvector')")
+        if cur.fetchone()[0] is not None:
+            cur.execute("DELETE FROM rag_chunks_pgvector WHERE doc_id = %s", (doc_id,))
+        cur.execute("DELETE FROM documents WHERE doc_id = %s", (doc_id,))
+
+
+def get_document_chunks(doc_id: str):
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT chunk_id, position, text FROM rag_chunks WHERE doc_id = %s ORDER BY position", (doc_id,))
+        return cur.fetchall()

@@ -133,18 +133,19 @@ separado así, y cómo adaptar la plantilla a un proyecto real.
 
 ## Panel de control: Docker, logs en vivo y proveedores de LLM
 
-- El panel (`http://localhost:8090`) ya tiene interfaz propia con
-  sidebar — "Local AI Studio" — con todas las secciones funcionando:
-  **Dashboard** (servicios interactivos, métricas por proceso, tareas con
-  drill-down), **Playground** (probar cualquier modelo/proveedor),
-  **Knowledge** (indexar y probar retrieval visualmente),
-  **Tasks** (vista completa con auditoría), **Plugins** (autodiscovery),
-  **Integrations** (on/off de n8n), **Logs** (vista unificada de todos
-  los servicios) y **Evaluation** (ejecuta el framework real desde un
-  botón). Solo "Models" queda sin página propia — su contenido ya está
-  cubierto por `/providers` del Gateway, visible desde Playground.
+- Al abrir el panel por primera vez, un **asistente de bienvenida**
+  comprueba Python/Docker/Postgres/Redis/Ollama de verdad y guía la
+  primera configuración — no hace falta saber qué es Redis o RQ para
+  arrancarlo.
+- **Diagnostics** detecta problemas concretos (ej. una cola sin worker
+  escuchándola) con un botón de acción, no solo un semáforo por servicio.
+- El panel (`http://localhost:8090`) tiene interfaz propia con sidebar —
+  "Local AI Studio" — con todas las secciones funcionando: **Dashboard**,
+  **Diagnostics**, **Playground** (con pestaña **Compare** para A/B de
+  modelos), **Knowledge**, **Tasks**, **Plugins**, **Integrations**,
+  **Logs** y **Evaluation**.
 - Cada servicio puede arrancarse/pararse/reiniciarse vía `docker compose`
-  (si tiene `docker_service` en `services.yaml`) o de forma nativa.
+  o de forma nativa.
 - `config/services.yaml` se puede editar desde Settings, con validación
   antes de guardar. El `.env` real nunca se lee ni se muestra desde el
   panel — solo la plantilla `.env.example`.
@@ -159,3 +160,11 @@ separado así, y cómo adaptar la plantilla a un proyecto real.
 - HTTPS/TLS y JWT: hay una API key simple como base; para producción
   real, añade TLS delante (Nginx/Caddy) y valora JWT si necesitas
   usuarios distintos con permisos distintos.
+
+## Knowledge
+
+Gestor real de documentos, no solo pegar texto:
+- Colecciones (`+ Collection` desde la interfaz).
+- Subida real de PDF/DOCX/TXT/MD, con extracción de texto automática.
+- Ver chunks, reindexar sin volver a subir el fichero, borrar.
+- Test de retrieval global o acotado a un documento concreto.

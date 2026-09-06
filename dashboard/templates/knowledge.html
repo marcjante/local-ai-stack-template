@@ -2,42 +2,59 @@
 {% block content %}
 <div class="topbar"><h1>Knowledge</h1></div>
 
-<h2 class="section-title">Documentos indexados</h2>
+<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+  {% for c in collections %}
+  <a href="/knowledge?collection={{ c.id }}" style="padding:7px 14px; border-radius:8px; border:1px solid var(--border); font-size:13px; {{ 'background:var(--accent-dim); color:#05230c; font-weight:700; border-color:var(--accent-dim);' if c.id == current_collection }}">
+    {{ c.name }} <span style="opacity:0.7;">({{ c.n_documents }})</span>
+  </a>
+  {% endfor %}
+  <button id="newCollectionBtn" style="margin-left:auto;">+ Collection</button>
+</div>
+
+<h2 class="section-title">Documents — {{ current_collection }}</h2>
 <div class="card">
-  {% if docs %}
+  {% if documents %}
   <table style="width:100%; font-size:12.5px; border-collapse:collapse;">
     <tr style="color:var(--text-muted); text-align:left;">
-      <th style="padding:4px 8px 8px 0;">doc_id</th><th>versión</th><th>chunks</th><th>indexado</th>
+      <th style="padding:4px 8px 8px 0;">nombre</th><th>tipo</th><th>chunks</th><th>indexado</th><th></th>
     </tr>
-    {% for d in docs %}
+    {% for d in documents %}
     <tr style="border-top:1px solid var(--border);">
-      <td style="padding:6px 8px 6px 0;">{{ d.doc_id }}</td>
-      <td>{{ d.doc_version }}</td>
+      <td style="padding:8px 8px 8px 0;"><a href="/knowledge/{{ d.doc_id }}" style="color:var(--blue);">{{ d.filename or d.doc_id }}</a></td>
+      <td style="color:var(--text-muted);">{{ d.content_type or '—' }}</td>
       <td>{{ d.n_chunks }}</td>
       <td style="color:var(--text-muted);">{{ d.indexed_at }}</td>
+      <td><span class="status-dot up"></span></td>
     </tr>
     {% endfor %}
   </table>
   {% else %}
-  <p style="color:var(--text-muted); margin:0;">Nada indexado todavía.</p>
+  <p style="color:var(--text-muted); margin:0;">Nada indexado en esta colección todavía.</p>
   {% endif %}
 </div>
 
-<h2 class="section-title">Indexar documento</h2>
+<h2 class="section-title">Subir documento (PDF / DOCX / TXT / MD)</h2>
+<div class="card">
+  <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md" style="margin-bottom:10px;">
+  <div style="display:flex; gap:10px; margin-bottom:10px;">
+    <input id="uploadDocVersion" placeholder="versión (v1)" style="width:140px;">
+  </div>
+  <button class="primary" id="uploadBtn">Upload</button>
+  <span id="uploadResult" style="margin-left:10px; color:var(--text-muted); font-size:12.5px;"></span>
+</div>
+
+<h2 class="section-title">O pegar texto directamente</h2>
 <div class="card">
   <div style="display:flex; gap:10px; margin-bottom:10px;">
     <input id="docId" placeholder="doc_id" style="flex:1;">
     <input id="docVersion" placeholder="versión (v1)" style="width:120px;">
   </div>
-  <textarea id="docText" rows="6" placeholder="Pega aquí el texto del documento…"></textarea>
-  <p style="color:var(--text-muted); font-size:11.5px; margin:6px 0 10px;">
-    Solo texto plano por ahora — subida de PDF/DOCX/CSV queda para una siguiente ronda.
-  </p>
-  <button class="primary" id="indexBtn">Indexar</button>
+  <textarea id="docText" rows="5" placeholder="Pega aquí el texto…"></textarea>
+  <button class="primary" id="indexBtn" style="margin-top:10px;">Indexar</button>
   <span id="indexResult" style="margin-left:10px; color:var(--text-muted); font-size:12.5px;"></span>
 </div>
 
-<h2 class="section-title">Probar retrieval</h2>
+<h2 class="section-title">Test retrieval</h2>
 <div class="card">
   <div style="display:flex; gap:10px; margin-bottom:12px;">
     <input id="query" placeholder="Escribe una pregunta…" style="flex:1;">
@@ -48,6 +65,34 @@
 </div>
 
 <script>
+const CURRENT_COLLECTION = "{{ current_collection }}";
+
+document.getElementById('newCollectionBtn').addEventListener('click', async () => {
+  const name = prompt('Nombre de la colección:');
+  if (!name) return;
+  const res = await fetch('/api/knowledge/collections', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name}),
+  });
+  const data = await res.json();
+  if (res.ok) window.location.href = '/knowledge?collection=' + data.id;
+  else alert('Error: ' + data.error);
+});
+
+document.getElementById('uploadBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('fileInput');
+  const resultEl = document.getElementById('uploadResult');
+  if (!fileInput.files.length) { resultEl.textContent = 'Elige un fichero primero.'; return; }
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  fd.append('collection_id', CURRENT_COLLECTION);
+  fd.append('doc_version', document.getElementById('uploadDocVersion').value || 'v1');
+  resultEl.textContent = 'Subiendo e indexando…';
+  const res = await fetch('/api/knowledge/upload', {method: 'POST', body: fd});
+  const data = await res.json();
+  if (!res.ok) { resultEl.textContent = 'Error: ' + data.error; resultEl.style.color = 'var(--red)'; }
+  else { resultEl.textContent = `${data.n_chunks} chunks creados para "${data.filename}"`; resultEl.style.color = 'var(--accent)'; setTimeout(() => location.reload(), 1200); }
+});
+
 document.getElementById('indexBtn').addEventListener('click', async () => {
   const doc_id = document.getElementById('docId').value.trim();
   const doc_version = document.getElementById('docVersion').value.trim() || 'v1';
@@ -56,11 +101,11 @@ document.getElementById('indexBtn').addEventListener('click', async () => {
   resultEl.textContent = 'Indexando…';
   const res = await fetch('/api/knowledge/index', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({doc_id, doc_version, text}),
+    body: JSON.stringify({doc_id, doc_version, text, collection_id: CURRENT_COLLECTION}),
   });
   const data = await res.json();
   if (!res.ok) { resultEl.textContent = 'Error: ' + data.error; resultEl.style.color = 'var(--red)'; }
-  else { resultEl.textContent = `${data.n_chunks} chunks creados para "${data.doc_id}" (${data.doc_version})`; resultEl.style.color = 'var(--accent)'; setTimeout(() => location.reload(), 1200); }
+  else { resultEl.textContent = `${data.n_chunks} chunks creados para "${data.doc_id}"`; resultEl.style.color = 'var(--accent)'; setTimeout(() => location.reload(), 1200); }
 });
 
 document.getElementById('searchBtn').addEventListener('click', async () => {

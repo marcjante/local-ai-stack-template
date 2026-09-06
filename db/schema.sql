@@ -48,6 +48,32 @@ CREATE TABLE IF NOT EXISTS rag_chunks (
 
 CREATE INDEX IF NOT EXISTS idx_rag_chunks_doc_id ON rag_chunks (doc_id);
 
+-- Colecciones: agrupación lógica de documentos (ej. "Research", "Manuals").
+CREATE TABLE IF NOT EXISTS collections (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    description TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Metadatos por documento: a qué colección pertenece, de qué fichero
+-- vino, con qué modelo de embeddings se indexó, y el TEXTO EXTRAÍDO
+-- completo (para poder reindexar sin pedir el fichero otra vez si
+-- cambia el chunk size o el modelo de embeddings).
+CREATE TABLE IF NOT EXISTS documents (
+    doc_id          TEXT PRIMARY KEY,
+    collection_id   TEXT REFERENCES collections(id) ON DELETE SET NULL,
+    filename        TEXT,
+    content_type    TEXT,
+    doc_version     TEXT NOT NULL DEFAULT 'v1',
+    embedding_model TEXT NOT NULL DEFAULT 'hashing_trick_256',
+    raw_text        TEXT,
+    n_chunks        INTEGER NOT NULL DEFAULT 0,
+    indexed_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_collection ON documents (collection_id);
+
 -- Integraciones de n8n activables desde el backend, en vez de fijas por
 -- código. Si un flujo no está en esta tabla, n8n_client lo registra
 -- automáticamente como activado la primera vez que se usa (para no

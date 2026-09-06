@@ -33,7 +33,7 @@ from pathlib import Path
 import psutil
 import requests
 import yaml
-from flask import Flask, jsonify, render_template, request, Response, stream_with_context
+from flask import Flask, jsonify, render_template, request, Response, stream_with_context, redirect
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
@@ -45,6 +45,32 @@ from rag.retrieval import index_document, retrieve  # noqa: E402
 from rag.rerank import rerank  # noqa: E402
 from rag.citations import format_citations  # noqa: E402
 from db.db import get_conn  # noqa: E402
+from db.db import (  # noqa: E402
+    ensure_default_collection, create_collection, list_collections,
+    register_document, list_documents, get_document, delete_document, get_document_chunks,
+)
+from rag.file_parsers import extract_text  # noqa: E402
+from rag.chunking import split_into_chunks  # noqa: E402
+from rag.embeddings import embed_text  # noqa: E402
+from rag.vector_store import add_chunks as vs_add_chunks  # noqa: E402
+from common.system_checks import run_all_checks, pull_recommended_model  # noqa: E402
+from common.diagnostics import run_diagnostics  # noqa: E402
+
+SETUP_STATE_PATH = BASE_DIR / "data" / "setup_state.json"
+
+
+def is_onboarding_complete():
+    if not SETUP_STATE_PATH.exists():
+        return False
+    try:
+        return json.loads(SETUP_STATE_PATH.read_text()).get("completed", False)
+    except (json.JSONDecodeError, OSError):
+        return False
+
+
+def save_setup_state(mode):
+    SETUP_STATE_PATH.parent.mkdir(exist_ok=True)
+    SETUP_STATE_PATH.write_text(json.dumps({"completed": True, "mode": mode}))
 
 CONFIG_PATH = BASE_DIR / "config" / "services.yaml"
 LOGS_DIR = BASE_DIR / "logs"
@@ -150,6 +176,8 @@ GATEWAY_URL = os.environ.get("LLM_GATEWAY_URL", "http://127.0.0.1:8091")
 
 @app.route("/")
 def index():
+    if not is_onboarding_complete():
+        return redirect("/onboarding")
     services = load_services()
     statuses = [status_for(s) for s in services]
     return render_template(
@@ -157,6 +185,66 @@ def index():
         queues=queue_depths(), docker_ok=docker_available(),
         llm_metrics=llm_gateway_metrics(), task_summary=task_counts_by_status(),
     )
+
+
+@app.route("/onboarding")
+def onboarding_page():
+    return render_template("onboarding.html", page="onboarding")
+
+
+@app.route("/api/onboarding/checks")
+def onboarding_checks():
+    return jsonify(run_all_checks())
+
+
+@app.route("/api/onboarding/install-model", methods=["POST"])
+def onboarding_install_model():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(pull_recommended_model(payload.get("model", "llama3.1")))
+
+
+@app.route("/api/onboarding/complete", methods=["POST"])
+def onboarding_complete():
+    payload = request.get_json(force=True) or {}
+    mode = payload.get("mode", "local_only")
+    save_setup_state(mode)
+    return jsonify({"completed": True, "mode": mode})
+
+
+# --- Diagnostics ---
+
+@app.route("/diagnostics")
+def diagnostics_page():
+    return render_template("diagnostics.html", page="diagnostics")
+
+
+@app.route("/api/diagnostics")
+def diagnostics_api():
+    return jsonify(run_diagnostics())
+
+
+# Colas ya cubiertas por una entrada real en services.yaml (arrancan con
+# su start_command normal); el resto usa el comando genérico de RQ.
+_QUEUE_TO_SERVICE = {"fetch": "worker_fetch", "process": "worker_process", "notify": "worker_notify"}
+
+
+@app.route("/api/diagnostics/start-worker/<queue_name>", methods=["POST"])
+def diagnostics_start_worker(queue_name):
+    service_id = _QUEUE_TO_SERVICE.get(queue_name)
+    if service_id:
+        svc = get_service(service_id)
+        if svc:
+            logf = _log_file(service_id)
+            proc = subprocess.Popen(svc["start_command"], shell=True, cwd=BASE_DIR, stdout=logf, stderr=subprocess.STDOUT)
+            _started_pids[service_id] = proc.pid
+            return jsonify({"started": True, "queue": queue_name, "pid": proc.pid})
+
+    # Cola de un plugin sin entrada propia en services.yaml: comando genérico.
+    cmd = f"rq worker {queue_name} --url redis://127.0.0.1:6379/0"
+    logf = _log_file(f"worker_{queue_name}")
+    proc = subprocess.Popen(cmd, shell=True, cwd=BASE_DIR, stdout=logf, stderr=subprocess.STDOUT)
+    _started_pids[f"worker_{queue_name}"] = proc.pid
+    return jsonify({"started": True, "queue": queue_name, "pid": proc.pid, "generic": True})
 
 
 @app.route("/playground")
@@ -183,38 +271,148 @@ def playground_run():
         return jsonify({"error": f"no se pudo contactar con el LLM Gateway: {e}"}), 502
 
 
+@app.route("/api/playground/compare", methods=["POST"])
+def playground_compare():
+    """
+    Lanza la misma petición contra dos combinaciones proveedor/modelo y
+    devuelve ambos resultados para comparar lado a lado. Secuencial, no en
+    paralelo — el semáforo del gateway ya limita concurrencia por diseño,
+    lanzarlas a la vez solo mediría "cuánto tarda cuando compiten entre
+    sí", no el rendimiento real de cada una.
+    """
+    payload = request.get_json(force=True) or {}
+    shared = {k: v for k, v in payload.items() if k not in ("a", "b")}
+    results = {}
+    for key in ("a", "b"):
+        variant = {**shared, **payload.get(key, {})}
+        try:
+            r = requests.post(f"{GATEWAY_URL}/generate", json=variant, timeout=125)
+            results[key] = r.json()
+        except requests.RequestException as e:
+            results[key] = {"error": str(e)}
+    return jsonify(results)
+
+
 # --- Knowledge (RAG) ---
+
+EMBEDDING_MODEL_NAME = "hashing_trick_256"
+
+
+def _index_and_register(doc_id, text, collection_id, filename=None, content_type=None, doc_version="v1"):
+    chunks = split_into_chunks(doc_id, text)
+    embeddings = [embed_text(c["text"]) for c in chunks]
+    if chunks:
+        vs_add_chunks(chunks, embeddings, doc_version=doc_version)
+    register_document(doc_id, collection_id, filename, content_type, doc_version,
+                       EMBEDDING_MODEL_NAME, text, len(chunks))
+    return len(chunks)
+
 
 @app.route("/knowledge")
 def knowledge_page():
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute("""
-            SELECT doc_id, doc_version, count(*) as n_chunks, max(created_at) as indexed_at
-            FROM rag_chunks GROUP BY doc_id, doc_version ORDER BY indexed_at DESC
-        """)
-        docs = [{"doc_id": r[0], "doc_version": r[1], "n_chunks": r[2], "indexed_at": str(r[3])} for r in cur.fetchall()]
-    return render_template("knowledge.html", page="knowledge", docs=docs)
+    ensure_default_collection()
+    collection_id = request.args.get("collection", "default")
+    collections = list_collections()
+    documents = list_documents(collection_id)
+    return render_template("knowledge.html", page="knowledge", collections=collections,
+                            current_collection=collection_id, documents=documents)
+
+
+@app.route("/knowledge/<doc_id>")
+def knowledge_document_page(doc_id):
+    doc = get_document(doc_id)
+    if not doc:
+        return "Documento no encontrado", 404
+    return render_template("knowledge_document.html", page="knowledge", doc=doc)
+
+
+@app.route("/api/knowledge/collections", methods=["POST"])
+def knowledge_create_collection():
+    payload = request.get_json(force=True) or {}
+    name = payload.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "el nombre es obligatorio"}), 400
+    collection_id = payload.get("id") or name.lower().replace(" ", "-")
+    create_collection(collection_id, name, payload.get("description"))
+    return jsonify({"id": collection_id, "name": name}), 201
 
 
 @app.route("/api/knowledge/index", methods=["POST"])
 def knowledge_index():
+    """Indexar texto pegado directamente (sin fichero)."""
     payload = request.get_json(force=True) or {}
     doc_id = payload.get("doc_id", "").strip()
     text = payload.get("text", "").strip()
     doc_version = payload.get("doc_version", "v1").strip() or "v1"
+    collection_id = payload.get("collection_id", "default")
     if not doc_id or not text:
         return jsonify({"error": "doc_id y text son obligatorios"}), 400
-    n_chunks = index_document(doc_id, text, doc_version=doc_version)
+    n_chunks = _index_and_register(doc_id, text, collection_id, filename=None,
+                                    content_type="text/plain", doc_version=doc_version)
     return jsonify({"doc_id": doc_id, "doc_version": doc_version, "n_chunks": n_chunks})
+
+
+@app.route("/api/knowledge/upload", methods=["POST"])
+def knowledge_upload():
+    """Sube un fichero real (PDF/DOCX/TXT/MD), lo parsea, trocea e indexa."""
+    file = request.files.get("file")
+    collection_id = request.form.get("collection_id", "default")
+    doc_version = request.form.get("doc_version", "v1")
+    if not file or not file.filename:
+        return jsonify({"error": "no se ha recibido ningún fichero"}), 400
+
+    doc_id = request.form.get("doc_id") or file.filename
+    content = file.read()
+    try:
+        text = extract_text(file.filename, content)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"no se pudo extraer texto de '{file.filename}': {e}"}), 400
+
+    if not text.strip():
+        return jsonify({"error": f"'{file.filename}' se procesó pero no se extrajo ningún texto (¿PDF escaneado sin OCR?)"}), 400
+
+    n_chunks = _index_and_register(doc_id, text, collection_id, filename=file.filename,
+                                    content_type=file.content_type, doc_version=doc_version)
+    return jsonify({"doc_id": doc_id, "filename": file.filename, "n_chunks": n_chunks}), 201
+
+
+@app.route("/api/knowledge/documents/<doc_id>/reindex", methods=["POST"])
+def knowledge_reindex(doc_id):
+    """Vuelve a trocear/embeder el texto ya guardado, sin pedir el fichero otra vez."""
+    doc = get_document(doc_id)
+    if not doc:
+        return jsonify({"error": "documento no encontrado"}), 404
+    if not doc.get("raw_text"):
+        return jsonify({"error": "este documento no tiene texto guardado para reindexar (indexado antes de esta función)"}), 400
+    n_chunks = _index_and_register(doc_id, doc["raw_text"], doc["collection_id"],
+                                    filename=doc["filename"], content_type=doc["content_type"],
+                                    doc_version=doc["doc_version"])
+    return jsonify({"doc_id": doc_id, "n_chunks": n_chunks})
+
+
+@app.route("/api/knowledge/documents/<doc_id>", methods=["DELETE"])
+def knowledge_delete(doc_id):
+    if not get_document(doc_id):
+        return jsonify({"error": "documento no encontrado"}), 404
+    delete_document(doc_id)
+    return jsonify({"deleted": doc_id})
+
+
+@app.route("/api/knowledge/documents/<doc_id>/chunks")
+def knowledge_document_chunks(doc_id):
+    return jsonify(get_document_chunks(doc_id))
 
 
 @app.route("/api/knowledge/search")
 def knowledge_search():
     query = request.args.get("q", "")
     top_k = int(request.args.get("top_k", 5))
+    doc_id = request.args.get("doc_id")
     if not query:
         return jsonify({"error": "falta ?q="}), 400
-    candidates = retrieve(query, top_k=20)
+    candidates = retrieve(query, top_k=20, doc_id=doc_id)
     top = rerank(query, candidates, top_n=top_k)
     return jsonify(format_citations(top))
 
@@ -533,4 +731,5 @@ def log_stream(service_id):
 
 
 if __name__ == "__main__":
+    ensure_default_collection()
     app.run(host="0.0.0.0", port=8090, debug=False)

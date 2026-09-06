@@ -565,3 +565,118 @@ hay más "modelo" que gestionar que lo que ya expone el LLM Gateway).
 Con esto, las 8 secciones del boceto original de "Local AI Studio" están
 todas construidas salvo "Models" (que no tiene más contenido real que
 mostrar del que ya da `/providers` del Gateway, visible desde Playground).
+
+## Séptima ronda: onboarding, diagnóstico y comparación A/B
+
+### Asistente de primera puesta en marcha
+
+`/` redirige a `/onboarding` hasta que se completa una vez (estado en
+`data/setup_state.json`, ignorado por git — es local de cada máquina).
+Comprueba Python, Docker, Postgres, Redis y Ollama de verdad
+(`common/system_checks.py`), y solo bloquea el avance si falla algo
+realmente imprescindible (Python, Postgres, Redis) — Docker y Ollama son
+opcionales, porque el modo nativo no necesita Docker y un proyecto que
+solo use APIs externas no necesita Ollama. Si Ollama está pero sin
+modelos, ofrece un botón para lanzar `ollama pull` en segundo plano.
+
+El segundo paso pregunta el modo de uso (local only / local + APIs
+externas / desarrollo) y lo guarda — de momento es solo una preferencia
+registrada, no cambia comportamiento del sistema todavía.
+
+**Probado en real, incluido un bug de diseño que se corrigió sobre la
+marcha**: la primera versión exigía que TODOS los checks pasaran para
+continuar, lo que habría bloqueado a cualquiera sin Docker instalado
+aunque estuviera en modo nativo (el caso más común). Se corrigió para
+que solo lo imprescindible bloquee. Probado el flujo completo: redirect
+a onboarding en la primera visita, checks reales, avance con Docker en
+amarillo, completar el asistente, redirect a Dashboard, y que una
+segunda visita a `/` ya no vuelve a pedir onboarding.
+
+### Centro de diagnóstico
+
+Ya no es "el puerto responde o no" — `common/diagnostics.py` cruza
+señales para detectar problemas concretos. El caso estrella: una cola
+con tareas esperando pero sin ningún worker escuchándola (comprobado vía
+`Worker.all()` de RQ), algo invisible mirando servicios uno a uno porque
+Redis, Postgres y el backend pueden estar perfectamente sanos mientras
+nada se procesa. Cada problema trae un botón de acción cuando existe uno
+razonable (`Start worker`), no solo el diagnóstico.
+
+Probado en real: con backend y gateway arrancados pero sin ningún
+worker, el estado general bajó a `degraded` con las 3 colas señaladas;
+pulsar "Start worker" sobre `process` lo puso en `up` de verdad
+(confirmado consultando `/api/diagnostics` otra vez).
+
+### Playground: Compare (A/B)
+
+Pestaña nueva junto a la de siempre: dos selectores de proveedor/modelo,
+un prompt compartido, y "RUN BOTH" — lanza la misma petición contra
+ambas combinaciones (secuencial a propósito, no en paralelo, para no
+medir "cómo compiten entre sí" sino el rendimiento real de cada una) y
+compara latencia, tokens y tokens/segundo lado a lado.
+
+No incluye una columna de "calidad/evaluation" como en el boceto
+original: eso necesita un caso con respuesta esperada de verdad, que es
+justo lo que ya cubre la pantalla **Evaluation** con casos reales — un
+número de "calidad" inventado sin referencia habría sido decorativo, no
+información real.
+
+Probado en real: dos modelos distintos (`llama3.1` y `llama3.1:8b`)
+contra el mismo prompt, con latencia/tokens/salida de cada uno
+mostrados correctamente por separado.
+
+### Pendiente de esta ronda
+
+**Knowledge como gestor de colecciones** (subida de PDF/DOCX/CSV, vista
+por documento con "ver chunks"/"reindexar"/"borrar") queda fuera a
+propósito: implica añadir el concepto de "colección" al esquema (hoy el
+RAG es plano, por `doc_id`) y nuevas dependencias de parseo de ficheros
+— cambios de fondo, no una extensión directa de lo que ya había.
+
+## Octava ronda: Knowledge como gestor de colecciones real
+
+Cierra la carencia que quedaba marcada como "sin construir". Ya no es
+pegar texto y probar retrieval — es un gestor real:
+
+- **Colecciones**: tabla `collections`, creables desde la interfaz
+  (`POST /api/knowledge/collections`). La colección `default` se crea
+  siempre al arrancar el panel, para no bloquear a quien sube algo sin
+  haber creado una colección antes.
+- **Subida real de ficheros**: `POST /api/knowledge/upload` (multipart)
+  acepta PDF, DOCX, TXT y MD. `rag/file_parsers.py` extrae el texto de
+  cada formato (`pypdf` para PDF, `python-docx` para DOCX) — añadir un
+  formato nuevo es añadir una función ahí, nada más.
+- **Metadatos por documento**: tabla `documents` — colección, nombre de
+  fichero, tipo, versión, modelo de embeddings usado, y el **texto
+  extraído completo** guardado (no solo los chunks), para poder
+  reindexar sin volver a pedir el fichero.
+- **Reindexar**: `POST /api/knowledge/documents/<id>/reindex` — borra
+  los chunks existentes y vuelve a trocear/calcular embeddings desde el
+  texto ya guardado.
+- **Borrar**: `DELETE /api/knowledge/documents/<id>` — quita chunks
+  (de ambos backends, JSON y pgvector si existiera) y la metadata.
+- **Ver chunks**: página de detalle por documento
+  (`/knowledge/<doc_id>`) con los chunks reales y un test de retrieval
+  acotado solo a ese documento (`?doc_id=` en `/api/knowledge/search`).
+
+### Dos bugs reales encontrados subiendo ficheros de verdad
+
+1. La colección `default` solo se creaba al visitar la página
+   `/knowledge` — llamar directamente a la API de subida (como hace
+   cualquier integración externa, no solo el navegador) fallaba con
+   `ForeignKeyViolation` porque la colección no existía todavía.
+   Corregido: se crea al arrancar el proceso del panel, no al visitar
+   una página concreta.
+2. El borrado de chunks en `rag_chunks_pgvector` asumía que esa tabla
+   siempre existe — pero desde la ronda anterior pgvector es opcional,
+   así que la tabla puede no estar. Corregido comprobando su existencia
+   (`to_regclass`) antes de intentar borrar ahí.
+
+**Probado end-to-end con ficheros reales, no de mentira**: generé un
+PDF real (con `reportlab`), un DOCX real (con `python-docx`), un TXT y
+un MD, subí los cuatro, y el retrieval global los recuperó a todos
+correctamente ordenados por relevancia — incluida la extracción de
+texto del PDF, que salió limpia. Probado también: página de detalle,
+ver chunks, reindexar sin re-subir, borrar (confirmando que desaparece
+de la búsqueda), y que dos colecciones distintas mantienen sus
+documentos separados.
