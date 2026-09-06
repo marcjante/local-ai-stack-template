@@ -46,6 +46,7 @@ def generate_answer(task_id: str, prompt: str, task_type: str = "default") -> di
     log_audit(task_id, step="generate", subagent="generate_answer", verdict="ok",
               details={
                   "model_used": data.get("_model_used"),
+                  "provider_used": data.get("_provider_used"),
                   "task_type": data.get("_task_type", task_type),
                   "prompt": prompt,
                   "answer_len": len(answer),

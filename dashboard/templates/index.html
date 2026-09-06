@@ -8,8 +8,11 @@
   h1 { font-size:1.3rem; }
   h2.section { font-size:0.85rem; text-transform:uppercase; color:#6b7480; margin:24px 0 8px; }
   .actions { margin-bottom:16px; }
-  button { padding:8px 14px; border-radius:8px; border:1px solid #ccc; background:white; cursor:pointer; margin-right:8px; }
-  .card { background:white; border-radius:10px; padding:14px 16px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+  button { padding:7px 12px; border-radius:8px; border:1px solid #ccc; background:white; cursor:pointer; margin-right:6px; font-size:0.8rem; }
+  button.docker { background:#e7f0ff; border-color:#a9c6f5; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .card { background:white; border-radius:10px; padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+  .card-top { display:flex; justify-content:space-between; align-items:flex-start; }
   .status { font-weight:700; padding:3px 10px; border-radius:12px; font-size:0.8rem; }
   .status.up { background:#e3f6e8; color:#1c8a4b; }
   .status.down { background:#fdeceb; color:#b3401f; }
@@ -19,14 +22,22 @@
   .metric-card { background:white; border-radius:10px; padding:12px 16px; flex:1; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
   .metric-card .value { font-size:1.4rem; font-weight:700; }
   .metric-card .label { font-size:0.75rem; color:#6b7480; }
+  .btn-row { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+  .docker-warning { font-size:0.7rem; color:#b3401f; margin-top:6px; }
+  #logPanel { display:none; margin-top:16px; background:#111; color:#d5f5e3; border-radius:10px; padding:12px; font-family: ui-monospace, monospace; font-size:0.75rem; max-height:280px; overflow-y:auto; white-space:pre-wrap; }
+  #logPanel.open { display:block; }
+  #logPanelTitle { color:#9aa1ab; font-size:0.7rem; margin-bottom:6px; }
 </style>
 </head>
 <body>
   <h1>Estado del stack</h1>
   <div class="actions">
-    <button onclick="fetch('/api/start-all',{method:'POST'}).then(()=>location.reload())">Arrancar todo</button>
-    <button onclick="fetch('/api/stop-all',{method:'POST'}).then(()=>location.reload())">Parar todo</button>
+    <button onclick="fetch('/api/start-all',{method:'POST'}).then(()=>location.reload())">Arrancar todo (nativo)</button>
+    <button onclick="fetch('/api/stop-all',{method:'POST'}).then(()=>location.reload())">Parar todo (nativo)</button>
   </div>
+  {% if not docker_ok %}
+  <div class="docker-warning">Docker no está disponible en este sistema — los botones de Docker quedarán deshabilitados.</div>
+  {% endif %}
 
   <h2 class="section">Máquina</h2>
   <div class="metrics-row">
@@ -46,15 +57,63 @@
   <h2 class="section">Servicios</h2>
   {% for s in services %}
   <div class="card">
-    <div>
-      <strong>{{ s.name }}</strong>{% if s.port %} (puerto {{ s.port }}){% endif %}
-      <span class="check-type">chequeo: {{ s.check_type }}</span><br>
-      <span style="color:#6b7480; font-size:0.85rem;">{{ s.description }}</span>
-    </div>
-    <div>
+    <div class="card-top">
+      <div>
+        <strong>{{ s.name }}</strong>{% if s.port %} (puerto {{ s.port }}){% endif %}
+        <span class="check-type">chequeo: {{ s.check_type }}</span><br>
+        <span style="color:#6b7480; font-size:0.85rem;">{{ s.description }}</span>
+      </div>
       <span class="status {{ s.status }}">{{ {'up': 'ACTIVO', 'down': 'PARADO', 'unknown': 'SIN DATO'}[s.status] }}</span>
+    </div>
+    <div class="btn-row">
+      <button onclick="fetch('/api/start/{{ s.id }}',{method:'POST'}).then(()=>location.reload())">Arrancar (nativo)</button>
+      <button onclick="fetch('/api/stop/{{ s.id }}',{method:'POST'}).then(()=>location.reload())">Parar (nativo)</button>
+      {% if s.docker_service %}
+      <button class="docker" {{ 'disabled' if not docker_ok }} onclick="dockerAction('{{ s.id }}','start')">▶ Docker</button>
+      <button class="docker" {{ 'disabled' if not docker_ok }} onclick="dockerAction('{{ s.id }}','stop')">■ Docker</button>
+      <button class="docker" {{ 'disabled' if not docker_ok }} onclick="dockerAction('{{ s.id }}','restart')">↻ Docker</button>
+      {% endif %}
+      <button onclick="openLogs('{{ s.id }}', '{{ s.name }}')">Ver logs en vivo</button>
     </div>
   </div>
   {% endfor %}
+
+  <div id="logPanel">
+    <div id="logPanelTitle">Logs de —</div>
+    <div id="logPanelBody"></div>
+  </div>
+
+<script>
+function dockerAction(serviceId, action) {
+  fetch(`/api/docker/${serviceId}/${action}`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) alert('Docker: ' + (data.error || data.stderr || 'fallo desconocido'));
+      else setTimeout(() => location.reload(), 1500);
+    });
+}
+
+let currentLogSource = null;
+
+function openLogs(serviceId, serviceName) {
+  const panel = document.getElementById('logPanel');
+  const body = document.getElementById('logPanelBody');
+  document.getElementById('logPanelTitle').textContent = 'Logs de ' + serviceName + ' (en vivo)';
+  body.textContent = '';
+  panel.classList.add('open');
+  panel.scrollIntoView({behavior: 'smooth'});
+
+  if (currentLogSource) currentLogSource.close();
+  currentLogSource = new EventSource(`/logs/${serviceId}/stream`);
+  currentLogSource.onmessage = (e) => {
+    const line = JSON.parse(e.data);
+    body.textContent += line + '\n';
+    panel.scrollTop = panel.scrollHeight;
+  };
+  currentLogSource.addEventListener('error', () => {
+    body.textContent += '[fin del stream o error de conexión]\n';
+  });
+}
+</script>
 </body>
 </html>

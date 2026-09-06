@@ -111,6 +111,17 @@ n8n en las dos direcciones:
 Ver `docs/architecture.md` para el diagrama completo, por qué está
 separado así, y cómo adaptar la plantilla a un proyecto real.
 
+## Panel de control: Docker, logs en vivo y proveedores de LLM
+
+- El panel (`http://localhost:8090`) puede arrancar/parar/reiniciar cada
+  servicio vía `docker compose` (si tiene `docker_service` en
+  `services.yaml` y Docker está instalado), además del modo nativo.
+- Cada servicio tiene un botón "Ver logs en vivo" (Server-Sent Events,
+  sin recargar la página).
+- El LLM Gateway soporta varios proveedores (`ollama`,
+  `openai_compatible`) — `GET /providers` los lista, y cada `task_type`
+  en `.env` decide cuál usar por defecto.
+
 ## Qué NO incluye (a propósito)
 
 - Lógica de negocio real: `workers/*_jobs.py` tienen placeholders donde

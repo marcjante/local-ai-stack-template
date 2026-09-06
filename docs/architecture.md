@@ -315,3 +315,78 @@ complejidad operativa de un cluster de Kafka.
 - **🟡9 (métricas RAG/LLM en el dashboard)**: el LLM Gateway ya expone
   `/metrics` (con desglose por modelo) — falta que el panel las muestre
   visualmente. Pendiente de la próxima ronda.
+
+## Tercera ronda: panel con control de Docker + logs en vivo + selector de proveedor de LLM
+
+De la tabla "interfaz gráfica completa" (dashboard interactivo, plugins,
+constructor visual de pipelines...), esta ronda cubre las 3 partes que
+son extensión directa de lo que ya había — el resto (constructor visual
+de pipelines, sistema de plugins, RAG con Qdrant/pgvector reales,
+integraciones de n8n activables) queda deliberadamente fuera: son diseños
+nuevos, no mejoras incrementales, y no tiene sentido construirlos a medias
+sin decidir antes cómo deben funcionar.
+
+### Control de Docker desde el panel
+
+Cada servicio de `services.yaml` tiene ahora un campo `docker_service`
+que lo enlaza con su nombre en `docker-compose.yml` (o `null` si no tiene
+equivalente en Docker — Ollama, ChromaDB y Nginx se gestionan solo de
+forma nativa, ver comentarios en `docker-compose.yml`).
+
+El panel añade, por servicio con `docker_service`, tres botones que
+llaman a `docker compose up -d / stop / restart <servicio>` vía
+`POST /api/docker/<id>/<start|stop|restart>`. Si Docker no está instalado
+o el servicio no tiene equivalente, el panel lo dice con un mensaje claro
+en vez de fallar en silencio.
+
+**Importante:** esto asume que el propio panel corre de forma NATIVA en
+la máquina que tiene Docker (como en todos los ejemplos de esta plantilla
+hasta ahora) — puede llamar a `docker compose` como cualquier comando del
+host. Si metieras el panel dentro de un contenedor, necesitarías montar
+el socket de Docker y añadir el cliente `docker` a esa imagen; no se ha
+hecho a propósito, para no meter docker-in-docker si no hace falta.
+
+Probado en real (sin Docker instalado en el entorno de desarrollo, que es
+justo el caso límite más importante de cubrir bien): pedir una acción
+Docker sobre un servicio devuelve `"Docker no está instalado..."` en vez
+de un error genérico o un fallo silencioso; pedirla sobre un servicio sin
+`docker_service` (como `llm`) devuelve `"no tiene equivalente en
+docker-compose.yml"`.
+
+### Logs en vivo (Server-Sent Events)
+
+Los procesos nativos que arranca el panel (`/api/start/<id>`) ahora
+redirigen su salida a `logs/<id>.log`. El endpoint
+`GET /logs/<id>/stream` sirve ese fichero como SSE: solo líneas nuevas a
+partir del momento en que se abre el stream (no vuelca el histórico
+entero cada vez).
+
+Para servicios en Docker, el mismo endpoint puede usar
+`docker compose logs -f --tail 50 <servicio>` (con `?source=docker`, o
+automáticamente si no hay fichero de log nativo y el servicio sí tiene
+`docker_service`).
+
+Probado en real: se abrió el stream, se escribieron dos líneas nuevas en
+el fichero de log mientras el stream estaba activo, y ambas llegaron
+correctamente por SSE en tiempo real (sin recargar nada).
+
+### Selector de modelo/proveedor en el LLM Gateway
+
+`MODEL_ROUTES` ya no mapea `task_type` a un simple nombre de modelo —
+mapea a `{provider, model}`. Hay dos adaptadores de proveedor:
+
+- `ollama` — el que ya había.
+- `openai_compatible` — cualquier servidor que hable el protocolo de
+  OpenAI (`/v1/chat/completions`): LM Studio, vLLM, text-generation-webui,
+  o la propia API de OpenAI si configuras `OPENAI_COMPAT_URL` y la key.
+
+`POST /generate` acepta `task_type` (usa la ruta configurada) o
+`provider`/`model` explícitos para forzar uno concreto en una llamada
+puntual. `GET /providers` lista los proveedores disponibles y las rutas
+configuradas.
+
+Probado en real con un Ollama simulado y un servidor OpenAI-compatible
+simulado a la vez: `task_type: "default"` fue a Ollama, `task_type:
+"razonamiento"` fue al servidor OpenAI-compatible, un override manual de
+`provider`/`model` en la misma llamada funcionó, y pedir un proveedor
+inexistente dio un 400 con la lista de proveedores válidos.
