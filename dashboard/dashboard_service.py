@@ -418,7 +418,10 @@ EMBEDDING_MODEL_NAME = "hashing_trick_256"
 
 
 def _index_and_register(doc_id, text, collection_id, filename=None, content_type=None, doc_version="v1", project_id="default"):
-    chunks = split_into_chunks(doc_id, text)
+    settings = get_project_settings(project_id)
+    chunk_size = settings["chunk_size"] if settings else 120
+    chunk_overlap = settings["chunk_overlap"] if settings else 20
+    chunks = split_into_chunks(doc_id, text, chunk_size=chunk_size, overlap=chunk_overlap)
     embeddings = [embed_text(c["text"]) for c in chunks]
     if chunks:
         vs_add_chunks(chunks, embeddings, doc_version=doc_version)
