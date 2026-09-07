@@ -202,3 +202,9 @@ proyecto `default` al actualizar — no se pierde nada.
 - Permisos por proyecto (`project_members`: admin/editor/viewer),
   aplicados en el **backend** vía `require_project_role()` — el panel
   sigue sin login, eso queda fuera a propósito.
+
+## Formatos soportados en Knowledge
+
+PDF, DOCX, TXT, MD, CSV, JSON y HTML — cada uno convertido a texto con
+significado (no volcado crudo). Añadir un formato nuevo: una función en
+`rag/file_parsers.py` + una entrada en `EXTRACTORS`.

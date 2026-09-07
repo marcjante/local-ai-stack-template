@@ -919,3 +919,68 @@ Con esto, los tres huecos señalados quedan cerrados. Las líneas
 "pendiente" que siguen abiertas de rondas anteriores (Qdrant real,
 constructor visual, login del panel) siguen igual — no se ha tocado
 ninguna en esta ronda.
+
+## Duodécima ronda: n8n real (parcial) y más formatos en Knowledge
+
+Siguiendo el orden acordado: Ollama real + n8n real → CSV/JSON/HTML →
+migraciones formales → snapshots/versionado → validator → v1.0.0.
+
+### n8n real — instalado y probado, con un límite honesto
+
+Se instaló n8n 2.35.7 de verdad (vía npm, ~2200 paquetes), se arrancó,
+se creó una cuenta owner por API, se hizo login, y se importó un
+workflow con un nodo Webhook. Confirmado con `/healthz` y la API REST
+respondiendo con datos reales, no simulados.
+
+**Límite encontrado y no resuelto en este entorno**: activar un
+workflow para que su webhook de producción quede registrado en memoria
+no se consigue ni editando la base de datos ni con `PATCH
+/rest/workflows/:id` — n8n parece necesitar el flujo de activación
+propio de su editor web, que no se puede reproducir sin navegador desde
+aquí. Se intentó también disparar la ejecución vía
+`POST /rest/workflows/:id/run` (la API interna que usa el botón
+"Execute workflow" del editor), pero su esquema de payload es interno,
+frágil y no documentado para uso por API — no compensaba seguir
+peleando contra eso en vez de contra nuestro propio código.
+
+**Recomendación**: la verificación final de esto (activar un webhook y
+confirmar que `common/n8n_client.py` le llega, o probar el saliente
+n8n→backend) debería hacerse en una máquina con navegador — un clic en
+el toggle "Active" del editor de n8n hace en 2 segundos lo que aquí no
+se pudo automatizar por API. La lógica de nuestro lado
+(`n8n_client.trigger_n8n_flow`, el webhook entrante
+`/webhooks/n8n/<cola>`) ya estaba probada exhaustivamente contra un n8n
+simulado fiel al contrato HTTP real (mismo formato de request/response)
+en rondas anteriores — lo que faltaba probar era la infraestructura de
+n8n en sí, no nuestro código.
+
+### Knowledge: CSV, JSON y HTML añadidos
+
+`rag/file_parsers.py` ampliado con 3 extractores nuevos, cada uno
+convirtiendo su formato a texto con significado (no volcando el
+formato crudo):
+
+- **CSV**: cada fila → `columna: valor, columna: valor` (vía
+  `csv.DictReader`), para que el chunking trabaje sobre frases, no
+  sobre comas sueltas.
+- **JSON**: aplanado a líneas `ruta.de.claves: valor` (recorrido
+  recursivo de objetos y listas).
+- **HTML**: texto visible real, quitando `<script>`, `<style>`,
+  `<title>` y `<head>` — no solo estos dos primeros.
+
+**Bug real encontrado en la propia prueba**: la primera versión del
+extractor de HTML dejaba colarse el contenido de `<title>` (no es texto
+visible de la página). Corregido añadiéndolo a la lista de etiquetas
+excluidas junto con `<head>`.
+
+**Probado con ficheros reales de cada formato**: un CSV con datos de
+jugadores, un JSON anidado con listas, y un HTML con `<script>` y
+`<style>` de por medio — los tres se subieron, indexaron, y salieron
+correctamente en búsquedas reales con contenido semánticamente
+coherente (ninguna filtración del script ni del CSS).
+
+### Pendiente de esta ronda, según el orden acordado
+
+Migraciones formales (Alembic o equivalente), snapshots/versionado de
+configuración, y el validador de proyecto (`Validate project`) quedan
+para la siguiente tanda — no se ha tocado nada de eso todavía.
