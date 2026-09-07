@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>Models</h1></div>
+
+{% if ollama_error %}
+<div class="callout" style="background:var(--amber-bg, #FAEEDA); color:#4a2f06; border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:16px;">
+  No se pudo contactar con Ollama ({{ ollama_error }}). ¿Está arrancado en <code>{{ 'OLLAMA_URL' }}</code>?
+</div>
+{% endif %}
+
+<h2 class="section-title">Installed</h2>
+<div class="card">
+  {% for m in installed %}
+  <div class="model-row" data-model="{{ m.name }}" style="padding:10px 0; {{ 'border-top:1px solid var(--border);' if not loop.first }}">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <span class="status-dot up"></span><strong>{{ m.name }}</strong>
+        <span style="color:var(--text-muted); font-size:11.5px; margin-left:8px;">{{ m.size }} · Ollama</span>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button onclick="testModel('{{ m.name }}')">Test</button>
+        <button onclick="deleteModel('{{ m.name }}')" style="border-color:var(--red); color:var(--red);">Delete</button>
+      </div>
+    </div>
+    <div class="benchmark-result" style="display:none; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); font-size:12.5px;"></div>
+  </div>
+  {% else %}
+  <p style="color:var(--text-muted); margin:0;">Ningún modelo instalado todavía.</p>
+  {% endfor %}
+</div>
+
+<h2 class="section-title">Available</h2>
+<div class="card">
+  {% for m in available %}
+  <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; {{ 'border-top:1px solid var(--border);' if not loop.first }}">
+    <div>
+      <span class="status-dot unknown"></span><strong>{{ m.name }}</strong>
+      <span style="color:var(--text-muted); font-size:11.5px; margin-left:8px;">{{ m.approx_size }}</span>
+    </div>
+    <button class="primary" onclick="installModel('{{ m.name }}')">Install</button>
+  </div>
+  {% else %}
+  <p style="color:var(--text-muted); margin:0;">No hay más modelos en el catálogo curado que no tengas ya instalados.</p>
+  {% endfor %}
+</div>
+
+<div id="installStatus" style="font-size:12.5px; color:var(--text-muted); margin-top:10px;"></div>
+
+<script>
+async function testModel(name) {
+  const row = document.querySelector(`.model-row[data-model="${name}"] .benchmark-result`);
+  row.style.display = 'block';
+  row.textContent = 'Ejecutando benchmark…';
+  const res = await fetch(`/api/models/${encodeURIComponent(name)}/benchmark`, {method: 'POST'});
+  const data = await res.json();
+  if (!res.ok) { row.textContent = 'Error: ' + data.error; row.style.color = 'var(--red)'; return; }
+  row.innerHTML = `
+    TTFT <strong>${data.ttft_seconds} s</strong> ·
+    Generation <strong>${data.tokens_per_second ?? '—'} tok/s</strong> ·
+    RAM <strong>${data.ram}</strong> ·
+    ${data.eval_count} tokens generados
+  `;
+}
+
+async function deleteModel(name) {
+  if (!confirm(`¿Borrar el modelo "${name}"? Habrá que volver a descargarlo si hace falta.`)) return;
+  const res = await fetch(`/api/models/${encodeURIComponent(name)}`, {method: 'DELETE'});
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + data.error); return; }
+  location.reload();
+}
+
+async function installModel(name) {
+  const status = document.getElementById('installStatus');
+  status.textContent = `Descargando "${name}" en segundo plano — puede tardar varios minutos…`;
+  const res = await fetch('/api/models/install', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({model: name}),
+  });
+  const data = await res.json();
+  if (!data.started) { status.textContent = 'Error: ' + data.error; status.style.color = 'var(--red)'; }
+  else { status.textContent += ' Refresca esta página cuando termine para verlo en "Installed".'; }
+}
+</script>
+{% endblock %}

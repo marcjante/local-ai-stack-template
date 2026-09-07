@@ -1119,3 +1119,52 @@ conflicto, 30/30 tests pasando.
   desarrollo) sigue existiendo en paralelo a Alembic, documentada
   explícitamente como la vía rápida de desarrollo — no la vía oficial
   de producción, que pasa a ser Alembic.
+
+## Decimoquinta ronda: Model Manager
+
+Última pieza de la lista: `/models` — gestión de modelos de Ollama
+desde el panel, tal como se pidió.
+
+### Cómo funciona
+
+- **Installed**: consulta `GET /api/tags` de Ollama de verdad — no una
+  lista inventada. Cada modelo con su tamaño real (formateado de bytes
+  a GB) y botones **Test** / **Delete**.
+- **Available**: catálogo curado a mano
+  (`common/model_manager.CURATED_AVAILABLE`) — Ollama no tiene una API
+  de catálogo consultable sin depender de `ollama.com`, así que es una
+  lista mantenida en el código, filtrada para no repetir lo ya
+  instalado.
+- **Install**: usa el binario `ollama pull` si está en el `PATH`; si no
+  (Ollama corriendo en Docker o en otra máquina), cae a la API HTTP
+  (`POST /api/pull`) — probado el segundo caso en este entorno, que no
+  tiene el binario.
+- **Delete**: `DELETE /api/delete` de Ollama.
+- **Benchmark ("Test")**: un único prompt de prueba, con los tiempos
+  que la propia respuesta de Ollama ya trae —
+  `load_duration + prompt_eval_duration` para el TTFT, y
+  `eval_count / eval_duration` para tokens/segundo. No hace falta
+  cronometrar aparte ni añadir instrumentación — esos campos ya existen
+  en la API real de Ollama. La RAM se consulta aparte con
+  `GET /api/ps` (modelos cargados ahora mismo); si el modelo no aparece
+  ahí, se muestra "—" en vez de inventar un número.
+- El selector de modelo del **New Project Wizard** ahora se rellena con
+  los modelos instalados de verdad (antes era un campo suelto sin
+  validar contra nada).
+
+### Probado de extremo a extremo
+
+Instalados/disponibles mostrados correctamente (2 instalados del
+entorno de prueba, catálogo curado filtrado a los 3 restantes).
+Benchmark real: TTFT 0.2s, 33.3 tok/s, RAM 6.3GB, calculado a partir de
+los campos de tiempo simulados con la misma forma que los reales de
+Ollama. Borrado de un modelo confirmado (desaparece de Installed,
+reaparece en Available). Instalación confirmada usando la vía API
+(al no haber binario `ollama` en este entorno) — el modelo aparece en
+Installed tras la llamada. Creación de un proyecto eligiendo un modelo
+del desplegable, confirmando que queda guardado como `default_model`
+del proyecto y se refleja en su Project Dashboard.
+
+Con esto, las 6 líneas de la hoja de ruta que se marcó
+(README, tests, GitHub Actions, migraciones, Model Manager, y esta
+documentación que se ha ido escribiendo ronda a ronda) quedan cerradas.

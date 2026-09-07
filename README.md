@@ -147,6 +147,14 @@ local-ai-stack-template/
 - Infraestructura cloud obligatoria — pensado para correr en local.
 - Constructor visual de pipelines — para eso, usa n8n directamente.
 
+## Model Manager
+
+`/models` — modelos de Ollama instalados de verdad (consultando
+`/api/tags`), catálogo de disponibles para instalar, borrar, y un
+benchmark real (TTFT, tokens/segundo, RAM) usando los tiempos que la
+propia API de Ollama ya devuelve. El selector de modelo del New Project
+Wizard se rellena con los modelos instalados de verdad.
+
 ## Migraciones (Alembic)
 
 El esquema de base de datos se versiona con Alembic — historial real,

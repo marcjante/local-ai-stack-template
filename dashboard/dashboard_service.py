@@ -103,8 +103,10 @@ def current_project_id() -> str:
 
 @app.route("/projects")
 def projects_page():
+    installed_models, _ = list_installed()
     return render_template("projects.html", page="projects", projects=list_projects(),
-                            templates=PROJECT_TEMPLATES, current_project=current_project_id())
+                            templates=PROJECT_TEMPLATES, current_project=current_project_id(),
+                            installed_models=[m["name"] for m in installed_models])
 
 
 @app.route("/projects/<project_id>/select", methods=["POST"])
@@ -126,7 +128,10 @@ def projects_create():
         return jsonify({"error": f"plantilla desconocida '{template}'"}), 400
     project_id = payload.get("id") or name.lower().replace(" ", "-")
     create_project(project_id, name, payload.get("description"), template)
-    update_project_settings(project_id, system_prompt=PROJECT_TEMPLATES[template]["system_prompt"])
+    settings_update = {"system_prompt": PROJECT_TEMPLATES[template]["system_prompt"]}
+    if payload.get("model"):
+        settings_update["default_model"] = payload["model"]
+    update_project_settings(project_id, **settings_update)
     ensure_default_collection(project_id=project_id)
     return jsonify({"id": project_id, "name": name}), 201
 
@@ -536,6 +541,42 @@ def knowledge_search():
 
 
 # --- Plugins ---
+
+from common.model_manager import list_installed, list_available, install_model, delete_model, benchmark_model  # noqa: E402
+
+
+@app.route("/models")
+def models_page():
+    installed, error = list_installed()
+    installed_names = {m["name"] for m in installed}
+    available = list_available(installed_names)
+    return render_template("models.html", page="models", installed=installed, available=available, ollama_error=error)
+
+
+@app.route("/api/models/install", methods=["POST"])
+def models_install():
+    payload = request.get_json(force=True) or {}
+    model_name = payload.get("model")
+    if not model_name:
+        return jsonify({"error": "falta 'model'"}), 400
+    return jsonify(install_model(model_name))
+
+
+@app.route("/api/models/<path:model_name>", methods=["DELETE"])
+def models_delete(model_name):
+    result = delete_model(model_name)
+    if "error" in result:
+        return jsonify(result), 502
+    return jsonify(result)
+
+
+@app.route("/api/models/<path:model_name>/benchmark", methods=["POST"])
+def models_benchmark(model_name):
+    result = benchmark_model(model_name)
+    if "error" in result:
+        return jsonify(result), 502
+    return jsonify(result)
+
 
 @app.route("/plugins")
 def plugins_page():
