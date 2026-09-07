@@ -984,3 +984,68 @@ coherente (ninguna filtración del script ni del CSS).
 Migraciones formales (Alembic o equivalente), snapshots/versionado de
 configuración, y el validador de proyecto (`Validate project`) quedan
 para la siguiente tanda — no se ha tocado nada de eso todavía.
+
+## Decimotercera ronda: README limpio, tests reales, y CI
+
+### README reescrito por completo
+
+Tras 12 rondas de parches encima del README original, había quedado
+contradictorio: una sección "Qué NO incluye" seguía diciendo que el RAG
+lanzaba `NotImplementedError` y que JWT estaba fuera, mientras el resto
+del documento ya explicaba el flujo con JWT, RAG real, verificación y
+citas. También la estructura de carpetas seguía listando
+`fetch_jobs.py`/`process_jobs.py`/`notify_jobs.py` (ficheros que ya no
+existen desde la ronda de plugins). Reescrito entero, sin acumulación:
+un README que describe el estado real actual, con una sección "No
+incluido, de forma deliberada" corregida (sin las afirmaciones
+obsoletas), y estructura de carpetas actualizada.
+
+### Tests reales, contra Postgres/Redis de verdad — no mocks
+
+30 tests en `tests/`, organizados como se pidió:
+
+```
+tests/
+├── test_health.py         (4 tests)
+├── test_projects.py       (4 tests)
+├── test_permissions.py    (5 tests)
+├── test_rag.py            (4 tests)
+├── test_file_parsers.py   (6 tests)
+├── test_workers.py        (2 tests)
+├── test_llm_gateway.py    (3 tests)
+├── test_export_import.py  (1 test)
+└── test_backup_restore.py (1 test, destructivo)
+```
+
+(`test_citations.py` se fusionó dentro de `test_rag.py` — las citas se
+prueban junto al pipeline que las genera, no por separado.)
+
+**El test más importante de todos, tal cual se pidió**: dos proyectos
+con documentos de contenido opuesto, confirmando que una búsqueda desde
+uno nunca devuelve nada del otro — ni con consultas genéricas ni con
+consultas dirigidas al contenido exacto del otro proyecto.
+`test_rag.py::test_project_isolation_never_leaks`.
+
+Los tests de backend/gateway usan el `test_client()` de Flask
+directamente (importando `app` sin arrancar un servidor real) — más
+rápido y fiable para CI que levantar procesos y hacer `curl`.
+`test_backup_restore.py` se salta solo si `pg_dump`/`psql` no están
+disponibles en el entorno, en vez de fallar.
+
+**Resultado real de ejecutarlos**: 30/30 pasan. En el camino, 2 tests
+propios tenían una aserción equivocada (esperaban HTTP 200 donde el
+backend devuelve correctamente 202 Accepted, que es lo correcto para
+"tarea encolada") — corregidos los tests, no el código, que ya hacía lo
+correcto.
+
+### GitHub Actions
+
+`.github/workflows/tests.yml` — en cada push/PR a `main`, levanta
+Postgres 16 y Redis 7 como servicios, instala dependencias, y corre
+`pytest tests/ -v`. Probado localmente simulando exactamente la
+`DATABASE_URL` que usará el workflow — mismos 30/30 pasando.
+
+### Pendiente, según el orden acordado
+
+Migraciones formales (Alembic), snapshots/versionado de configuración,
+y el Model Manager quedan para la siguiente tanda.

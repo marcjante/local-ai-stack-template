@@ -1,210 +1,171 @@
 # local-ai-stack-template
 
-Plantilla reutilizable para proyectos de IA local con trabajo pesado
-repartido entre workers especializados: cola con reintentos (Redis + RQ),
-estado trazable en Postgres, control de concurrencia hacia el LLM,
-autenticación básica y un panel de control con salud real (no solo
-"el puerto está abierto").
+![Tests](https://github.com/marcjante/local-ai-stack-template/actions/workflows/tests.yml/badge.svg)
+
+Plantilla reutilizable para proyectos de IA local, con multi-proyecto,
+RAG real (con citas exactas), verificación de respuestas, y un panel
+web completo ("Local AI Studio") para manejarlo todo sin tocar la
+terminal.
 
 No contiene lógica ni datos de ningún proyecto concreto — solo la
-infraestructura. Pensada para clonarla como punto de partida.
+infraestructura. Pensada para clonarla como punto de partida y crear
+tantos proyectos como haga falta dentro (RAG, tuberculosis, heridas,
+soporte, lo que sea), cada uno aislado del resto.
+
+## Arranque rápido
+
+```bash
+pip3 install -r requirements.txt
+cp .env.example .env
+
+# Redis y Postgres (nativos o vía Docker — ver docs/architecture.md
+# y la guía de instalación para macOS/Linux/Windows)
+python3 -c "from db.db import init_schema; init_schema()"
+
+rq worker process --url redis://127.0.0.1:6379/0 &
+python3 backend/main.py &
+python3 dashboard/dashboard_service.py   # http://localhost:8090
+```
+
+La primera vez que abres el panel, un asistente de bienvenida comprueba
+que todo lo necesario está bien antes de dejarte pasar — no hace falta
+saber qué es Redis o RQ para arrancarlo.
+
+## Qué hay dentro
+
+**Infraestructura de tareas**: cola con reintentos y backoff (Redis +
+RQ), estado trazable en Postgres, control de concurrencia hacia el LLM
+(LLM Gateway, multi-proveedor: Ollama / OpenAI-compatible).
+
+**RAG real, no un placeholder**: `rag/*.py` — chunking, embeddings,
+vector store (backend JSON por defecto o pgvector real), reranking y
+citas textuales exactas. Knowledge (el gestor documental del panel)
+sube PDF, DOCX, TXT, MD, CSV, JSON y HTML, cada uno convertido a texto
+con significado, no volcado crudo.
+
+**Verificación de respuestas**: el worker `process` corre un circuito
+de subagentes (recoger fuentes → generar respuesta → contrastar contra
+las fuentes → detectar posible alucinación) y devuelve un veredicto
+(`veraz` / `revisar` / `sin_verificar`) con cita exacta por afirmación,
+más una auditoría completa de qué decidió cada paso.
+
+**Multi-proyecto**: cada proyecto tiene sus propias colecciones,
+documentos, tareas, integraciones de n8n y configuración (modelo,
+system prompt, temperature, chunking) — aislado de verdad, probado
+tanto a nivel de base de datos como a través de la interfaz real.
+Incluye New Project Wizard (8 plantillas), Project Dashboard, y
+export/import de un proyecto individual (`.ai-project.zip`).
+
+**Permisos por proyecto**: tabla `project_members`
+(admin/editor/viewer), aplicados en el backend vía
+`require_project_role()`. El panel web sigue sin login — es una
+herramienta de un solo usuario local; añadir login es la pieza que
+falta si de verdad va a haber varios usuarios accediendo a la misma
+instalación.
+
+**Workers como plugins**: `fetch`, `process` y `notify` viven en
+`workers/plugins/` y se descubren solos. Añadir un worker nuevo es
+crear un fichero ahí con `QUEUE_NAME` y una función
+`handle(task_id, payload)` — el backend lo detecta al arrancar, sin
+tocar `backend/main.py` ni `config/services.yaml`. Esta es la vía
+oficial para extender la plantilla (un plugin de PubMed, de búsqueda
+web, de OCR, lo que necesite cada proyecto) sin tocar el núcleo.
+
+**n8n en las dos direcciones**: el worker `process` avisa a un flujo al
+terminar; n8n puede disparar una tarea llamando a
+`POST /webhooks/n8n/<queue>`. Cada flujo se activa/desactiva por
+proyecto sin tocar código.
+
+**Evaluación**: framework genérico (`common/evaluation.py`) que compara
+la salida real de cualquier función contra casos declarados en JSON.
+Los resultados quedan guardados por proyecto, con histórico visible en
+el Project Dashboard.
+
+**Backup / Restore**: desde Settings, exporta toda la instalación
+(config + base de datos completa) a un `.zip` vía `pg_dump`, o
+restaura uno — probado de forma destructiva (borrar algo, restaurar,
+confirmar que vuelve). El `.env` real nunca se incluye.
+
+**Local AI Studio** (el panel, `http://localhost:8090`): Dashboard
+interactivo, Diagnostics (detecta problemas concretos como una cola sin
+worker, no solo semáforos), Playground (con comparación A/B de
+modelos), Knowledge, Tasks, Plugins, Integrations, Logs, Evaluation,
+Settings y Projects — 14 pantallas en total.
 
 ## Estructura
 
 ```
 local-ai-stack-template/
 ├── config/
-│   ├── services.yaml        # inventario de servicios: nombre, puerto, comandos
-│   └── nginx.conf           # reverse proxy de ejemplo
+│   ├── services.yaml         # inventario de servicios: nombre, puerto, comandos
+│   └── nginx.conf            # reverse proxy (TLS documentado, no activo)
 ├── backend/
-│   └── main.py              # API: auth, encolado por tipo de tarea, /health /ready /metrics, SSE
+│   ├── main.py                # API: auth, RAG, encolado, SSE, integrations, tasks, projects
+│   └── auth.py                 # API key + JWT con roles, permisos por proyecto
 ├── workers/
-│   ├── queue_conn.py        # conexión y colas de RQ compartidas (fetch/process/notify)
-│   ├── fetch_jobs.py        # worker especializado: traer datos externos
-│   ├── process_jobs.py      # worker especializado: trabajo pesado, llama a llm_gateway
-│   └── notify_jobs.py       # worker especializado: avisos al terminar
+│   ├── plugin_loader.py       # descubre workers/plugins/*.py automáticamente
+│   ├── queue_conn.py          # Redis/RQ compartido
+│   └── plugins/
+│       ├── fetch.py, process.py, notify.py
 ├── llm_gateway/
-│   └── llm_gateway.py       # único punto de acceso a Ollama, limita concurrencia
+│   └── llm_gateway.py         # proveedores (ollama/openai_compatible), routing, semáforo
 ├── rag/
-│   ├── embeddings.py        # texto → vector
-│   ├── retrieval.py         # vector/consulta → documentos candidatos
-│   ├── rerank.py            # documentos candidatos → los N más relevantes
-│   └── citations.py         # documentos finales → formato de cita
-├── db/
-│   ├── schema.sql           # tabla tasks: pending/running/completed/failed
-│   └── db.py                # helpers de conexión y estado
+│   ├── chunking.py, embeddings.py, vector_store.py
+│   ├── retrieval.py, rerank.py, citations.py
+│   └── file_parsers.py        # PDF/DOCX/TXT/MD/CSV/JSON/HTML → texto
 ├── common/
-│   └── logging_setup.py     # logging con task_id, compartido por backend y workers
-├── dashboard/
-│   ├── dashboard_service.py # panel (Flask): salud HTTP real, CPU/RAM, profundidad de colas
-│   └── templates/index.html
+│   ├── logging_setup.py, verification.py, adaptive_pipeline.py
+│   ├── n8n_client.py, evaluation.py, backup.py, project_export.py
+│   ├── system_checks.py, diagnostics.py
+├── db/
+│   ├── schema.sql              # núcleo: tasks, audit_log, rag_chunks, documents,
+│   │                            # collections, projects, project_settings,
+│   │                            # project_members, evaluations, n8n_integrations
+│   ├── schema_pgvector.sql     # opcional — solo si RAG_BACKEND=pgvector
+│   └── db.py
+├── dashboard/                   # "Local AI Studio": 14 páginas (ver docs/architecture.md)
+├── evaluation/                  # casos de prueba en JSON
 ├── scripts/
-│   ├── start_stack.sh
-│   └── stop_stack.sh
-├── docs/
-│   └── architecture.md      # diagrama y explicación de cómo se conecta todo
-├── docker-compose.yml       # Redis + Postgres + backend + workers + dashboard
-├── Dockerfile
+│   ├── run_evaluation.py, start_stack.sh, stop_stack.sh
+├── docker-compose.yml, Dockerfile
 ├── .env.example
-└── requirements.txt
+├── requirements.txt
+└── docs/
+    └── architecture.md          # diario técnico completo, ronda a ronda
 ```
 
-## Uso rápido (sin Docker)
+## No incluido, de forma deliberada
+
+- Lógica clínica o de negocio específica de ningún proyecto.
+- Modelos propietarios obligatorios — funciona con cualquier modelo de
+  Ollama o compatible con la API de OpenAI.
+- Datos de proyectos concretos.
+- Exposición pública a Internet (TLS documentado en `nginx.conf`, no
+  activo).
+- Autenticación del panel web para despliegues multiusuario externos —
+  los permisos por proyecto existen en el backend, no en el panel.
+- Infraestructura cloud obligatoria — pensado para correr en local.
+- Constructor visual de pipelines — para eso, usa n8n directamente.
+
+## Tests
+
+30 tests reales contra Postgres/Redis de verdad (no mocks) — incluido
+el que más importa: crear dos proyectos, un documento distinto en cada
+uno, y confirmar que una búsqueda desde el proyecto A **jamás**
+devuelve nada del B.
 
 ```bash
-pip install -r requirements.txt
-cp .env.example .env    # y pon una API_KEY real
-
-redis-server --port 6379 &
-# Postgres: crea la base indicada en .env (createdb stack_template)
-
-python3 backend/main.py &
-python3 llm_gateway/llm_gateway.py &     # si tu proyecto usa LLM
-rq worker fetch --url redis://127.0.0.1:6379/0 &
-rq worker process --url redis://127.0.0.1:6379/0 &
-rq worker notify --url redis://127.0.0.1:6379/0 &
-python3 dashboard/dashboard_service.py   # http://localhost:8090
+pip3 install -r requirements-dev.txt
+pytest tests/ -v
 ```
 
-## Uso rápido (con Docker)
+Se ejecutan automáticamente en cada push/PR vía GitHub Actions
+(`.github/workflows/tests.yml`), levantando Postgres y Redis reales.
 
-```bash
-cp .env.example .env
-docker compose up -d
-```
+## Documentación
 
-## Probar el flujo completo
-
-```bash
-# Autenticación JWT (además de la API key existente)
-TOKEN=$(curl -s -X POST http://127.0.0.1:8080/auth/token \
-  -H "X-API-Key: $API_KEY" -d '{"subject":"marc","role":"escritor"}' | jq -r .token)
-
-# Indexar un documento real en el RAG
-curl -X POST http://127.0.0.1:8080/rag/index \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"doc_id":"doc1","text":"...","doc_version":"v1"}'
-
-# Buscar en el RAG
-curl "http://127.0.0.1:8080/rag/search?q=..." -H "Authorization: Bearer $TOKEN"
-
-# Lanzar una tarea de 'process': el circuito adaptativo decide de dónde
-# saca las fuentes (doc_id, sources directas, o índice global), si hace
-# falta verificar, y cita afirmación por afirmación
-curl -X POST http://127.0.0.1:8080/enqueue/process \
-  -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
-  -d '{"prompt": "...", "doc_id": "doc1", "task_type": "rapido"}'
-# → {"task_id": "...", "queue": "process", "status": "pending"}
-
-curl http://127.0.0.1:8080/tasks/<task_id> -H "X-API-Key: $API_KEY"
-# → verdict: "veraz" / "revisar" / "sin_verificar", con citas exactas por afirmación
-
-curl http://127.0.0.1:8080/tasks/<task_id>/audit -H "X-API-Key: $API_KEY"
-# → traza completa: qué modelo respondió, qué chunks se usaron, qué se decidió saltar y por qué
-```
-
-n8n en las dos direcciones:
-- El worker `process` avisa a un flujo de n8n al terminar (`common/n8n_client.py`).
-- n8n puede disparar una tarea llamando a `POST /webhooks/n8n/<queue>`
-  con la cabecera `X-N8N-Secret`.
-- Cada flujo se puede activar/desactivar sin tocar código: `GET
-  /integrations`, `POST /integrations/<flow>/enable|disable` (rol admin).
-
-## Workers como plugins
-
-`fetch`, `process` y `notify` viven en `workers/plugins/` y se descubren
-solos. Añadir un worker nuevo es crear un fichero ahí con `QUEUE_NAME` y
-una función `handle(task_id, payload)` — el backend lo detecta al
-arrancar, sin tocar `backend/main.py` ni `config/services.yaml`.
-
-## Evaluación
-
-```bash
-python3 scripts/run_evaluation.py --cases evaluation/cases_rag_example.json --target rag
-python3 scripts/run_evaluation.py --cases mis_casos.json --target plugin:process
-```
-
-Framework genérico (`common/evaluation.py`): compara la salida real de
-cualquier función contra comprobaciones declaradas en JSON
-(`expect_contains`, `expect_field`, `expect_min_score`).
-
-Ver `docs/architecture.md` para el diagrama completo, por qué está
-separado así, y cómo adaptar la plantilla a un proyecto real.
-
-## Panel de control: Docker, logs en vivo y proveedores de LLM
-
-- Al abrir el panel por primera vez, un **asistente de bienvenida**
-  comprueba Python/Docker/Postgres/Redis/Ollama de verdad y guía la
-  primera configuración — no hace falta saber qué es Redis o RQ para
-  arrancarlo.
-- **Diagnostics** detecta problemas concretos (ej. una cola sin worker
-  escuchándola) con un botón de acción, no solo un semáforo por servicio.
-- El panel (`http://localhost:8090`) tiene interfaz propia con sidebar —
-  "Local AI Studio" — con todas las secciones funcionando: **Dashboard**,
-  **Diagnostics**, **Playground** (con pestaña **Compare** para A/B de
-  modelos), **Knowledge**, **Tasks**, **Plugins**, **Integrations**,
-  **Logs** y **Evaluation**.
-- Cada servicio puede arrancarse/pararse/reiniciarse vía `docker compose`
-  o de forma nativa.
-- `config/services.yaml` se puede editar desde Settings, con validación
-  antes de guardar. El `.env` real nunca se lee ni se muestra desde el
-  panel — solo la plantilla `.env.example`.
-
-## Qué NO incluye (a propósito)
-
-- Lógica de negocio real: `workers/*_jobs.py` tienen placeholders donde
-  va el trabajo de cada proyecto.
-- RAG funcional: `rag/*.py` están separados por responsabilidad pero
-  lanzan `NotImplementedError` — cada proyecto conecta su propia base
-  vectorial y modelo de embeddings.
-- HTTPS/TLS y JWT: hay una API key simple como base; para producción
-  real, añade TLS delante (Nginx/Caddy) y valora JWT si necesitas
-  usuarios distintos con permisos distintos.
-
-## Knowledge
-
-Gestor real de documentos, no solo pegar texto:
-- Colecciones (`+ Collection` desde la interfaz).
-- Subida real de PDF/DOCX/TXT/MD, con extracción de texto automática.
-- Ver chunks, reindexar sin volver a subir el fichero, borrar.
-- Test de retrieval global o acotado a un documento concreto.
-
-## Backup / Restore
-
-Desde Settings: exporta `services.yaml` + toda la base de datos en un
-`.zip` (via `pg_dump`), o restaura uno subiéndolo — pensado para el día
-que algo se rompa y necesites volver atrás. El `.env` real nunca se
-incluye.
-
-## Multi-proyecto
-
-Cada proyecto tiene sus propias colecciones, documentos, tareas,
-integraciones de n8n y configuración (modelo, system prompt, temperature,
-chunking) — aislados de verdad, probado tanto a nivel de base de datos
-como a través de la interfaz real.
-
-- `/projects` — lista, selector, **New Project Wizard** (8 plantillas)
-- `/projects/<id>` — dashboard del proyecto (documentos/chunks, tareas,
-  modelo activo, evaluación, errores recientes) + su configuración
-- Export/import de un proyecto individual (`.ai-project.zip`), distinto
-  del backup global de toda la instalación
-
-Toda instalación previa a esta función queda automáticamente asignada al
-proyecto `default` al actualizar — no se pierde nada.
-
-## Playground/Evaluation por proyecto y permisos
-
-- Playground y Evaluation ya leen `project_settings` del proyecto
-  activo (modelo, prompt, temperature) y acotan el RAG evaluado a ese
-  proyecto.
-- El Project Dashboard muestra la calidad real de la última evaluación
-  y su histórico.
-- Permisos por proyecto (`project_members`: admin/editor/viewer),
-  aplicados en el **backend** vía `require_project_role()` — el panel
-  sigue sin login, eso queda fuera a propósito.
-
-## Formatos soportados en Knowledge
-
-PDF, DOCX, TXT, MD, CSV, JSON y HTML — cada uno convertido a texto con
-significado (no volcado crudo). Añadir un formato nuevo: una función en
-`rag/file_parsers.py` + una entrada en `EXTRACTORS`.
+- `docs/architecture.md` — diario técnico completo, ronda a ronda: qué
+  se construyó, qué bugs aparecieron y cómo se corrigieron, qué está
+  probado y cómo.
+- Guía de instalación y uso con capturas reales del panel (pídela si no
+  la tienes a mano).
