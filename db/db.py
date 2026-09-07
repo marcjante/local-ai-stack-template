@@ -38,8 +38,23 @@ def get_conn():
 
 def init_schema():
     """
-    Crea las tablas núcleo (tasks, audit_log, rag_chunks, n8n_integrations)
-    si no existen. Se llaman siempre, sin depender de nada opcional.
+    Crea las tablas núcleo si no existen, ejecutando db/schema.sql
+    directamente. Sigue existiendo por rapidez (así lo usan los tests y
+    el arranque rápido en desarrollo), pero desde que existe Alembic
+    (`db/migrations/`), la vía recomendada para una instalación nueva es:
+
+        alembic upgrade head
+
+    y para una instalación EXISTENTE que nunca usó Alembic:
+
+        alembic stamp head    # marca el esquema actual como al día,
+                               # sin volver a ejecutar nada
+
+    Cualquier cambio de esquema NUEVO a partir de ahora debe ser una
+    migración de Alembic (`alembic revision`), no una edición a mano de
+    schema.sql — así queda un historial real y rollback controlado
+    (`alembic downgrade`), en vez de sentencias `ALTER ... IF NOT
+    EXISTS` acumuladas sin orden ni posibilidad de deshacer.
 
     La parte de pgvector (schema_pgvector.sql) es aparte a propósito: el
     backend por defecto del RAG (RAG_BACKEND=postgres_json) no necesita

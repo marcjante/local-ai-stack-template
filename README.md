@@ -147,6 +147,24 @@ local-ai-stack-template/
 - Infraestructura cloud obligatoria — pensado para correr en local.
 - Constructor visual de pipelines — para eso, usa n8n directamente.
 
+## Migraciones (Alembic)
+
+El esquema de base de datos se versiona con Alembic — historial real,
+con rollback controlado (no `ALTER TABLE ... IF NOT EXISTS` acumulado
+a mano).
+
+```bash
+alembic upgrade head       # instalación nueva, desde cero
+alembic stamp head         # instalación ya existente: marca como al día
+alembic downgrade -1       # deshacer la última migración
+alembic revision -m "..."  # crear una migración nueva
+```
+
+`db/schema.sql` sigue siendo la referencia legible de lo que hay ahora
+mismo — la migración baseline lo ejecuta tal cual para instalaciones
+nuevas; cualquier cambio de esquema a partir de ahora es una migración
+nueva, no una edición de ese fichero.
+
 ## Tests
 
 30 tests reales contra Postgres/Redis de verdad (no mocks) — incluido

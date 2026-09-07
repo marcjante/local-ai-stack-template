@@ -1049,3 +1049,73 @@ Postgres 16 y Redis 7 como servicios, instala dependencias, y corre
 
 Migraciones formales (Alembic), snapshots/versionado de configuración,
 y el Model Manager quedan para la siguiente tanda.
+
+## Decimocuarta ronda: migraciones formales con Alembic
+
+Se sustituyen las migraciones embebidas en `schema.sql` (bloques
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` y `DO $$ ... $$` acumulados a
+mano en cada ronda) por Alembic: historial real de versiones y rollback
+controlado.
+
+### Cómo queda organizado
+
+- `db/schema.sql` — sigue siendo la referencia legible de "qué hay
+  ahora mismo", y lo que ejecuta la migración baseline.
+- `db/migrations/versions/` — el historial real:
+  - `2a9187c48a69_baseline.py` — ejecuta `schema.sql` tal cual, para
+    instalaciones nuevas.
+  - `ed4c953f47f2_..._notes_a_projects.py` — primer ejemplo real de
+    migración incremental (añade una columna `notes` a `projects`).
+- `alembic upgrade head` — instalación nueva, desde cero.
+- `alembic stamp head` — instalación YA EXISTENTE (como la que se ha
+  usado en todas las rondas anteriores): marca el esquema actual como
+  al día sin volver a ejecutar nada.
+- A partir de ahora, cualquier cambio de esquema es
+  `alembic revision -m "..."` + rellenar `upgrade()`/`downgrade()`, no
+  una edición a mano de `schema.sql`.
+
+### Bug real encontrado gracias a esto — exactamente el motivo de hacerlo
+
+Al probar `alembic upgrade head` contra una base **100% vacía** por
+primera vez (nunca se había hecho antes — cada ronda anterior heredaba
+tablas ya creadas), `schema.sql` falló con
+`relation "documents" does not exist`. Una línea de una ronda anterior
+(`ALTER TABLE documents DROP CONSTRAINT IF EXISTS
+documents_collection_id_fkey;`, añadida al arreglar la migración de PK
+de `collections`) intentaba tocar la tabla `documents` **antes** de que
+el propio script la creara más abajo. Nunca se vio porque en todas las
+pruebas previas la base ya tenía esa tabla de rondas anteriores.
+Corregido envolviéndola en una comprobación `to_regclass('public.documents')
+IS NOT NULL` antes de intentar el `ALTER`.
+
+### Probado de verdad, las 4 operaciones
+
+1. **Upgrade desde cero**: base vacía → `alembic upgrade head` → las 10
+   tablas núcleo + `alembic_version` creadas correctamente.
+2. **Downgrade completo**: `alembic downgrade base` → todas las tablas
+   desaparecen limpiamente, solo queda `alembic_version`.
+3. **Stamp de una instalación existente**: la base real del proyecto
+   (con meses de datos de pruebas de rondas anteriores) marcada como al
+   día con `alembic stamp head`, sin tocar ni una fila.
+4. **Migración incremental real, con rollback de un solo paso**: se
+   creó, aplicó, revirtió (`downgrade -1`) y reaplicó la migración de
+   ejemplo (columna `notes` en `projects`), confirmando en cada paso
+   que la columna aparecía/desaparecía correctamente.
+
+También se simuló la secuencia exacta que correrá en GitHub Actions
+(`alembic upgrade head` seguido de `pytest`, que internamente sigue
+llamando a `init_schema()` por rapidez) contra una base nueva — sin
+conflicto, 30/30 tests pasando.
+
+### Lo que NO se ha hecho, con honestidad
+
+- No se ha migrado cada tabla a Alembic con `autogenerate` reflejando
+  modelos SQLAlchemy — el enfoque es pragmático: la migración baseline
+  ejecuta el `schema.sql` existente tal cual, y las migraciones nuevas
+  a partir de ahora usan `op.add_column`/`op.create_table` etc.
+  directamente. Adoptar un ORM completo (SQLAlchemy models) sería un
+  cambio de arquitectura mucho mayor, no lo que se pidió.
+- `init_schema()` (usada por los tests y el arranque rápido en
+  desarrollo) sigue existiendo en paralelo a Alembic, documentada
+  explícitamente como la vía rápida de desarrollo — no la vía oficial
+  de producción, que pasa a ser Alembic.

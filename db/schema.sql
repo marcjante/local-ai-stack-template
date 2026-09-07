@@ -116,7 +116,16 @@ CREATE TABLE IF NOT EXISTS collections (
 -- recompone la PK a (project_id, id) — necesario para que dos proyectos
 -- puedan tener cada uno una colección "default" sin chocar.
 ALTER TABLE collections ADD COLUMN IF NOT EXISTS project_id TEXT NOT NULL DEFAULT 'default';
-ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_collection_id_fkey;
+DO $$
+BEGIN
+    -- La FK solo puede existir si 'documents' ya existe (instalaciones
+    -- previas a esta migración) — en una base 100% nueva, 'documents'
+    -- todavía no se ha creado en este punto del script, así que se
+    -- comprueba antes de intentar tocarla.
+    IF to_regclass('public.documents') IS NOT NULL THEN
+        ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_collection_id_fkey;
+    END IF;
+END $$;
 DO $$
 BEGIN
     IF EXISTS (

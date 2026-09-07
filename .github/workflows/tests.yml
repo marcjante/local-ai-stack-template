@@ -48,6 +48,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Verify Alembic migrations run clean on a fresh database
+        env:
+          DATABASE_URL: "dbname=stack_template user=postgres password=postgres host=127.0.0.1 port=5432"
+        run: alembic -c alembic.ini upgrade head
+
       - name: Run tests
         env:
           DATABASE_URL: "dbname=stack_template user=postgres password=postgres host=127.0.0.1 port=5432"
