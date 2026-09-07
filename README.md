@@ -1,16 +1,25 @@
-# local-ai-stack-template
+# Local AI Studio
+
+**local-ai-stack-template** — la plantilla, en GitHub. **Local AI
+Studio** — el panel que ves al arrancarla.
 
 ![Tests](https://github.com/marcjante/local-ai-stack-template/actions/workflows/tests.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-Plantilla reutilizable para proyectos de IA local, con multi-proyecto,
-RAG real (con citas exactas), verificación de respuestas, y un panel
-web completo ("Local AI Studio") para manejarlo todo sin tocar la
+Plantilla reutilizable para proyectos de IA local, con **multi-proyecto
+aislado de verdad**, RAG real (con citas exactas), verificación de
+respuestas, y un panel web completo para manejarlo todo sin tocar la
 terminal.
 
 No contiene lógica ni datos de ningún proyecto concreto — solo la
 infraestructura. Pensada para clonarla como punto de partida y crear
 tantos proyectos como haga falta dentro (RAG, tuberculosis, heridas,
 soporte, lo que sea), cada uno aislado del resto.
+
+![Dashboard de Local AI Studio](docs/images/dashboard.png)
+
+**[📖 Guía de uso completa, con capturas de cada pantalla →](docs/GUIA-USO.md)**
 
 ## Arranque rápido
 
@@ -190,8 +199,8 @@ Se ejecutan automáticamente en cada push/PR vía GitHub Actions
 
 ## Documentación
 
+- **[Guía de uso completa](docs/GUIA-USO.md)** — instalación (macOS/Linux/Windows),
+  arranque, y las 15 pantallas del panel, cada una con captura real.
 - `docs/architecture.md` — diario técnico completo, ronda a ronda: qué
   se construyó, qué bugs aparecieron y cómo se corrigieron, qué está
   probado y cómo.
-- Guía de instalación y uso con capturas reales del panel (pídela si no
-  la tienes a mano).
