@@ -1,82 +1,421 @@
-version: 1
-
+version: 2
+defaults:
+  enabled: true
+  trust_level: internal
+  load_mode: on_demand
 skills:
-
-  - id: systematic-review-core
-    name: Systematic Review Core
-    category: systematic_review
-    version: "1.0"
-    enabled: true
-    tasks:
-      - protocol_design
-      - search_strategy
-      - screening
-      - fulltext_screening
-      - data_extraction
-      - risk_of_bias
-      - prisma
-      - bibliography_export
-
-  - id: scientific-research-core
-    name: Scientific Research Core
-    category: scientific
-    version: "1.0"
-    enabled: true
-    tasks:
-      - research_question
-      - hypothesis_generation
-      - literature_analysis
-      - evidence_synthesis
-      - critical_appraisal
-      - scientific_writing
-
-  - id: qualitative-research-core
-    name: Qualitative Research Core
-    category: qualitative
-    version: "1.0"
-    enabled: true
-    tasks:
-      - qualitative_design
-      - thematic_analysis
-      - grounded_theory
-      - interviews
-      - focus_groups
-
-  - id: experimental-design-core
-    name: Experimental Design Core
-    category: experimental
-    version: "1.0"
-    enabled: true
-    tasks:
-      - experimental_design
-      - variables
-      - randomization
-      - factorial_design
-      - doe
-      - statistical_plan
-
-  - id: open-science-core
-    name: Open Science Core
-    category: open_science
-    version: "1.0"
-    enabled: true
-    tasks:
-      - preregistration
-      - reproducibility
-      - data_management
-      - open_science
-      - osf
-
-  - id: academic-writing-core
-    name: Academic Writing Core
-    category: academic
-    version: "1.0"
-    enabled: true
-    tasks:
-      - manuscript
-      - abstract
-      - introduction
-      - methods
-      - results
-      - discussion
-      - references
+- id: systematic-review-core
+  name: Systematic Review Core
+  category: systematic_review
+  version: '1.0'
+  enabled: true
+  origin: internal
+  trust_level: internal
+  load_mode: on_demand
+  path: skills/systematic_review
+  tasks:
+  - protocol_design
+  - search_strategy
+  - screening
+  - fulltext_screening
+  - data_extraction
+  - risk_of_bias
+  - prisma
+  - bibliography_export
+- id: scientific-research-core
+  name: Scientific Research Core
+  category: scientific
+  version: '1.0'
+  enabled: true
+  origin: internal
+  trust_level: internal
+  load_mode: on_demand
+  path: skills/scientific
+  tasks:
+  - research_question
+  - hypothesis_generation
+  - literature_analysis
+  - evidence_synthesis
+  - critical_appraisal
+  - scientific_writing
+- id: qualitative-research-core
+  name: Qualitative Research Core
+  category: qualitative
+  version: '1.0'
+  enabled: true
+  origin: internal
+  trust_level: internal
+  load_mode: on_demand
+  path: skills/qualitative
+  tasks:
+  - qualitative_design
+  - thematic_analysis
+  - grounded_theory
+  - interviews
+  - focus_groups
+- id: experimental-design-core
+  name: Experimental Design Core
+  category: experimental
+  version: '1.0'
+  enabled: true
+  origin: internal
+  trust_level: internal
+  load_mode: on_demand
+  path: skills/experimental
+  tasks:
+  - experimental_design
+  - variables
+  - randomization
+  - factorial_design
+  - doe
+  - statistical_plan
+- id: open-science-core
+  name: Open Science Core
+  category: open_science
+  version: '1.0'
+  enabled: true
+  origin: internal
+  trust_level: internal
+  load_mode: on_demand
+  path: skills/open_science
+  tasks:
+  - preregistration
+  - reproducibility
+  - data_management
+  - open_science
+  - osf
+- id: academic-writing-core
+  name: Academic Writing Core
+  category: academic
+  version: '1.0'
+  enabled: true
+  origin: internal
+  trust_level: internal
+  load_mode: on_demand
+  path: skills/academic
+  tasks:
+  - manuscript
+  - abstract
+  - introduction
+  - methods
+  - results
+  - discussion
+  - references
+- id: slr-automation-guide
+  name: Systematic Literature Review Automation Guide
+  category: systematic_review
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/slr-automation-guide
+  source:
+    repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/slr-automation-guide/SOURCE_COMMIT
+    license: pending_review
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - systematic_review
+  - slr_automation
+  - screening
+  - deduplication
+  - fulltext_screening
+  - data_extraction
+  - risk_of_bias
+  - prisma
+- id: action-research-guide
+  name: Action Research Guide
+  category: qualitative
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/action-research-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/action-research-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - action_research
+  - participatory_research
+  - qualitative_design
+- id: claude-scientific-guide
+  name: Scientific Research Guide
+  category: scientific
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/claude-scientific-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/claude-scientific-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - scientific_research
+  - research_question
+  - critical_appraisal
+  - scientific_writing
+- id: experimental-design-guide
+  name: Experimental Design Guide
+  category: experimental
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/experimental-design-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/experimental-design-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - experimental_design
+  - doe
+  - factorial_design
+  - randomization
+  - statistical_plan
+- id: grad-school-guide
+  name: Graduate Research Guide
+  category: academic
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/grad-school-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/grad-school-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - academic_research
+  - thesis
+  - doctoral_research
+- id: grounded-theory-guide
+  name: Grounded Theory Guide
+  category: qualitative
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/grounded-theory-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/grounded-theory-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - grounded_theory
+  - qualitative_design
+  - qualitative_analysis
+- id: mixed-methods-guide
+  name: Mixed Methods Guide
+  category: qualitative
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/mixed-methods-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/mixed-methods-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - mixed_methods
+  - mixed_methods_design
+  - research_design
+- id: osf-api-guide
+  name: Open Science Framework Guide
+  category: open_science
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/osf-api-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/osf-api-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - osf
+  - preregistration
+  - open_science
+  - data_management
+- id: parsifal-slr-guide
+  name: Parsifal Systematic Review Guide
+  category: systematic_review
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/parsifal-slr-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/parsifal-slr-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - systematic_review
+  - protocol_design
+  - search_strategy
+  - screening
+  - quality_assessment
+- id: qualitative-research-guide
+  name: Qualitative Research Guide
+  category: qualitative
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/qualitative-research-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/qualitative-research-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - qualitative_design
+  - interviews
+  - focus_groups
+  - thematic_analysis
+  - qualitative_analysis
+- id: research-paper-kb
+  name: Research Paper Knowledge Base
+  category: scientific
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/research-paper-kb
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/research-paper-kb/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - literature_analysis
+  - paper_knowledge_base
+  - evidence_synthesis
+  - rag
+- id: research-town-guide
+  name: Research Town Multi-Agent Guide
+  category: optional
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/research-town-guide
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/research-town-guide/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - multi_agent_research
+  - research_collaboration
+- id: scientify-idea-generation
+  name: Scientific Idea Generation
+  category: scientific
+  version: external
+  enabled: true
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/empirical-research/scientify-idea-generation
+  source:
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    commit_file: skills/vendor/empirical-research/scientify-idea-generation/SOURCE_COMMIT
+    license: MIT
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks:
+  - idea_generation
+  - research_question
+  - hypothesis_generation
+  - research_gaps
+external_skill_template:
+  id: example-external-skill
+  name: Example External Skill
+  category: optional
+  version: '0.0'
+  enabled: false
+  origin: external
+  trust_level: untrusted
+  load_mode: on_demand
+  path: skills/vendor/example
+  source:
+    repository: ''
+    commit: ''
+    license: ''
+  compatible_models:
+  - ollama
+  - gemma
+  - llama
+  tasks: []
