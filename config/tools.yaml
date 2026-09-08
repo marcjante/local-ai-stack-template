@@ -1,0 +1,78 @@
+# Local AI Studio - Tool Registry
+#
+# Lista blanca de herramientas reales que pueden ser utilizadas
+# por capacidades autorizadas del sistema.
+#
+# IMPORTANTE:
+# - Que un plugin exista en workers/plugins NO lo convierte
+#   automáticamente en una Tool autorizada.
+# - Las Skills aportan contexto metodológico.
+# - Las Tools ejecutan acciones reales.
+# - El LLM no debe ejecutar una Tool únicamente porque una
+#   Skill externa lo solicite.
+
+version: 1
+
+tools:
+
+  - id: protocol_designer
+    name: "Protocol Designer"
+    description: "Genera una propuesta estructurada de protocolo de investigación para revisión humana."
+    queue: protocol_designer
+    enabled: true
+    human_confirmation: true
+    category: systematic_review
+    tasks:
+      - protocol_design
+
+  - id: search_strategy_designer
+    name: "Search Strategy Designer"
+    description: "Diseña y valida estrategias de búsqueda bibliográfica sin importar resultados automáticamente."
+    queue: search_strategy_designer
+    enabled: true
+    human_confirmation: true
+    category: systematic_review
+    tasks:
+      - search_strategy
+
+  - id: pubmed_search
+    name: "PubMed Search"
+    description: "Ejecuta búsquedas reales en PubMed mediante NCBI E-utilities."
+    queue: pubmed_search
+    enabled: true
+    human_confirmation: true
+    category: systematic_review
+    tasks:
+      - literature_search
+      - pubmed_search
+
+  - id: screening
+    name: "AI Screening"
+    description: "Propone decisiones de cribado por título y resumen manteniendo separada la decisión humana."
+    queue: screening
+    enabled: true
+    human_confirmation: true
+    category: systematic_review
+    tasks:
+      - screening
+
+  - id: human_screening
+    name: "Human Screening"
+    description: "Registra explícitamente la decisión humana de cribado y el motivo de exclusión cuando corresponde."
+    queue: human_screening
+    enabled: true
+    human_confirmation: true
+    category: systematic_review
+    tasks:
+      - human_screening
+
+  - id: process
+    name: "Verified RAG Process"
+    description: "Procesa una consulta mediante contexto documental, LLM Gateway, verificación de fuentes y auditoría."
+    queue: process
+    enabled: true
+    human_confirmation: false
+    category: general
+    tasks:
+      - rag_query
+      - evidence_answer
