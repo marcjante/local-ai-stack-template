@@ -111,9 +111,10 @@ skills:
   load_mode: on_demand
   path: skills/vendor/empirical-research/slr-automation-guide
   source:
-    repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
+    repository: https://github.com/wentorai/research-plugins
+    snapshot_repository: https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills
     commit_file: skills/vendor/empirical-research/slr-automation-guide/SOURCE_COMMIT
-    license: pending_review
+    license: MIT
   compatible_models:
   - ollama
   - gemma
