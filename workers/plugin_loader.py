@@ -3,22 +3,12 @@ plugin_loader.py
 
 Descubre workers automáticamente: cualquier fichero .py dentro de
 workers/plugins/ que defina QUEUE_NAME y una función handle(task_id, payload)
-se registra como un worker más, sin tocar backend/main.py ni
-config/services.yaml.
+se registra como un worker.
 
-Para añadir un worker nuevo: crea workers/plugins/mi_worker.py con:
-
-    QUEUE_NAME = "mi_cola"
-    QUEUE_TIMEOUT = 120  # opcional, por defecto 120
-
-    def handle(task_id: str, payload: dict) -> dict:
-        ...
-
-Y arráncalo con: rq worker mi_cola --url redis://127.0.0.1:6379/0
-
-El backend lo verá automáticamente en /enqueue/mi_cola la próxima vez
-que arranque (la lista de plugins se descubre una vez al arrancar, no
-en caliente — reiniciar el backend basta, no hace falta más).
+IMPORTANTE:
+- Un plugin descubierto técnicamente NO implica que esté autorizado como Tool.
+- La autorización de Tools se controla por separado en config/tools.yaml.
+- Dos plugins no pueden declarar el mismo QUEUE_NAME.
 """
 
 import importlib
@@ -27,21 +17,62 @@ import pkgutil
 import workers.plugins as plugins_pkg
 
 
+DEFAULT_QUEUE_TIMEOUT = 120
+
+
 def discover_plugins() -> dict:
     """
-    Devuelve {queue_name: {"handle": fn, "timeout": int, "module_name": str}}
-    para cada plugin válido encontrado en workers/plugins/.
+    Descubre los plugins disponibles.
+
+    Devuelve:
+
+        {
+            queue_name: {
+                "handle": function,
+                "timeout": int,
+                "module_name": str,
+            }
+        }
+
+    Falla explícitamente si dos módulos declaran el mismo QUEUE_NAME.
+    Esto evita que una copia, backup o versión antigua sustituya
+    silenciosamente al plugin esperado.
     """
+
     registry = {}
+
     for _, module_name, _ in pkgutil.iter_modules(plugins_pkg.__path__):
-        module = importlib.import_module(f"workers.plugins.{module_name}")
+        module = importlib.import_module(
+            f"workers.plugins.{module_name}"
+        )
+
         queue_name = getattr(module, "QUEUE_NAME", None)
         handle = getattr(module, "handle", None)
-        if not queue_name or not handle:
-            continue  # no es un plugin válido, se ignora sin fallar
+
+        if not queue_name or not callable(handle):
+            continue
+
+        if queue_name in registry:
+            previous_module = registry[queue_name]["module_name"]
+
+            raise RuntimeError(
+                "QUEUE_NAME duplicado detectado: "
+                f"'{queue_name}' está definido en "
+                f"'workers.plugins.{previous_module}' y "
+                f"'workers.plugins.{module_name}'. "
+                "Cada cola debe tener una única implementación."
+            )
+
+        timeout = getattr(
+            module,
+            "QUEUE_TIMEOUT",
+            DEFAULT_QUEUE_TIMEOUT,
+        )
+
         registry[queue_name] = {
             "handle": handle,
-            "timeout": getattr(module, "QUEUE_TIMEOUT", 120),
+            "timeout": timeout,
             "module_name": module_name,
         }
+
     return registry
