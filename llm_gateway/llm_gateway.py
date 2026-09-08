@@ -32,7 +32,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from skills.loader import build_prompt_context
+from skills.loader import (
+    build_prompt_context,
+    load_for_task,
+)
 
 
 # ============================================================
@@ -384,13 +387,55 @@ def generate():
     ).strip()
 
     skills_context = ""
+    skills_used = []
 
     if skill_task:
         try:
-            skills_context = build_prompt_context(
+            loaded_skills = load_for_task(
                 skill_task,
                 max_skills=3,
             )
+
+            context_blocks = []
+
+            for skill in loaded_skills:
+
+                skills_used.append({
+                    "id": skill.get("skill_id"),
+                    "category": skill.get("category"),
+                    "origin": skill.get("origin"),
+                    "trust_level": skill.get("trust_level"),
+                    "mode": skill.get("runtime_mode"),
+                    "version": skill.get("version"),
+                    "has_content": skill.get("has_content"),
+                })
+
+                if not skill.get("has_content"):
+                    continue
+
+                context_blocks.append(
+                    "=== SKILL: "
+                    + str(skill.get("skill_id"))
+                    + " ===\n"
+                    + "Origin: "
+                    + str(skill.get("origin"))
+                    + "\n"
+                    + "Trust: "
+                    + str(skill.get("trust_level"))
+                    + "\n"
+                    + "Mode: "
+                    + str(skill.get("runtime_mode"))
+                    + "\n"
+                    + "Safety: "
+                    + str(skill.get("safety_instruction"))
+                    + "\n\n"
+                    + str(skill.get("content"))
+                )
+
+            skills_context = "\n\n".join(
+                context_blocks
+            )
+
         except Exception as exc:
             return jsonify({
                 "error": "error cargando skills",
@@ -551,6 +596,12 @@ def generate():
             "_provider_used": provider,
 
             "_task_type": task_type,
+
+            "_skill_task": (
+                skill_task or None
+            ),
+
+            "_skills_used": skills_used,
 
             "_elapsed_seconds": elapsed,
 
