@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from router import (
+from skills.router import (
     BASE_DIR,
     get_skill,
     route_task,

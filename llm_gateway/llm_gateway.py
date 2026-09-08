@@ -14,11 +14,25 @@ Arrancar:
 """
 
 import os
+import sys
 import threading
 import time as time_module
+from pathlib import Path
 
 import requests
 from flask import Flask, request, jsonify
+
+
+# ============================================================
+# LOCAL AI STUDIO — PROJECT IMPORTS
+# ============================================================
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from skills.loader import build_prompt_context
 
 
 # ============================================================
