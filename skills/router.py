@@ -17,6 +17,7 @@ TRUST_PRIORITY = {
 
 def load_registry() -> Dict:
     """Carga y valida el catálogo de skills."""
+
     if not REGISTRY_PATH.exists():
         raise FileNotFoundError(
             f"No existe el Skill Registry: {REGISTRY_PATH}"
@@ -79,35 +80,43 @@ def is_external(skill: Dict) -> bool:
     )
 
 
-def can_execute(skill: Dict) -> bool:
+def is_internal_context(skill: Dict) -> bool:
     """
-    Indica si una skill puede utilizarse como capacidad ejecutable.
+    Indica si una skill puede utilizarse como contexto
+    metodológico interno confiable.
 
-    Las skills externas no revisadas nunca se consideran
-    instrucciones ejecutables.
+    IMPORTANTE:
+    Esto no significa que la skill ejecute código,
+    herramientas, workers o APIs.
     """
 
-    if is_external(skill):
-        return get_trust_level(skill) in {
-            "trusted",
-            "reviewed",
-        }
-
-    return get_trust_level(skill) == "internal"
+    return (
+        not is_external(skill)
+        and get_trust_level(skill) == "internal"
+    )
 
 
 def skill_mode(skill: Dict) -> str:
     """
     Devuelve cómo debe utilizarse una skill.
 
-    executable:
-        Puede formar parte de una capacidad ejecutable.
+    internal_context:
+        Contexto metodológico interno y confiable.
+        No implica ejecución de herramientas.
 
     reference:
-        Solo puede utilizarse como contexto metodológico.
+        Material externo utilizado únicamente como
+        referencia metodológica o informativa.
+
+    El modo "tool" queda reservado para futuras
+    capacidades que realmente ejecuten componentes
+    autorizados del Local AI Studio.
     """
 
-    return "executable" if can_execute(skill) else "reference"
+    if is_internal_context(skill):
+        return "internal_context"
+
+    return "reference"
 
 
 def _priority(skill: Dict) -> tuple:
@@ -137,8 +146,12 @@ def route_task(
 
     El router es determinista y no utiliza LLM.
 
-    Las skills externas no confiables pueden aparecer como
-    referencia, pero no se consideran ejecutables.
+    Las skills internas aportan contexto metodológico
+    confiable.
+
+    Las skills externas pueden aparecer como referencia,
+    pero nunca se convierten automáticamente en
+    instrucciones ejecutables.
     """
 
     task = (task or "").strip().lower()
@@ -160,8 +173,15 @@ def route_task(
 
         if task in tasks:
             selected = dict(skill)
+
             selected["runtime_mode"] = skill_mode(skill)
-            selected["can_execute"] = can_execute(skill)
+
+            # Compatibilidad temporal:
+            # mantenemos este campo para consumidores
+            # existentes, pero ya no significa que la
+            # skill ejecute herramientas.
+            selected["can_execute"] = False
+
             matches.append(selected)
 
     matches.sort(key=_priority)
@@ -191,13 +211,18 @@ def routing_plan(
     max_skills: int = 3,
 ) -> Dict:
     """
-    Genera un plan de routing separado por seguridad.
+    Genera un plan de routing explícito.
 
-    executable_skills:
-        Skills autorizadas como capacidades ejecutables.
+    internal_context_skills:
+        Skills internas confiables utilizadas como
+        contexto metodológico.
 
     reference_skills:
-        Skills que solo aportan contexto o metodología.
+        Skills externas utilizadas solo como referencia.
+
+    tool_skills:
+        Reservado para futuras capacidades que realmente
+        ejecuten herramientas autorizadas.
     """
 
     selected = route_task(
@@ -209,16 +234,17 @@ def routing_plan(
     return {
         "task": task,
         "skills": selected,
-        "executable_skills": [
+        "internal_context_skills": [
             skill["id"]
             for skill in selected
-            if skill["runtime_mode"] == "executable"
+            if skill["runtime_mode"] == "internal_context"
         ],
         "reference_skills": [
             skill["id"]
             for skill in selected
             if skill["runtime_mode"] == "reference"
         ],
+        "tool_skills": [],
     }
 
 
@@ -237,19 +263,24 @@ if __name__ == "__main__":
 
     for task in [
         "screening",
-        "experimental_design",
+        "research_question",
         "grounded_theory",
-        "manuscript",
+        "experimental_design",
         "preregistration",
+        "manuscript",
     ]:
         plan = routing_plan(task)
 
         print(f"\n{task}")
         print(
-            "  ejecutables:",
-            plan["executable_skills"],
+            "  contexto interno:",
+            plan["internal_context_skills"],
         )
         print(
             "  referencia:",
             plan["reference_skills"],
+        )
+        print(
+            "  herramientas:",
+            plan["tool_skills"],
         )

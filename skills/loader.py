@@ -145,7 +145,7 @@ def load_skill(
     skill = dict(skill)
 
     if skill.get("origin") == "internal":
-        skill["runtime_mode"] = "executable"
+        skill["runtime_mode"] = "internal_context"
     else:
         skill["runtime_mode"] = "reference"
 
