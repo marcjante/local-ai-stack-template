@@ -125,6 +125,17 @@ services:
     docker_service: "worker_notify"
     depends_on: [queue, database]
 
+  - id: worker_scientific
+    name: "Worker: scientific"
+    description: "Worker multi-cola para las herramientas científicas y revisiones sistemáticas."
+    host: 127.0.0.1
+    port: null
+    health_endpoint: null
+    start_command: "rq worker protocol_designer search_strategy_designer pubmed_search screening human_screening --url redis://127.0.0.1:6379/0"
+    stop_command: "pkill -f 'rq worker protocol_designer search_strategy_designer pubmed_search screening human_screening'"
+    docker_service: null
+    depends_on: [queue, database, llm_gateway]
+
   - id: dashboard
     name: "Panel de control"
     description: "Comprueba salud real (HTTP) de cada servicio, muestra CPU/RAM y profundidad de colas."
