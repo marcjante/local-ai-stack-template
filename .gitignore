@@ -8,3 +8,12 @@ venv/
 *.rdb
 pgdata/
 logs/*.log
+
+# Local AI Studio - archivos temporales y backups
+*.log
+*.backup
+*.simple
+*_v1.py
+*_v2.py
+*_v3.py
+workers/plugins.backup/

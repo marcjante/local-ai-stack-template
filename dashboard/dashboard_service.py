@@ -674,7 +674,855 @@ def evaluation_run():
 
 
 # --- Settings ---
+@app.route("/systematic-reviews")
+def systematic_reviews():
+    import psycopg2.extras
+    from db.db import get_conn
 
+    project_id = current_project_id()
+
+    with get_conn() as conn:
+        with conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        ) as cur:
+
+            cur.execute(
+                """
+                SELECT
+                    sr.id,
+                    sr.project_id,
+                    sr.title,
+                    sr.review_type,
+                    sr.research_question,
+                    sr.status,
+                    sr.created_at,
+                    sr.updated_at,
+
+                    COUNT(ra.id) AS article_count,
+
+                    COUNT(
+                        CASE
+                            WHEN ra.screening_status = 'reviewed'
+                            THEN 1
+                        END
+                    ) AS reviewed_count
+
+                FROM systematic_reviews sr
+
+                LEFT JOIN review_articles ra
+                    ON ra.review_id = sr.id
+
+                WHERE sr.project_id = %s
+
+                GROUP BY
+                    sr.id,
+                    sr.project_id,
+                    sr.title,
+                    sr.review_type,
+                    sr.research_question,
+                    sr.status,
+                    sr.created_at,
+                    sr.updated_at
+
+                ORDER BY sr.created_at DESC
+                """,
+                (project_id,),
+            )
+
+            reviews = cur.fetchall()
+
+    return render_template(
+        "systematic_reviews.html",
+        page="systematic_reviews",
+        reviews=reviews,
+    )
+
+
+@app.route(
+    "/api/systematic-reviews/create",
+    methods=["POST"]
+)
+def systematic_reviews_create():
+    import uuid
+    from db.db import get_conn
+
+    data = request.get_json(silent=True) or {}
+
+    title = (data.get("title") or "").strip()
+
+    if not title:
+        return jsonify({
+            "ok": False,
+            "error": "El título es obligatorio"
+        }), 400
+
+    allowed_review_types = {
+        "systematic_review",
+        "scoping_review",
+        "rapid_review",
+        "meta_analysis",
+    }
+
+    allowed_statuses = {
+        "draft",
+        "active",
+    }
+
+    review_type = (
+        data.get("review_type")
+        or "systematic_review"
+    )
+
+    status = (
+        data.get("status")
+        or "draft"
+    )
+
+    if review_type not in allowed_review_types:
+        return jsonify({
+            "ok": False,
+            "error": "Tipo de revisión no válido"
+        }), 400
+
+    if status not in allowed_statuses:
+        return jsonify({
+            "ok": False,
+            "error": "Estado de revisión no válido"
+        }), 400
+
+    review_id = str(uuid.uuid4())
+
+    project_id = current_project_id()
+
+    research_question = (
+        data.get("research_question") or ""
+    ).strip()
+
+    population = (
+        data.get("population") or ""
+    ).strip()
+
+    intervention = (
+        data.get("intervention") or ""
+    ).strip()
+
+    comparator = (
+        data.get("comparator") or ""
+    ).strip()
+
+    outcomes = (
+        data.get("outcomes") or ""
+    ).strip()
+
+    inclusion_criteria = (
+        data.get("inclusion_criteria") or ""
+    ).strip()
+
+    exclusion_criteria = (
+        data.get("exclusion_criteria") or ""
+    ).strip()
+
+    try:
+
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+
+                cur.execute(
+                    """
+                    INSERT INTO systematic_reviews (
+                        id,
+                        project_id,
+                        title,
+                        review_type,
+                        research_question,
+                        population,
+                        intervention,
+                        comparator,
+                        outcomes,
+                        inclusion_criteria,
+                        exclusion_criteria,
+                        status
+                    )
+                    VALUES (
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s
+                    )
+                    """,
+                    (
+                        review_id,
+                        project_id,
+                        title,
+                        review_type,
+                        research_question,
+                        population,
+                        intervention,
+                        comparator,
+                        outcomes,
+                        inclusion_criteria,
+                        exclusion_criteria,
+                        status,
+                    ),
+                )
+
+        return jsonify({
+            "ok": True,
+            "review_id": review_id,
+        })
+
+    except Exception as exc:
+
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+
+
+@app.route(
+    "/api/systematic-reviews/save-search-strategy",
+    methods=["POST"]
+)
+def systematic_reviews_save_search_strategy():
+    import uuid
+    from db.db import get_conn
+
+    data = request.get_json(silent=True) or {}
+
+    review_id = (
+        data.get("review_id")
+        or ""
+    ).strip()
+
+    query = (
+        data.get("query")
+        or ""
+    ).strip()
+
+    database_name = (
+        data.get("database_name")
+        or "PubMed"
+    ).strip()
+
+    if not review_id:
+        return jsonify({
+            "ok": False,
+            "error": "review_id es obligatorio"
+        }), 400
+
+    if not query:
+        return jsonify({
+            "ok": False,
+            "error": "La estrategia de búsqueda está vacía"
+        }), 400
+
+    is_valid = bool(
+        data.get("is_valid")
+    )
+
+    accepted_by_database = bool(
+        data.get("accepted_by_database")
+    )
+
+    total_found = data.get(
+        "total_found"
+    )
+
+    query_translation = (
+        data.get("query_translation")
+        or ""
+    )
+
+    warnings = (
+        data.get("warnings")
+        or []
+    )
+
+    errors = (
+        data.get("errors")
+        or []
+    )
+
+    removed_terms = (
+        data.get("removed_terms")
+        or []
+    )
+
+    concepts = (
+        data.get("concepts")
+        or []
+    )
+
+    model = (
+        data.get("model")
+        or ""
+    )
+
+    provider = (
+        data.get("provider")
+        or ""
+    )
+
+    try:
+
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+
+                cur.execute(
+                    """
+                    SELECT COALESCE(
+                        MAX(version),
+                        0
+                    )
+                    FROM review_search_strategies
+                    WHERE review_id = %s
+                      AND database_name = %s
+                    """,
+                    (
+                        review_id,
+                        database_name,
+                    ),
+                )
+
+                current_version = (
+                    cur.fetchone()[0]
+                    or 0
+                )
+
+                next_version = (
+                    current_version + 1
+                )
+
+                strategy_id = str(
+                    uuid.uuid4()
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO review_search_strategies (
+                        id,
+                        review_id,
+                        database_name,
+                        version,
+                        query,
+                        is_valid,
+                        accepted_by_database,
+                        total_found,
+                        query_translation,
+                        warnings,
+                        errors,
+                        removed_terms,
+                        concepts,
+                        model,
+                        provider,
+                        human_confirmed,
+                        confirmed_at
+                    )
+                    VALUES (
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        TRUE,
+                        CURRENT_TIMESTAMP
+                    )
+                    """,
+                    (
+                        strategy_id,
+                        review_id,
+                        database_name,
+                        next_version,
+                        query,
+                        is_valid,
+                        accepted_by_database,
+                        total_found,
+                        query_translation,
+                        warnings,
+                        errors,
+                        removed_terms,
+                        concepts,
+                        model,
+                        provider,
+                    ),
+                )
+
+        return jsonify({
+            "ok": True,
+            "strategy_id": strategy_id,
+            "version": next_version,
+        })
+
+    except Exception as exc:
+
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+
+
+@app.route(
+    "/api/systematic-reviews/design-protocol",
+    methods=["POST"]
+)
+def systematic_reviews_design_protocol():
+    import uuid
+    from workers.plugins.protocol_designer import handle as protocol_designer_handle
+
+    data = request.get_json(silent=True) or {}
+
+    topic = (
+        data.get("topic")
+        or data.get("research_topic")
+        or ""
+    ).strip()
+
+    review_type = (
+        data.get("review_type")
+        or "systematic_review"
+    ).strip()
+
+    if not topic:
+        return jsonify({
+            "ok": False,
+            "error": "El tema o pregunta inicial es obligatorio"
+        }), 400
+
+    allowed_review_types = {
+        "systematic_review",
+        "scoping_review",
+        "rapid_review",
+        "meta_analysis",
+    }
+
+    if review_type not in allowed_review_types:
+        return jsonify({
+            "ok": False,
+            "error": "Tipo de revisión no válido"
+        }), 400
+
+    try:
+
+        task_id = "protocol-ui-" + str(uuid.uuid4())
+
+        result = protocol_designer_handle(
+            task_id,
+            {
+                "topic": topic,
+                "review_type": review_type,
+            },
+        )
+
+        return jsonify({
+            "ok": True,
+            "result": result,
+        })
+
+    except Exception as exc:
+
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+
+
+@app.route(
+    "/api/systematic-reviews/design-search-strategy",
+    methods=["POST"]
+)
+def systematic_reviews_design_search_strategy():
+    import uuid
+    from workers.plugins.search_strategy_designer import handle as search_strategy_handle
+
+    data = request.get_json(silent=True) or {}
+
+    research_question = (
+        data.get("research_question")
+        or ""
+    ).strip()
+
+    population = (
+        data.get("population")
+        or ""
+    ).strip()
+
+    intervention = (
+        data.get("intervention")
+        or ""
+    ).strip()
+
+    comparator = (
+        data.get("comparator")
+        or ""
+    ).strip()
+
+    outcomes = (
+        data.get("outcomes")
+        or ""
+    ).strip()
+
+    if not research_question:
+        return jsonify({
+            "ok": False,
+            "error": "La pregunta de investigación es obligatoria"
+        }), 400
+
+    try:
+
+        task_id = "search-strategy-ui-" + str(uuid.uuid4())
+
+        result = search_strategy_handle(
+            task_id,
+            {
+                "research_question": research_question,
+                "population": population,
+                "intervention": intervention,
+                "comparator": comparator,
+                "outcomes": outcomes,
+            },
+        )
+
+        return jsonify({
+            "ok": True,
+            "result": result,
+        })
+
+    except Exception as exc:
+
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+
+
+@app.route("/systematic-review")
+def systematic_review():
+    from db.db import get_conn
+    from psycopg2.extras import RealDictCursor
+
+    review_id = request.args.get("review_id")
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+
+            if review_id:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM systematic_reviews
+                    WHERE id = %s
+                    """,
+                    (review_id,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM systematic_reviews
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                )
+
+            review = cur.fetchone()
+
+            if not review:
+                return render_template(
+                    "systematic_review.html",
+                    page="systematic_review",
+                    review=None,
+                    articles=[],
+                    stats={
+                        "total": 0,
+                        "reviewed": 0,
+                        "pending": 0,
+                    },
+                )
+
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    pmid,
+                    doi,
+                    title,
+                    journal,
+                    year,
+                    ai_decision,
+                    ai_reason,
+                    ai_confidence,
+                    human_decision,
+                    exclusion_reason,
+                    screening_status
+                FROM review_articles
+                WHERE review_id = %s
+                ORDER BY created_at ASC
+                """,
+                (review["id"],),
+            )
+
+            articles = cur.fetchall()
+
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    database_name,
+                    version,
+                    query,
+                    is_valid,
+                    accepted_by_database,
+                    total_found,
+                    model,
+                    provider,
+                    human_confirmed,
+                    created_at,
+                    confirmed_at
+                FROM review_search_strategies
+                WHERE review_id = %s
+                ORDER BY database_name ASC, version DESC
+                """,
+                (review["id"],),
+            )
+
+            search_strategies = cur.fetchall()
+
+    total = len(articles)
+    reviewed = sum(
+        1 for article in articles
+        if article["screening_status"] == "reviewed"
+    )
+    pending = total - reviewed
+
+    stats = {
+        "total": total,
+        "reviewed": reviewed,
+        "pending": pending,
+    }
+
+    return render_template(
+        "systematic_review.html",
+        page="systematic_review",
+        review=review,
+        articles=articles,
+        search_strategies=search_strategies,
+        stats=stats,
+    )
+@app.route("/api/systematic-review/pubmed-search", methods=["POST"])
+def systematic_review_pubmed_search():
+    from db.db import get_conn
+    from workers.plugins.pubmed_search import handle as pubmed_search_handle
+
+    data = request.get_json(silent=True) or {}
+
+    review_id = data.get("review_id")
+    strategy_id = data.get("strategy_id")
+    query = (data.get("query") or "").strip()
+    max_results = data.get("max_results", 20)
+
+    if not review_id:
+        return jsonify({
+            "ok": False,
+            "error": "review_id es obligatorio"
+        }), 400
+
+    if not query:
+        return jsonify({
+            "ok": False,
+            "error": "La búsqueda de PubMed no puede estar vacía"
+        }), 400
+
+    try:
+        max_results = int(max_results)
+    except (TypeError, ValueError):
+        return jsonify({
+            "ok": False,
+            "error": "max_results debe ser un número"
+        }), 400
+
+    max_results = max(1, min(max_results, 100))
+
+    # Si se ejecuta una estrategia guardada,
+    # verificamos que pertenece a esta revisión
+    # y que la query no ha sido modificada.
+    if strategy_id:
+
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+
+                cur.execute(
+                    """
+                    SELECT
+                        review_id,
+                        database_name,
+                        query,
+                        human_confirmed
+                    FROM review_search_strategies
+                    WHERE id = %s
+                    """,
+                    (strategy_id,),
+                )
+
+                strategy = cur.fetchone()
+
+        if not strategy:
+            return jsonify({
+                "ok": False,
+                "error": "La estrategia indicada no existe"
+            }), 404
+
+        (
+            strategy_review_id,
+            database_name,
+            strategy_query,
+            human_confirmed,
+        ) = strategy
+
+        if strategy_review_id != review_id:
+            return jsonify({
+                "ok": False,
+                "error": "La estrategia no pertenece a esta revisión"
+            }), 400
+
+        if database_name != "PubMed":
+            return jsonify({
+                "ok": False,
+                "error": "La estrategia no corresponde a PubMed"
+            }), 400
+
+        if not human_confirmed:
+            return jsonify({
+                "ok": False,
+                "error": "La estrategia todavía no tiene confirmación humana"
+            }), 400
+
+        if query != (strategy_query or "").strip():
+            return jsonify({
+                "ok": False,
+                "error":
+                    "La query no coincide con la estrategia confirmada. "
+                    "Vuelve a validar la estrategia antes de ejecutarla."
+            }), 400
+
+    try:
+        result = pubmed_search_handle(
+            f"pubmed-ui-{review_id}",
+            {
+                "review_id": review_id,
+                "strategy_id": strategy_id,
+                "query": query,
+                "max_results": max_results,
+            },
+        )
+
+        return jsonify({
+            "ok": True,
+            "result": result,
+        })
+
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+
+
+@app.route("/api/systematic-review/ai-screening", methods=["POST"])
+def systematic_review_ai_screening():
+    from workers.plugins.screening import handle as screening_handle
+
+    data = request.get_json(silent=True) or {}
+
+    review_id = data.get("review_id")
+
+    if not review_id:
+        return jsonify({
+            "ok": False,
+            "error": "review_id es obligatorio"
+        }), 400
+
+    try:
+        result = screening_handle(
+            f"screening-ui-{review_id}",
+            {
+                "review_id": review_id
+            },
+        )
+
+        return jsonify({
+            "ok": True,
+            "result": result,
+        })
+
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+@app.route("/api/systematic-review/human-decision", methods=["POST"])
+def systematic_review_human_decision():
+    from workers.plugins.human_screening import handle as human_screening_handle
+
+    data = request.get_json(silent=True) or {}
+
+    review_id = data.get("review_id")
+    article_id = data.get("article_id")
+    pmid = data.get("pmid")
+    decision = data.get("decision")
+    exclusion_reason = data.get("exclusion_reason")
+
+    if not review_id:
+        return jsonify({"ok": False, "error": "review_id es obligatorio"}), 400
+
+    if not article_id and not pmid:
+        return jsonify({"ok": False, "error": "article_id o pmid es obligatorio"}), 400
+
+    if decision not in {"include", "exclude", "uncertain"}:
+        return jsonify({
+            "ok": False,
+            "error": "decision debe ser include, exclude o uncertain"
+        }), 400
+
+    if decision == "exclude" and not exclusion_reason:
+        return jsonify({
+            "ok": False,
+            "error": "El motivo de exclusión es obligatorio"
+        }), 400
+
+    try:
+        result = human_screening_handle(
+            f"human-ui-{article_id or pmid}",
+            {
+                "review_id": review_id,
+                "article_id": article_id,
+                "pmid": pmid,
+                "decision": decision,
+                "exclusion_reason": exclusion_reason,
+            },
+        )
+
+        return jsonify({"ok": True, "result": result})
+
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
 @app.route("/settings")
 def settings_page():
     services = load_services()

@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Systematic Review Assistant</title>
+
+    <style>
+        :root {
+            --bg: #f4f7fb;
+            --card: #ffffff;
+            --text: #172033;
+            --muted: #6b7280;
+            --border: #dfe5ee;
+            --primary: #2857d9;
+            --primary-dark: #1e40af;
+            --success: #12805c;
+            --danger: #c0392b;
+            --warning: #b7791f;
+            --soft-blue: #eef4ff;
+            --soft-green: #eaf8f2;
+            --soft-red: #fff0ef;
+            --soft-yellow: #fff8e6;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                Roboto,
+                Helvetica,
+                Arial,
+                sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .hero {
+            background: linear-gradient(
+                135deg,
+                #172554 0%,
+                #1d4ed8 55%,
+                #2563eb 100%
+            );
+            color: white;
+            padding: 28px;
+            border-radius: 18px;
+            margin-bottom: 22px;
+            box-shadow: 0 14px 34px rgba(30, 64, 175, 0.18);
+        }
+
+        .hero h1 {
+            margin: 0 0 8px;
+            font-size: 30px;
+        }
+
+        .hero p {
+            margin: 0;
+            opacity: 0.88;
+            line-height: 1.5;
+        }
+
+        .grid-stats {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+        }
+
+        .stat-label {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 30px;
+            font-weight: 700;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+        }
+
+        .card h2 {
+            margin: 0 0 16px;
+            font-size: 20px;
+        }
+
+        .card h3 {
+            margin: 0 0 8px;
+            font-size: 15px;
+        }
+
+        .review-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .review-question {
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .pico-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .pico-item {
+            border: 1px solid var(--border);
+            background: #fafbfd;
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .criteria {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .criteria-item {
+            border-radius: 12px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            line-height: 1.5;
+        }
+
+        .criteria-include {
+            background: var(--soft-green);
+        }
+
+        .criteria-exclude {
+            background: var(--soft-red);
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .field label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        input,
+        select {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 11px 12px;
+            font-size: 14px;
+            background: white;
+        }
+
+        input[type="text"] {
+            min-width: 360px;
+        }
+
+        input[type="number"] {
+            width: 110px;
+        }
+
+        button {
+            border: 0;
+            border-radius: 10px;
+            padding: 11px 14px;
+            cursor: pointer;
+            font-weight: 650;
+            font-size: 14px;
+            transition: 0.15s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: wait;
+            transform: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-neutral {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .status-line {
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 14px;
+            min-height: 20px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px;
+        }
+
+        th,
+        td {
+            padding: 13px 12px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        th {
+            background: #f8fafc;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .article-title {
+            font-weight: 650;
+            line-height: 1.45;
+            min-width: 260px;
+        }
+
+        .article-meta {
+            color: var(--muted);
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 9px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .badge-include {
+            background: var(--soft-green);
+            color: var(--success);
+        }
+
+        .badge-exclude {
+            background: var(--soft-red);
+            color: var(--danger);
+        }
+
+        .badge-uncertain {
+            background: var(--soft-yellow);
+            color: var(--warning);
+        }
+
+        .badge-pending {
+            background: #eef2f7;
+            color: #475569;
+        }
+
+        .ai-reason {
+            min-width: 250px;
+            max-width: 360px;
+            line-height: 1.45;
+        }
+
+        .confidence {
+            font-weight: 700;
+        }
+
+        .decision-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 120px;
+        }
+
+        .decision-buttons button {
+            padding: 8px 9px;
+            font-size: 12px;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--muted);
+        }
+
+        .notice {
+            background: var(--soft-blue);
+            border: 1px solid #c7d7ff;
+            color: #24458e;
+            padding: 12px 14px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            line-height: 1.45;
+        }
+
+        @media (max-width: 900px) {
+            .grid-stats,
+            .pico-grid,
+            .criteria {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 14px;
+            }
+
+            input[type="text"] {
+                min-width: 100%;
+                width: 100%;
+            }
+
+            .toolbar {
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <section class="hero">
+        <h1>Systematic Review Assistant</h1>
+        <p>
+            Búsqueda bibliográfica, screening asistido por IA y validación humana
+            con trazabilidad de decisiones.
+        </p>
+    </section>
+
+    {% if not review %}
+
+        <div class="card empty">
+            <h2>No hay ninguna revisión sistemática creada</h2>
+            <p>
+                Crea una revisión para empezar a importar artículos,
+                realizar screening y registrar decisiones.
+            </p>
+        </div>
+
+    {% else %}
+
+        <section class="card">
+            <div class="review-title">
+                {{ review.title }}
+            </div>
+
+            <div class="review-question">
+                {{ review.research_question or "Pregunta de investigación no especificada" }}
+            </div>
+        </section>
+
+        <section class="grid-stats">
+            <div class="stat-card">
+                <div class="stat-label">Artículos totales</div>
+                <div class="stat-value">{{ stats.total }}</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">Revisados por humano</div>
+                <div class="stat-value">{{ stats.reviewed }}</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">Pendientes</div>
+                <div class="stat-value">{{ stats.pending }}</div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>PICO / PECO</h2>
+
+            <div class="pico-grid">
+
+                <div class="pico-item">
+                    <h3>Población</h3>
+                    {{ review.population or "No especificada" }}
+                </div>
+
+                <div class="pico-item">
+                    <h3>Intervención / exposición</h3>
+                    {{ review.intervention or "No especificada" }}
+                </div>
+
+                <div class="pico-item">
+                    <h3>Comparador</h3>
+                    {{ review.comparator or "No especificado" }}
+                </div>
+
+                <div class="pico-item">
+                    <h3>Outcomes</h3>
+                    {{ review.outcomes or "No especificados" }}
+                </div>
+
+            </div>
+
+            <div class="criteria">
+
+                <div class="criteria-item criteria-include">
+                    <h3>Criterios de inclusión</h3>
+                    {{ review.inclusion_criteria or "No especificados" }}
+                </div>
+
+                <div class="criteria-item criteria-exclude">
+                    <h3>Criterios de exclusión</h3>
+                    {{ review.exclusion_criteria or "No especificados" }}
+                </div>
+
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Estrategias de búsqueda</h2>
+
+            {% if search_strategies %}
+
+                {% for strategy in search_strategies %}
+
+                    <div style="
+                        border:1px solid var(--border);
+                        border-radius:12px;
+                        padding:14px;
+                        margin-bottom:12px;
+                        background:#fafbfd;
+                    ">
+
+                        <div style="
+                            display:flex;
+                            justify-content:space-between;
+                            gap:12px;
+                            flex-wrap:wrap;
+                            margin-bottom:10px;
+                        ">
+
+                            <div>
+                                <strong>
+                                    {{ strategy.database_name }}
+                                </strong>
+                                · versión {{ strategy.version }}
+                            </div>
+
+                            <div style="
+                                font-size:13px;
+                                color:var(--muted);
+                            ">
+                                {% if strategy.confirmed_at %}
+                                    Confirmada:
+                                    {{ strategy.confirmed_at.strftime("%d/%m/%Y %H:%M") }}
+                                {% endif %}
+                            </div>
+
+                        </div>
+
+                        <div style="
+                            margin-bottom:10px;
+                            display:flex;
+                            gap:10px;
+                            flex-wrap:wrap;
+                            font-size:13px;
+                        ">
+
+                            <span>
+                                Resultados:
+                                <strong>
+                                    {{ strategy.total_found if strategy.total_found is not none else "—" }}
+                                </strong>
+                            </span>
+
+                            <span>
+                                Validación:
+                                {% if strategy.accepted_by_database %}
+                                    ✅ aceptada
+                                {% else %}
+                                    ⚠️ no aceptada
+                                {% endif %}
+                            </span>
+
+                            <span>
+                                Confirmación humana:
+                                {% if strategy.human_confirmed %}
+                                    ✅ sí
+                                {% else %}
+                                    ⚠️ no
+                                {% endif %}
+                            </span>
+
+                            <span>
+                                Modelo:
+                                {{ strategy.model or "—" }}
+                            </span>
+
+                        </div>
+
+                        <div style="
+                            font-size:12px;
+                            color:var(--muted);
+                            margin-bottom:6px;
+                        ">
+                            Query
+                        </div>
+
+                        <pre style="
+                            white-space:pre-wrap;
+                            overflow-wrap:anywhere;
+                            margin:0;
+                            padding:12px;
+                            border-radius:10px;
+                            background:#f3f6fb;
+                            border:1px solid var(--border);
+                            font-size:12px;
+                            line-height:1.5;
+                        ">{{ strategy.query }}</pre>
+
+                    </div>
+
+                {% endfor %}
+
+            {% else %}
+
+                <div class="notice">
+                    Aún no hay ninguna estrategia de búsqueda guardada para esta revisión.
+                </div>
+
+            {% endif %}
+
+        </section>
+
+        <section class="card">
+            <h2>Búsqueda e inteligencia artificial</h2>
+
+            <div class="notice">
+                La IA propone decisiones de screening, pero la decisión final
+                debe ser confirmada por el investigador.
+            </div>
+
+            <div class="toolbar">
+
+                <div class="field">
+                    <label for="pubmed-query">Búsqueda PubMed</label>
+                    <input
+                        id="pubmed-query"
+                        type="text"
+                        placeholder="Ej. tuberculosis digital adherence technology"
+                    >
+                </div>
+
+                <div class="field">
+                    <label for="pubmed-max">Máximo</label>
+                    <input
+                        id="pubmed-max"
+                        type="number"
+                        min="1"
+                        max="100"
+                        value="20"
+                    >
+                </div>
+
+                <button
+                    id="pubmed-button"
+                    class="btn-primary"
+                    type="button"
+                    onclick="runPubMedSearch()"
+                >
+                    🔎 Buscar en PubMed
+                </button>
+
+                <button
+                    id="ai-screening-button"
+                    class="btn-primary"
+                    type="button"
+                    onclick="runAIScreening()"
+                >
+                    🤖 Ejecutar screening IA
+                </button>
+
+            </div>
+
+            <div
+                id="operation-status"
+                class="status-line"
+            ></div>
+
+        </section>
+
+        <section class="card">
+            <h2>Artículos</h2>
+
+            {% if articles %}
+
+                <div class="table-wrap">
+
+                    <table>
+
+                        <thead>
+                            <tr>
+                                <th>Artículo</th>
+                                <th>IA</th>
+                                <th>Confianza</th>
+                                <th>Motivo IA</th>
+                                <th>Decisión humana</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                        {% for article in articles %}
+
+                            <tr id="article-{{ article.id }}">
+
+                                <td>
+                                    <div class="article-title">
+                                        {{ article.title or "Sin título" }}
+                                    </div>
+
+                                    <div class="article-meta">
+                                        {% if article.journal %}
+                                            {{ article.journal }}
+                                        {% endif %}
+
+                                        {% if article.year %}
+                                            · {{ article.year }}
+                                        {% endif %}
+
+                                        {% if article.pmid %}
+                                            <br>PMID: {{ article.pmid }}
+                                        {% endif %}
+
+                                        {% if article.doi %}
+                                            <br>DOI: {{ article.doi }}
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <td>
+
+                                    {% if article.ai_decision == "include" %}
+                                        <span class="badge badge-include">
+                                            Include
+                                        </span>
+
+                                    {% elif article.ai_decision == "exclude" %}
+                                        <span class="badge badge-exclude">
+                                            Exclude
+                                        </span>
+
+                                    {% elif article.ai_decision == "uncertain" %}
+                                        <span class="badge badge-uncertain">
+                                            Uncertain
+                                        </span>
+
+                                    {% else %}
+                                        <span class="badge badge-pending">
+                                            Sin evaluar
+                                        </span>
+                                    {% endif %}
+
+                                </td>
+
+                                <td>
+                                    {% if article.ai_confidence is not none %}
+                                        <span class="confidence">
+                                            {{ "%.0f"|format(article.ai_confidence * 100) }}%
+                                        </span>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+
+                                <td class="ai-reason">
+                                    {{ article.ai_reason or "—" }}
+                                </td>
+
+                                <td id="human-decision-{{ article.id }}">
+
+                                    {% if article.human_decision == "include" %}
+                                        <span class="badge badge-include">
+                                            Include
+                                        </span>
+
+                                    {% elif article.human_decision == "exclude" %}
+                                        <span class="badge badge-exclude">
+                                            Exclude
+                                        </span>
+
+                                        {% if article.exclusion_reason %}
+                                            <div class="article-meta">
+                                                {{ article.exclusion_reason }}
+                                            </div>
+                                        {% endif %}
+
+                                    {% elif article.human_decision == "uncertain" %}
+                                        <span class="badge badge-uncertain">
+                                            Uncertain
+                                        </span>
+
+                                    {% else %}
+                                        <span class="badge badge-pending">
+                                            Pendiente
+                                        </span>
+                                    {% endif %}
+
+                                </td>
+
+                                <td>
+
+                                    <div class="decision-buttons">
+
+                                        <button
+                                            class="btn-success"
+                                            onclick="setHumanDecision(
+                                                '{{ article.id }}',
+                                                'include'
+                                            )"
+                                        >
+                                            ✓ Incluir
+                                        </button>
+
+                                        <button
+                                            class="btn-danger"
+                                            onclick="setHumanDecision(
+                                                '{{ article.id }}',
+                                                'exclude'
+                                            )"
+                                        >
+                                            ✕ Excluir
+                                        </button>
+
+                                        <button
+                                            class="btn-warning"
+                                            onclick="setHumanDecision(
+                                                '{{ article.id }}',
+                                                'uncertain'
+                                            )"
+                                        >
+                                            ? Dudoso
+                                        </button>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            {% else %}
+
+                <div class="empty">
+                    Todavía no hay artículos importados para esta revisión.
+                </div>
+
+            {% endif %}
+
+        </section>
+
+    {% endif %}
+
+</div>
+
+
+{% if review %}
+
+<script>
+
+const REVIEW_ID = {{ review.id | tojson }};
+
+
+function setStatus(message) {
+    const element = document.getElementById("operation-status");
+
+    if (element) {
+        element.textContent = message;
+    }
+}
+
+
+async function runPubMedSearch() {
+
+    const queryInput = document.getElementById("pubmed-query");
+    const maxInput = document.getElementById("pubmed-max");
+    const button = document.getElementById("pubmed-button");
+
+    const query = queryInput.value.trim();
+
+    if (!query) {
+        setStatus("❌ Escribe una búsqueda para PubMed.");
+        return;
+    }
+
+    button.disabled = true;
+
+    setStatus("🔎 Buscando artículos en PubMed...");
+
+    try {
+
+        const response = await fetch(
+            "/api/systematic-review/pubmed-search",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    review_id: REVIEW_ID,
+                    query: query,
+                    max_results: Number(maxInput.value || 20)
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(
+                data.error || "Error durante la búsqueda PubMed"
+            );
+        }
+
+        const result = data.result || {};
+
+        const imported =
+            result.imported_count ??
+            result.imported ??
+            0;
+
+        const total =
+            result.total_count ??
+            result.total ??
+            "?";
+
+        setStatus(
+            `✅ PubMed: ${imported} artículos nuevos importados. ` +
+            `Resultados encontrados: ${total}.`
+        );
+
+        setTimeout(
+            () => window.location.reload(),
+            900
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        setStatus(
+            `❌ Error PubMed: ${error.message}`
+        );
+
+        button.disabled = false;
+    }
+}
+
+
+async function runAIScreening() {
+
+    const button =
+        document.getElementById("ai-screening-button");
+
+    button.disabled = true;
+
+    setStatus(
+        "🤖 Analizando artículos pendientes con IA..."
+    );
+
+    try {
+
+        const response = await fetch(
+            "/api/systematic-review/ai-screening",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    review_id: REVIEW_ID
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(
+                data.error || "Error ejecutando screening IA"
+            );
+        }
+
+        const screened =
+            data.result?.screened ?? 0;
+
+        if (screened === 0) {
+
+            setStatus(
+                "ℹ️ No hay artículos nuevos pendientes de screening IA."
+            );
+
+            button.disabled = false;
+
+            return;
+        }
+
+        setStatus(
+            `✅ Screening IA completado: ${screened} artículos.`
+        );
+
+        setTimeout(
+            () => window.location.reload(),
+            900
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        setStatus(
+            `❌ Error screening IA: ${error.message}`
+        );
+
+        button.disabled = false;
+    }
+}
+
+
+async function setHumanDecision(
+    articleId,
+    decision
+) {
+
+    let exclusionReason = null;
+
+    if (decision === "exclude") {
+
+        exclusionReason = prompt(
+            "Indica el motivo de exclusión:"
+        );
+
+        if (
+            exclusionReason === null ||
+            exclusionReason.trim() === ""
+        ) {
+            return;
+        }
+
+        exclusionReason =
+            exclusionReason.trim();
+    }
+
+    setStatus(
+        "Guardando decisión humana..."
+    );
+
+    try {
+
+        const response = await fetch(
+            "/api/systematic-review/human-decision",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    review_id: REVIEW_ID,
+                    article_id: articleId,
+                    decision: decision,
+                    exclusion_reason: exclusionReason
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(
+                data.error || "Error guardando la decisión"
+            );
+        }
+
+        setStatus(
+            "✅ Decisión humana guardada."
+        );
+
+        setTimeout(
+            () => window.location.reload(),
+            350
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        setStatus(
+            `❌ ${error.message}`
+        );
+    }
+}
+
+</script>
+
+{% endif %}
+
+</body>
+</html>
+
+

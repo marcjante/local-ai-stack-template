@@ -1,0 +1,1200 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+  .sr-header {
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    margin-bottom:20px;
+  }
+
+  .sr-title {
+    margin:0;
+    font-size:24px;
+  }
+
+  .sr-subtitle {
+    margin-top:6px;
+    color:var(--text-muted);
+    font-size:13px;
+    max-width:720px;
+    line-height:1.5;
+  }
+
+  .sr-actions {
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+
+  .review-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+    gap:14px;
+  }
+
+  .review-card {
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px;
+    transition:.15s ease;
+  }
+
+  .review-card:hover {
+    border-color:var(--blue);
+    transform:translateY(-1px);
+  }
+
+  .review-card-title {
+    font-size:16px;
+    font-weight:700;
+    margin-bottom:8px;
+    line-height:1.35;
+  }
+
+  .review-question {
+    color:var(--text-muted);
+    font-size:12px;
+    line-height:1.45;
+    min-height:52px;
+  }
+
+  .review-meta {
+    margin-top:14px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+
+  .badge {
+    font-size:11px;
+    border:1px solid var(--border);
+    padding:4px 7px;
+    border-radius:999px;
+    color:var(--text-muted);
+  }
+
+  .badge-active {
+    color:var(--accent);
+    border-color:rgba(63,185,80,.35);
+    background:rgba(63,185,80,.08);
+  }
+
+  .badge-draft {
+    color:var(--amber);
+    border-color:rgba(210,153,34,.35);
+    background:rgba(210,153,34,.08);
+  }
+
+  .review-footer {
+    margin-top:16px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+  }
+
+  .review-stats {
+    color:var(--text-muted);
+    font-size:11px;
+  }
+
+  .empty-state {
+    text-align:center;
+    padding:40px 20px;
+    color:var(--text-muted);
+  }
+
+  .modal-overlay {
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.65);
+    z-index:1000;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  }
+
+  .modal-overlay.open {
+    display:flex;
+  }
+
+  .modal {
+    width:min(860px, 100%);
+    max-height:90vh;
+    overflow:auto;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+  }
+
+  .modal-header {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:18px;
+  }
+
+  .modal-header h2 {
+    margin:0;
+    font-size:18px;
+  }
+
+  .form-grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+
+  .form-field {
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+
+  .form-field.full {
+    grid-column:1 / -1;
+  }
+
+  .form-field label {
+    font-size:12px;
+    color:var(--text-muted);
+    font-weight:600;
+  }
+
+  .form-field input,
+  .form-field textarea,
+  .form-field select {
+    width:100%;
+  }
+
+  .form-field textarea {
+    min-height:85px;
+  }
+
+  .modal-footer {
+    margin-top:18px;
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+  }
+
+  .status-message {
+    margin-top:10px;
+    min-height:20px;
+    font-size:12px;
+    color:var(--text-muted);
+  }
+
+  @media (max-width:700px) {
+    .sr-header {
+      flex-direction:column;
+    }
+
+    .form-grid {
+      grid-template-columns:1fr;
+    }
+
+    .form-field.full {
+      grid-column:auto;
+    }
+  }
+</style>
+
+<div class="sr-header">
+  <div>
+    <h1 class="sr-title">Systematic Review Assistant</h1>
+    <div class="sr-subtitle">
+      Gestiona revisiones sistemáticas independientes sobre cualquier tema.
+      Cada revisión mantiene sus propios criterios, búsquedas, artículos y decisiones.
+    </div>
+  </div>
+
+  <div class="sr-actions">
+    <button class="primary" onclick="openNewReviewModal()">
+      + Nueva revisión
+    </button>
+  </div>
+</div>
+
+<h2 class="section-title">Mis revisiones</h2>
+
+{% if reviews %}
+
+<div class="review-grid">
+
+  {% for review in reviews %}
+
+  <div class="review-card">
+
+    <div class="review-card-title">
+      {{ review.title }}
+    </div>
+
+    <div class="review-question">
+      {{ review.research_question or "Sin pregunta de investigación definida." }}
+    </div>
+
+    <div class="review-meta">
+
+      <span class="badge">
+        {{ review.review_type or "systematic_review" }}
+      </span>
+
+      {% if review.status == "active" %}
+        <span class="badge badge-active">Activa</span>
+      {% else %}
+        <span class="badge badge-draft">
+          {{ review.status or "draft" }}
+        </span>
+      {% endif %}
+
+    </div>
+
+    <div class="review-footer">
+
+      <div class="review-stats">
+        {{ review.article_count or 0 }} artículos
+        ·
+        {{ review.reviewed_count or 0 }} revisados
+      </div>
+
+      <a href="/systematic-review?review_id={{ review.id }}">
+        <button>Abrir revisión</button>
+      </a>
+
+    </div>
+
+  </div>
+
+  {% endfor %}
+
+</div>
+
+{% else %}
+
+<div class="card empty-state">
+  <div style="font-size:34px;margin-bottom:10px;">📚</div>
+  <div style="font-weight:700;color:var(--text);margin-bottom:6px;">
+    Todavía no hay revisiones
+  </div>
+  <div>
+    Crea la primera revisión sistemática para empezar.
+  </div>
+</div>
+
+{% endif %}
+
+
+<div id="new-review-modal" class="modal-overlay">
+
+  <div class="modal">
+
+    <div class="modal-header">
+      <h2>Nueva revisión sistemática</h2>
+
+      <button onclick="closeNewReviewModal()">
+        ✕
+      </button>
+    </div>
+
+    <div class="form-grid">
+
+      <div class="form-field full">
+        <label>Tema o pregunta inicial</label>
+        <textarea
+          id="protocol-topic"
+          placeholder="Ej. Inteligencia artificial para la valoración de heridas crónicas"
+        ></textarea>
+
+        <div style="margin-top:10px;">
+          <button
+            type="button"
+            id="design-protocol-button"
+            class="primary"
+            onclick="designProtocolWithAI()"
+          >
+            ✨ Diseñar protocolo con IA
+          </button>
+        </div>
+
+        <div
+          id="protocol-ai-status"
+          class="status-message"
+          style="margin-top:8px;"
+        ></div>
+      </div>
+
+      <div class="form-field full">
+        <label>Título *</label>
+        <input
+          id="review-title"
+          type="text"
+          placeholder="Ej. Inteligencia artificial en valoración de heridas"
+        >
+      </div>
+
+      <div class="form-field">
+        <label>Tipo de revisión</label>
+        <select id="review-type">
+          <option value="systematic_review">Revisión sistemática</option>
+          <option value="scoping_review">Scoping review</option>
+          <option value="rapid_review">Rapid review</option>
+          <option value="meta_analysis">Meta-análisis</option>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label>Estado inicial</label>
+        <select id="review-status">
+          <option value="draft">Borrador</option>
+          <option value="active">Activa</option>
+        </select>
+      </div>
+
+      <div class="form-field full">
+        <label>Pregunta de investigación</label>
+        <textarea
+          id="research-question"
+          placeholder="¿Cuál es la pregunta principal de la revisión?"
+        ></textarea>
+      </div>
+
+      <div class="form-field">
+        <label>Población</label>
+        <textarea
+          id="population"
+          placeholder="Población o problema clínico"
+        ></textarea>
+      </div>
+
+      <div class="form-field">
+        <label>Intervención / exposición</label>
+        <textarea
+          id="intervention"
+          placeholder="Intervención, exposición o tecnología"
+        ></textarea>
+      </div>
+
+      <div class="form-field">
+        <label>Comparador</label>
+        <textarea
+          id="comparator"
+          placeholder="Comparador, atención habitual, placebo..."
+        ></textarea>
+      </div>
+
+      <div class="form-field">
+        <label>Outcomes</label>
+        <textarea
+          id="outcomes"
+          placeholder="Resultados principales"
+        ></textarea>
+      </div>
+
+      <div class="form-field">
+        <label>Criterios de inclusión</label>
+        <textarea
+          id="inclusion-criteria"
+          placeholder="Qué estudios deben incluirse"
+        ></textarea>
+      </div>
+
+      <div class="form-field">
+        <label>Criterios de exclusión</label>
+        <textarea
+          id="exclusion-criteria"
+          placeholder="Qué estudios deben excluirse"
+        ></textarea>
+      </div>
+
+      <div class="form-field full">
+        <label>
+          Estrategia PubMed propuesta por IA
+        </label>
+
+        <textarea
+          id="pubmed-query-proposal"
+          placeholder="La IA propondrá aquí una estrategia inicial de búsqueda."
+          style="min-height:110px;"
+        ></textarea>
+
+        <div style="
+          margin-top:6px;
+          font-size:12px;
+          color:var(--muted);
+        ">
+          ⚠️ Propuesta preliminar. Revísala antes de ejecutar la búsqueda.
+        </div>
+
+        <div style="
+          margin-top:10px;
+          display:flex;
+          gap:10px;
+          align-items:center;
+          flex-wrap:wrap;
+        ">
+          <button
+            type="button"
+            id="validate-search-strategy-button"
+            class="primary"
+            onclick="validateSearchStrategy()"
+          >
+            🔎 Validar estrategia PubMed
+          </button>
+
+          <button
+            type="button"
+            id="save-search-strategy-button"
+            onclick="saveSearchStrategy()"
+            disabled
+          >
+            ✅ Confirmar y guardar estrategia
+          </button>
+
+          <div
+            id="search-strategy-status"
+            style="
+              font-size:13px;
+              color:var(--muted);
+            "
+          ></div>
+        </div>
+
+        <div
+          id="search-strategy-details"
+          style="
+            display:none;
+            margin-top:10px;
+            padding:12px;
+            border:1px solid var(--border);
+            border-radius:10px;
+            background:var(--surface-2);
+            font-size:13px;
+          "
+        ></div>
+      </div>
+
+    </div>
+
+    <div id="new-review-status" class="status-message"></div>
+
+    <div class="modal-footer">
+
+      <button onclick="closeNewReviewModal()">
+        Cancelar
+      </button>
+
+      <button
+        id="create-review-button"
+        class="primary"
+        onclick="createReview()"
+      >
+        Crear revisión
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+function openNewReviewModal() {
+  document
+    .getElementById("new-review-modal")
+    .classList.add("open");
+}
+
+function closeNewReviewModal() {
+  document
+    .getElementById("new-review-modal")
+    .classList.remove("open");
+}
+
+
+async function designProtocolWithAI() {
+
+  const topic =
+    document.getElementById("protocol-topic").value.trim();
+
+  const reviewType =
+    document.getElementById("review-type").value;
+
+  const button =
+    document.getElementById("design-protocol-button");
+
+  const status =
+    document.getElementById("protocol-ai-status");
+
+  if (!topic) {
+    status.textContent =
+      "❌ Escribe primero un tema o pregunta inicial.";
+    return;
+  }
+
+  button.disabled = true;
+  status.textContent =
+    "🧠 Gemma 2 9B está diseñando el protocolo...";
+
+  try {
+
+    const response = await fetch(
+      "/api/systematic-reviews/design-protocol",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          topic: topic,
+          review_type: reviewType
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(
+        data.error ||
+        "No se pudo generar el protocolo"
+      );
+    }
+
+    const protocol =
+      data.result && data.result.protocol
+        ? data.result.protocol
+        : null;
+
+    if (!protocol) {
+      throw new Error(
+        "La IA no devolvió un protocolo válido"
+      );
+    }
+
+    document.getElementById("review-title").value =
+      protocol.suggested_title || "";
+
+    document.getElementById("research-question").value =
+      protocol.research_question || "";
+
+    document.getElementById("population").value =
+      protocol.population || "";
+
+    document.getElementById("intervention").value =
+      protocol.intervention || "";
+
+    document.getElementById("comparator").value =
+      protocol.comparator || "";
+
+    document.getElementById("outcomes").value =
+      protocol.outcomes || "";
+
+    document.getElementById("inclusion-criteria").value =
+      protocol.inclusion_criteria || "";
+
+    document.getElementById("exclusion-criteria").value =
+      protocol.exclusion_criteria || "";
+
+    document.getElementById("pubmed-query-proposal").value =
+      protocol.pubmed_query || "";
+
+    status.textContent =
+      "✅ Protocolo propuesto. Revísalo y modifica lo que quieras antes de crear la revisión.";
+
+  } catch (error) {
+
+    console.error(error);
+
+    status.textContent =
+      "❌ " + error.message;
+
+  } finally {
+
+    button.disabled = false;
+  }
+}
+
+
+let validatedSearchStrategy = null;
+let confirmedSearchStrategy = null;
+
+
+
+async function validateSearchStrategy() {
+
+  const button =
+    document.getElementById(
+      "validate-search-strategy-button"
+    );
+
+  const status =
+    document.getElementById(
+      "search-strategy-status"
+    );
+
+  const details =
+    document.getElementById(
+      "search-strategy-details"
+    );
+
+  const researchQuestion =
+    document.getElementById(
+      "research-question"
+    ).value.trim();
+
+  const population =
+    document.getElementById(
+      "population"
+    ).value.trim();
+
+  const intervention =
+    document.getElementById(
+      "intervention"
+    ).value.trim();
+
+  const comparator =
+    document.getElementById(
+      "comparator"
+    ).value.trim();
+
+  const outcomes =
+    document.getElementById(
+      "outcomes"
+    ).value.trim();
+
+  if (!researchQuestion) {
+    status.textContent =
+      "❌ Primero completa la pregunta de investigación.";
+    return;
+  }
+
+  button.disabled = true;
+
+  status.textContent =
+    "⏳ Diseñando y validando estrategia en PubMed...";
+
+  details.style.display = "none";
+  details.innerHTML = "";
+
+  try {
+
+    const response = await fetch(
+      "/api/systematic-reviews/design-search-strategy",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          research_question: researchQuestion,
+          population: population,
+          intervention: intervention,
+          comparator: comparator,
+          outcomes: outcomes
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(
+        data.error ||
+        "No se pudo validar la estrategia."
+      );
+    }
+
+    const result = data.result || {};
+
+    const pubmed =
+      result.pubmed_validation || {};
+
+    document.getElementById(
+      "pubmed-query-proposal"
+    ).value =
+      result.query || "";
+
+    const total =
+      pubmed.total_found;
+
+    if (
+      result.valid &&
+      pubmed.accepted_by_pubmed
+    ) {
+      status.textContent =
+        "✅ Estrategia válida en PubMed"
+        + (
+          total !== null &&
+          total !== undefined
+            ? ` · ${total} resultados`
+            : ""
+        );
+    } else {
+      status.textContent =
+        "⚠️ La estrategia necesita revisión.";
+    }
+
+    const removed =
+      result.removed_terms || [];
+
+    const localWarnings =
+      (
+        result.local_validation &&
+        result.local_validation.warnings
+      ) || [];
+
+    const pubmedWarnings =
+      pubmed.warnings || [];
+
+    const errors = [
+      ...(
+        (
+          result.local_validation &&
+          result.local_validation.errors
+        ) || []
+      ),
+      ...(pubmed.errors || [])
+    ];
+
+    let html = "";
+
+    html += `
+      <div style="margin-bottom:8px;">
+        <strong>Resultado PubMed:</strong>
+        ${
+          total !== null &&
+          total !== undefined
+            ? total + " artículos encontrados"
+            : "sin recuento disponible"
+        }
+      </div>
+    `;
+
+    html += `
+      <div style="margin-bottom:8px;">
+        <strong>Modelo:</strong>
+        ${result.model || "—"}
+        ·
+        <strong>Proveedor:</strong>
+        ${result.provider || "—"}
+      </div>
+    `;
+
+    if (removed.length) {
+
+      html += `
+        <div style="margin-top:10px;">
+          <strong>
+            Términos eliminados automáticamente:
+          </strong>
+          <ul>
+      `;
+
+      for (const item of removed) {
+        html += `
+          <li>
+            <code>${escapeHtml(item.term || "")}</code>
+            — ${escapeHtml(item.reason || "")}
+          </li>
+        `;
+      }
+
+      html += `
+          </ul>
+        </div>
+      `;
+    }
+
+    if (
+      localWarnings.length ||
+      pubmedWarnings.length
+    ) {
+
+      html += `
+        <div style="margin-top:10px;">
+          <strong>Avisos:</strong>
+          <ul>
+      `;
+
+      for (
+        const warning of [
+          ...localWarnings,
+          ...pubmedWarnings
+        ]
+      ) {
+        html += `
+          <li>${escapeHtml(warning)}</li>
+        `;
+      }
+
+      html += `
+          </ul>
+        </div>
+      `;
+    }
+
+    if (errors.length) {
+
+      html += `
+        <div style="margin-top:10px;">
+          <strong>Errores:</strong>
+          <ul>
+      `;
+
+      for (const error of errors) {
+        html += `
+          <li>${escapeHtml(error)}</li>
+        `;
+      }
+
+      html += `
+          </ul>
+        </div>
+      `;
+    }
+
+    html += `
+      <div style="
+        margin-top:10px;
+        font-size:12px;
+        color:var(--muted);
+      ">
+        La estrategia ha sido propuesta por IA,
+        construida de forma determinista por Python
+        y validada contra PubMed.
+        Revísala antes de ejecutar la búsqueda.
+      </div>
+    `;
+
+    details.innerHTML = html;
+    details.style.display = "block";
+
+    const saveButton =
+      document.getElementById(
+        "save-search-strategy-button"
+      );
+
+    if (
+      result.valid &&
+      pubmed.accepted_by_pubmed
+    ) {
+      validatedSearchStrategy = result;
+      confirmedSearchStrategy = null;
+      saveButton.disabled = false;
+    } else {
+      validatedSearchStrategy = null;
+      confirmedSearchStrategy = null;
+      saveButton.disabled = true;
+    }
+
+  } catch (error) {
+
+    console.error(error);
+
+    status.textContent =
+      "❌ " + error.message;
+
+  } finally {
+
+    button.disabled = false;
+  }
+}
+
+
+function saveSearchStrategy() {
+
+  const status =
+    document.getElementById(
+      "search-strategy-status"
+    );
+
+  const saveButton =
+    document.getElementById(
+      "save-search-strategy-button"
+    );
+
+  const currentQuery =
+    document.getElementById(
+      "pubmed-query-proposal"
+    ).value.trim();
+
+  if (!validatedSearchStrategy) {
+    status.textContent =
+      "❌ Primero valida correctamente la estrategia en PubMed.";
+    return;
+  }
+
+  if (!currentQuery) {
+    status.textContent =
+      "❌ La estrategia está vacía.";
+    confirmedSearchStrategy = null;
+    return;
+  }
+
+  if (
+    currentQuery !==
+    String(validatedSearchStrategy.query || "").trim()
+  ) {
+    confirmedSearchStrategy = null;
+    saveButton.disabled = true;
+
+    status.textContent =
+      "⚠️ Has modificado la estrategia después de validarla. " +
+      "Debes volver a validarla en PubMed antes de confirmarla.";
+
+    return;
+  }
+
+  confirmedSearchStrategy = {
+    ...validatedSearchStrategy,
+    query: currentQuery
+  };
+
+  saveButton.disabled = true;
+
+  status.textContent =
+    "✅ Estrategia confirmada. Se guardará al crear la revisión.";
+}
+
+
+function escapeHtml(value) {
+
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+
+async function createReview() {
+
+  const button =
+    document.getElementById("create-review-button");
+
+  const status =
+    document.getElementById("new-review-status");
+
+  const title =
+    document.getElementById("review-title").value.trim();
+
+  if (!title) {
+    status.textContent = "❌ El título es obligatorio.";
+    return;
+  }
+
+  button.disabled = true;
+  status.textContent = "Creando revisión...";
+
+  const payload = {
+    title: title,
+
+    review_type:
+      document.getElementById("review-type").value,
+
+    status:
+      document.getElementById("review-status").value,
+
+    research_question:
+      document.getElementById("research-question").value.trim(),
+
+    population:
+      document.getElementById("population").value.trim(),
+
+    intervention:
+      document.getElementById("intervention").value.trim(),
+
+    comparator:
+      document.getElementById("comparator").value.trim(),
+
+    outcomes:
+      document.getElementById("outcomes").value.trim(),
+
+    inclusion_criteria:
+      document.getElementById("inclusion-criteria").value.trim(),
+
+    exclusion_criteria:
+      document.getElementById("exclusion-criteria").value.trim()
+  };
+
+  let createdReviewId = null;
+
+  try {
+
+    const response = await fetch(
+      "/api/systematic-reviews/create",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(
+        data.error || "No se pudo crear la revisión"
+      );
+    }
+
+    createdReviewId = data.review_id;
+
+    if (confirmedSearchStrategy) {
+
+      status.textContent =
+        "Revisión creada. Guardando estrategia PubMed...";
+
+      const pubmed =
+        confirmedSearchStrategy.pubmed_validation || {};
+
+      const saveResponse = await fetch(
+        "/api/systematic-reviews/save-search-strategy",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            review_id: createdReviewId,
+            database_name: "PubMed",
+
+            query:
+              confirmedSearchStrategy.query || "",
+
+            is_valid:
+              !!confirmedSearchStrategy.valid,
+
+            accepted_by_database:
+              !!pubmed.accepted_by_pubmed,
+
+            total_found:
+              pubmed.total_found ?? null,
+
+            query_translation:
+              pubmed.query_translation || "",
+
+            warnings: [
+              ...(
+                (
+                  confirmedSearchStrategy.local_validation &&
+                  confirmedSearchStrategy.local_validation.warnings
+                ) || []
+              ),
+              ...(pubmed.warnings || [])
+            ],
+
+            errors: [
+              ...(
+                (
+                  confirmedSearchStrategy.local_validation &&
+                  confirmedSearchStrategy.local_validation.errors
+                ) || []
+              ),
+              ...(pubmed.errors || [])
+            ],
+
+            removed_terms:
+              confirmedSearchStrategy.removed_terms || [],
+
+            concepts:
+              confirmedSearchStrategy.concepts || [],
+
+            model:
+              confirmedSearchStrategy.model || "",
+
+            provider:
+              confirmedSearchStrategy.provider || ""
+          })
+        }
+      );
+
+      const saveData =
+        await saveResponse.json();
+
+      if (!saveResponse.ok || !saveData.ok) {
+
+        console.error(
+          "La revisión se creó pero falló el guardado de la estrategia:",
+          saveData
+        );
+
+        status.textContent =
+          "⚠️ La revisión se ha creado correctamente, " +
+          "pero no se pudo guardar la estrategia PubMed. " +
+          "Abriendo la revisión para evitar crear un duplicado...";
+
+        setTimeout(() => {
+          window.location.href =
+            "/systematic-review?review_id=" +
+            encodeURIComponent(createdReviewId);
+        }, 1800);
+
+        return;
+      }
+
+      status.textContent =
+        "✅ Revisión y estrategia PubMed guardadas.";
+
+    } else {
+
+      status.textContent =
+        "✅ Revisión creada.";
+    }
+
+    window.location.href =
+      "/systematic-review?review_id=" +
+      encodeURIComponent(createdReviewId);
+
+  } catch (error) {
+
+    console.error(error);
+
+    /*
+     * Si ya existe createdReviewId significa que la revisión
+     * se creó en PostgreSQL. No permitimos repetir la creación.
+     */
+    if (createdReviewId) {
+
+      status.textContent =
+        "⚠️ La revisión ya se ha creado. " +
+        "Ha ocurrido un problema posterior. " +
+        "Abriendo la revisión existente...";
+
+      setTimeout(() => {
+        window.location.href =
+          "/systematic-review?review_id=" +
+          encodeURIComponent(createdReviewId);
+      }, 1800);
+
+      return;
+    }
+
+    /*
+     * Solo reactivamos el botón cuando sabemos que
+     * la revisión NO llegó a crearse.
+     */
+    status.textContent =
+      "❌ " + error.message;
+
+    button.disabled = false;
+  }
+}
+
+</script>
+
+{% endblock %}

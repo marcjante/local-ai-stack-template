@@ -1,0 +1,82 @@
+version: 1
+
+skills:
+
+  - id: systematic-review-core
+    name: Systematic Review Core
+    category: systematic_review
+    version: "1.0"
+    enabled: true
+    tasks:
+      - protocol_design
+      - search_strategy
+      - screening
+      - fulltext_screening
+      - data_extraction
+      - risk_of_bias
+      - prisma
+      - bibliography_export
+
+  - id: scientific-research-core
+    name: Scientific Research Core
+    category: scientific
+    version: "1.0"
+    enabled: true
+    tasks:
+      - research_question
+      - hypothesis_generation
+      - literature_analysis
+      - evidence_synthesis
+      - critical_appraisal
+      - scientific_writing
+
+  - id: qualitative-research-core
+    name: Qualitative Research Core
+    category: qualitative
+    version: "1.0"
+    enabled: true
+    tasks:
+      - qualitative_design
+      - thematic_analysis
+      - grounded_theory
+      - interviews
+      - focus_groups
+
+  - id: experimental-design-core
+    name: Experimental Design Core
+    category: experimental
+    version: "1.0"
+    enabled: true
+    tasks:
+      - experimental_design
+      - variables
+      - randomization
+      - factorial_design
+      - doe
+      - statistical_plan
+
+  - id: open-science-core
+    name: Open Science Core
+    category: open_science
+    version: "1.0"
+    enabled: true
+    tasks:
+      - preregistration
+      - reproducibility
+      - data_management
+      - open_science
+      - osf
+
+  - id: academic-writing-core
+    name: Academic Writing Core
+    category: academic
+    version: "1.0"
+    enabled: true
+    tasks:
+      - manuscript
+      - abstract
+      - introduction
+      - methods
+      - results
+      - discussion
+      - references
