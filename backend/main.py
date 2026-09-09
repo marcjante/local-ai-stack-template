@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db.db import init_schema, create_task, get_task, get_audit_trail, list_integrations, set_integration_enabled, list_tasks, task_counts_by_status  # noqa: E402
 from workers.queue_conn import DEFAULT_RETRY, redis_conn, build_queues  # noqa: E402
 from workers.plugin_loader import discover_plugins  # noqa: E402
+from tools.registry import configured_tools, get_tool  # noqa: E402
 from rag.retrieval import index_document, retrieve  # noqa: E402
 from rag.rerank import rerank  # noqa: E402
 from rag.citations import format_citations  # noqa: E402
@@ -160,6 +161,85 @@ def integration_enable(flow_name):
 def integration_disable(flow_name):
     set_integration_enabled(flow_name, False)
     return jsonify({"flow_name": flow_name, "enabled": False})
+
+
+
+@app.route("/projects/<project_id>/tools/<tool_id>/execute", methods=["POST"])
+@require_project_role("editor", "admin")
+def execute_project_tool(project_id, tool_id):
+    """
+    Ejecuta una Tool autorizada a través de RQ.
+
+    Esta ruta NO concede capacidades por descubrir un plugin:
+    la Tool debe estar declarada explícitamente en config/tools.yaml,
+    habilitada, disponible y autorizada para llamadas de agente.
+    """
+
+    configured = {
+        tool["id"]: tool
+        for tool in configured_tools(enabled_only=True)
+    }
+
+    declared_tool = configured.get(tool_id)
+
+    if declared_tool is None:
+        return jsonify({
+            "error": "tool no autorizada o deshabilitada",
+            "tool_id": tool_id,
+        }), 404
+
+    if not declared_tool.get("agent_callable", False):
+        return jsonify({
+            "error": "tool no autorizada para ejecución por agente",
+            "tool_id": tool_id,
+        }), 403
+
+    tool = get_tool(
+        tool_id,
+        require_available=True,
+        require_agent_callable=True,
+    )
+
+    if tool is None:
+        return jsonify({
+            "error": "tool autorizada pero no disponible",
+            "tool_id": tool_id,
+        }), 503
+
+    body = request.get_json(silent=True) or {}
+    confirmed = body.get("confirmed") is True
+
+    if (
+        tool["requires_confirmation_before_execute"]
+        and not confirmed
+    ):
+        return jsonify({
+            "error": "confirmación humana requerida",
+            "tool_id": tool_id,
+            "requires_confirmation_before_execute": True,
+            "status": "confirmation_required",
+        }), 409
+
+    payload = body.get("payload") or {}
+
+    if not isinstance(payload, dict):
+        return jsonify({
+            "error": "payload debe ser un objeto JSON",
+            "tool_id": tool_id,
+        }), 400
+
+    payload["project_id"] = project_id
+    payload["_tool_id"] = tool_id
+    payload["_tool_effect"] = tool["effect"]
+    payload["_human_review_required"] = tool["human_review_required"]
+
+    result, status = _do_enqueue(tool["queue"], payload)
+
+    if status == 202:
+        result["tool_id"] = tool_id
+        result["human_review_required"] = tool["human_review_required"]
+
+    return jsonify(result), status
 
 
 @app.route("/enqueue/<queue_name>", methods=["POST"])
