@@ -353,7 +353,6 @@ def handle(
         set_status(
             task_id,
             "running",
-            message="Diseñando protocolo con IA",
         )
     except Exception:
         pass
@@ -376,7 +375,6 @@ def handle(
                 task_id,
                 "completed",
                 result=result,
-                message="Protocolo IA generado",
             )
         except Exception:
             pass
@@ -400,7 +398,6 @@ def handle(
                 task_id,
                 "failed",
                 error=str(exc),
-                message="Error generando protocolo IA",
             )
         except Exception:
             pass
