@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import Any, Dict
+from typing import Optional, Any, Dict
 
 import requests
 
@@ -60,15 +60,21 @@ def _extract_json(text: str) -> Dict[str, Any]:
 def _call_gateway(
     prompt: str,
     route: str = "razonamiento",
+    skill_task: Optional[str] = None,
 ) -> Dict[str, Any]:
+
+    request_payload = {
+        "prompt": prompt,
+        "route": route,
+    }
+
+    if skill_task:
+        request_payload["skill_task"] = skill_task
 
     try:
         response = requests.post(
             f"{GATEWAY_URL}/generate",
-            json={
-                "prompt": prompt,
-                "route": route,
-            },
+            json=request_payload,
             timeout=240,
         )
     except requests.RequestException as exc:
@@ -301,6 +307,7 @@ Devuelve exactamente estas claves:
     payload = _call_gateway(
         prompt=prompt,
         route="razonamiento",
+        skill_task="protocol_design",
     )
 
     raw_response = payload.get("response", "")
@@ -323,6 +330,15 @@ Devuelve exactamente estas claves:
 
     protocol["_task_type"] = payload.get(
         "_task_type"
+    )
+
+    protocol["_skill_task"] = payload.get(
+        "_skill_task"
+    )
+
+    protocol["_skills_used"] = payload.get(
+        "_skills_used",
+        [],
     )
 
     return protocol

@@ -20,8 +20,13 @@ import sys
 import time
 import uuid
 import functools
+from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, Response, stream_with_context
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db.db import init_schema, create_task, get_task, get_audit_trail, log_audit, list_integrations, set_integration_enabled, list_tasks, task_counts_by_status  # noqa: E402
