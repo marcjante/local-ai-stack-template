@@ -33,9 +33,15 @@ from pathlib import Path
 import psutil
 import requests
 import yaml
+from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context, redirect, send_file, session
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Carga la configuración local antes de importar módulos que leen
+# variables de entorno como DATABASE_URL o REDIS_URL.
+load_dotenv(BASE_DIR / ".env")
+
 sys.path.insert(0, str(BASE_DIR))
 from db.db import list_tasks, task_counts_by_status  # noqa: E402
 sys.path.insert(0, str(BASE_DIR))

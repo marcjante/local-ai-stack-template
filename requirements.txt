@@ -11,3 +11,4 @@ python-docx>=1.1
 beautifulsoup4>=4.12
 alembic>=1.13
 SQLAlchemy>=2.0
+python-dotenv>=1.0
