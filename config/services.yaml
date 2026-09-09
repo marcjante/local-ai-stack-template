@@ -109,7 +109,7 @@ services:
     host: 127.0.0.1
     port: null
     health_endpoint: null
-    start_command: "rq worker process --url redis://127.0.0.1:6379/0"
+    start_command: "rq worker -w rq.worker.SimpleWorker --with-scheduler process --url redis://127.0.0.1:6379/0"
     stop_command: "pkill -f 'rq worker process'"
     docker_service: "worker_process"
     depends_on: [queue, database, llm_gateway]

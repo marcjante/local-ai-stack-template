@@ -38,6 +38,8 @@ skills:
   - evidence_synthesis
   - critical_appraisal
   - scientific_writing
+  - rag_query
+  - evidence_answer
 - id: qualitative-research-core
   name: Qualitative Research Core
   category: qualitative

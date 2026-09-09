@@ -33,11 +33,15 @@ QUEUE_NAME = "process"
 QUEUE_TIMEOUT = 300
 
 
-def generate_answer(task_id: str, prompt: str, task_type: str = "default") -> dict:
+def generate_answer(task_id: str, prompt: str, task_type: str = "default", skill_task: str = None) -> dict:
     """Subagente: pide la respuesta al LLM, siempre a través del gateway, con routing por task_type."""
+    request_payload = {"prompt": prompt, "task_type": task_type}
+    if skill_task:
+        request_payload["skill_task"] = skill_task
+
     resp = requests.post(
         f"{LLM_GATEWAY_URL}/generate",
-        json={"prompt": prompt, "task_type": task_type},
+        json=request_payload,
         timeout=90,
     )
     resp.raise_for_status()
@@ -51,10 +55,18 @@ def generate_answer(task_id: str, prompt: str, task_type: str = "default") -> di
                   "model_used": data.get("_model_used"),
                   "provider_used": data.get("_provider_used"),
                   "task_type": data.get("_task_type", task_type),
+                  "skill_task": data.get("_skill_task"),
+                  "skills_used": data.get("_skills_used", []),
                   "prompt": prompt,
                   "answer_len": len(answer),
               })
-    return {"answer": answer, "model_used": data.get("_model_used")}
+    return {
+        "answer": answer,
+        "model_used": data.get("_model_used"),
+        "provider_used": data.get("_provider_used"),
+        "_skill_task": data.get("_skill_task"),
+        "_skills_used": data.get("_skills_used", []),
+    }
 
 
 def handle(task_id: str, payload: dict) -> dict:
@@ -63,9 +75,20 @@ def handle(task_id: str, payload: dict) -> dict:
     try:
         prompt = payload.get("prompt", "")
         task_type = payload.get("task_type", "default")
+        skill_task = payload.get("skill_task", "rag_query")
+
+        if skill_task not in {"rag_query", "evidence_answer"}:
+            raise ValueError(
+                f"skill_task no permitido para process: {skill_task}"
+            )
 
         chunks, gather_path = gather_candidate_chunks(task_id, payload, query=prompt)
-        gen = generate_answer(task_id, prompt, task_type=task_type)
+        gen = generate_answer(
+            task_id,
+            prompt,
+            task_type=task_type,
+            skill_task=skill_task,
+        )
         answer = gen["answer"]
 
         needs_verification = decide_need_verification(task_id, answer, chunks)
@@ -90,6 +113,9 @@ def handle(task_id: str, payload: dict) -> dict:
         result = {
             "answer": answer,
             "model_used": gen["model_used"],
+            "provider_used": gen.get("provider_used"),
+            "_skill_task": gen.get("_skill_task"),
+            "_skills_used": gen.get("_skills_used", []),
             "verdict": final_verdict,
             "cross_check": cross_check,
         }
