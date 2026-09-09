@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Tuple
 import requests
 
 from common.logging_setup import get_logger
+from db.db import set_status
 
 
 QUEUE_NAME = "search_strategy_designer"
@@ -130,14 +131,20 @@ TEXTO:
 
 def _call_ai(
     prompt: str,
+    skill_task: str = None,
 ) -> Dict[str, Any]:
+
+    request_payload = {
+        "prompt": prompt,
+        "route": "razonamiento",
+    }
+
+    if skill_task:
+        request_payload["skill_task"] = skill_task
 
     response = requests.post(
         f"{GATEWAY_URL}/generate",
-        json={
-            "prompt": prompt,
-            "route": "razonamiento",
-        },
+        json=request_payload,
         timeout=240,
     )
 
@@ -172,6 +179,15 @@ def _call_ai(
 
     result["_provider_used"] = payload.get(
         "_provider_used"
+    )
+
+    result["_skill_task"] = payload.get(
+        "_skill_task"
+    )
+
+    result["_skills_used"] = payload.get(
+        "_skills_used",
+        [],
     )
 
     return result
@@ -924,7 +940,8 @@ FORMATO EXACTO:
 """.strip()
 
     result = _call_ai(
-        prompt
+        prompt,
+        skill_task="search_strategy",
     )
 
     raw_concepts = (
@@ -996,6 +1013,17 @@ FORMATO EXACTO:
             result.get(
                 "_provider_used"
             ),
+
+        "_skill_task":
+            result.get(
+                "_skill_task"
+            ),
+
+        "_skills_used":
+            result.get(
+                "_skills_used",
+                [],
+            ),
     }
 
 
@@ -1014,6 +1042,14 @@ def handle(
             "task_id": task_id
         },
     )
+
+    try:
+        set_status(
+            task_id,
+            "running",
+        )
+    except Exception:
+        pass
 
     design = _design_concepts(
         payload
@@ -1105,9 +1141,29 @@ def handle(
                 "_provider_used"
             ),
 
+        "_skill_task":
+            design.get(
+                "_skill_task"
+            ),
+
+        "_skills_used":
+            design.get(
+                "_skills_used",
+                [],
+            ),
+
         "requires_human_confirmation":
             True,
     }
+
+    try:
+        set_status(
+            task_id,
+            "completed",
+            result=result,
+        )
+    except Exception:
+        pass
 
     log.info(
         "Estrategia PubMed v3 terminada. "
