@@ -1051,126 +1051,146 @@ def handle(
     except Exception:
         pass
 
-    design = _design_concepts(
-        payload
-    )
+    try:
+        design = _design_concepts(
+            payload
+        )
 
-    built = _build_pubmed_query(
-        design["concepts"]
-    )
+        built = _build_pubmed_query(
+            design["concepts"]
+        )
 
-    query = built["query"]
+        query = built["query"]
 
-    local = _local_validation(
-        query
-    )
+        local = _local_validation(
+            query
+        )
 
-    pubmed = None
+        pubmed = None
 
-    if local["valid"]:
+        if local["valid"]:
+
+            try:
+
+                pubmed = _test_pubmed(
+                    query
+                )
+
+            except Exception as exc:
+
+                pubmed = {
+                    "accepted_by_pubmed":
+                        False,
+
+                    "total_found":
+                        None,
+
+                    "errors": [
+                        "No se pudo validar "
+                        "contra PubMed: "
+                        f"{exc}"
+                    ],
+
+                    "warnings":
+                        [],
+
+                    "query_translation":
+                        "",
+                }
+
+        valid = (
+            local["valid"]
+            and pubmed is not None
+            and pubmed.get(
+                "accepted_by_pubmed",
+                False,
+            )
+        )
+
+        result = {
+            "query":
+                query,
+
+            "valid":
+                valid,
+
+            "concepts":
+                design["concepts"],
+
+            "used_concepts":
+                built["used_concepts"],
+
+            "removed_terms":
+                built["removed_terms"],
+
+            "rationale":
+                design["rationale"],
+
+            "local_validation":
+                local,
+
+            "pubmed_validation":
+                pubmed,
+
+            "model":
+                design.get(
+                    "_model_used"
+                ),
+
+            "provider":
+                design.get(
+                    "_provider_used"
+                ),
+
+            "_skill_task":
+                design.get(
+                    "_skill_task"
+                ),
+
+            "_skills_used":
+                design.get(
+                    "_skills_used",
+                    [],
+                ),
+
+            "requires_human_confirmation":
+                True,
+        }
 
         try:
-
-            pubmed = _test_pubmed(
-                query
+            set_status(
+                task_id,
+                "completed",
+                result=result,
             )
+        except Exception:
+            pass
 
-        except Exception as exc:
-
-            pubmed = {
-                "accepted_by_pubmed":
-                    False,
-
-                "total_found":
-                    None,
-
-                "errors": [
-                    "No se pudo validar "
-                    "contra PubMed: "
-                    f"{exc}"
-                ],
-
-                "warnings":
-                    [],
-
-                "query_translation":
-                    "",
-            }
-
-    valid = (
-        local["valid"]
-        and pubmed is not None
-        and pubmed.get(
-            "accepted_by_pubmed",
-            False,
+        log.info(
+            "Estrategia PubMed v3 terminada. "
+            f"valid={valid}",
+            extra={
+                "task_id": task_id
+            },
         )
-    )
 
-    result = {
-        "query":
-            query,
+        return result
 
-        "valid":
-            valid,
+    except Exception as exc:
+        try:
+            set_status(
+                task_id,
+                "failed",
+                error=str(exc),
+            )
+        except Exception:
+            pass
 
-        "concepts":
-            design["concepts"],
-
-        "used_concepts":
-            built["used_concepts"],
-
-        "removed_terms":
-            built["removed_terms"],
-
-        "rationale":
-            design["rationale"],
-
-        "local_validation":
-            local,
-
-        "pubmed_validation":
-            pubmed,
-
-        "model":
-            design.get(
-                "_model_used"
-            ),
-
-        "provider":
-            design.get(
-                "_provider_used"
-            ),
-
-        "_skill_task":
-            design.get(
-                "_skill_task"
-            ),
-
-        "_skills_used":
-            design.get(
-                "_skills_used",
-                [],
-            ),
-
-        "requires_human_confirmation":
-            True,
-    }
-
-    try:
-        set_status(
-            task_id,
-            "completed",
-            result=result,
+        log.exception(
+            "Error diseñando estrategia PubMed v3",
+            extra={
+                "task_id": task_id
+            },
         )
-    except Exception:
-        pass
 
-    log.info(
-        "Estrategia PubMed v3 terminada. "
-        f"valid={valid}",
-        extra={
-            "task_id": task_id
-        },
-    )
-
-    return result
+        raise
