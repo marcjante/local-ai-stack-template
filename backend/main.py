@@ -24,7 +24,7 @@ import functools
 from flask import Flask, request, jsonify, Response, stream_with_context
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from db.db import init_schema, create_task, get_task, get_audit_trail, list_integrations, set_integration_enabled, list_tasks, task_counts_by_status  # noqa: E402
+from db.db import init_schema, create_task, get_task, get_audit_trail, log_audit, list_integrations, set_integration_enabled, list_tasks, task_counts_by_status  # noqa: E402
 from workers.queue_conn import DEFAULT_RETRY, redis_conn, build_queues  # noqa: E402
 from workers.plugin_loader import discover_plugins  # noqa: E402
 from tools.registry import configured_tools, get_tool  # noqa: E402
@@ -236,6 +236,30 @@ def execute_project_tool(project_id, tool_id):
     result, status = _do_enqueue(tool["queue"], payload)
 
     if status == 202:
+        task_id = result["task_id"]
+        actor = getattr(request, "jwt_claims", {}).get("sub", "unknown")
+
+        log_audit(
+            task_id=task_id,
+            step="tool_execution_requested",
+            subagent=actor,
+            verdict="queued",
+            details={
+                "tool_id": tool_id,
+                "queue": tool["queue"],
+                "project_id": project_id,
+                "agent_callable": tool["agent_callable"],
+                "confirmed": confirmed,
+                "confirmation_required": tool[
+                    "requires_confirmation_before_execute"
+                ],
+                "effect": tool["effect"],
+                "human_review_required": tool[
+                    "human_review_required"
+                ],
+            },
+        )
+
         result["tool_id"] = tool_id
         result["human_review_required"] = tool["human_review_required"]
 
