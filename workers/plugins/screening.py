@@ -109,6 +109,7 @@ uncertain
         f"{LLM_GATEWAY_URL}/generate",
         json={
             "task_type": "rapido",
+            "skill_task": "screening",
             "prompt": prompt,
             "system": (
                 "Eres un asistente metodológico conservador para revisiones "
@@ -158,6 +159,8 @@ uncertain
         "confidence": confidence,
         "model": payload.get("_model_used"),
         "provider": payload.get("_provider_used"),
+        "_skill_task": payload.get("_skill_task"),
+        "_skills_used": payload.get("_skills_used", []),
     }
 
 
