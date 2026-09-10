@@ -7,6 +7,7 @@ Devuelve PMID, título, autores, revista, año, DOI y abstract cuando están dis
 
 import os
 import sys
+import time
 import requests
 import xml.etree.ElementTree as ET
 
@@ -243,7 +244,8 @@ def handle(task_id: str, payload: dict) -> dict:
     if not query:
         raise ValueError("Falta el campo 'query'")
 
-    max_results = max(1, min(max_results, 100))
+    max_results = max(1, min(max_results, 5000))
+    batch_size = min(100, max_results)
 
     log.info(
         f"Buscando PubMed: query={query}, max_results={max_results}",
@@ -253,23 +255,44 @@ def handle(task_id: str, payload: dict) -> dict:
     set_status(task_id, "running", increment_attempts=True)
 
     try:
-        search_response = requests.get(
-            PUBMED_SEARCH_URL,
-            params={
-                "db": "pubmed",
-                "term": query,
-                "retmode": "json",
-                "retmax": max_results,
-            },
-            timeout=30,
-        )
-        search_response.raise_for_status()
+        id_list = []
+        total_found = 0
+        retstart = 0
 
-        search_data = search_response.json()
-        id_list = search_data.get("esearchresult", {}).get("idlist", [])
-        total_found = int(
-            search_data.get("esearchresult", {}).get("count", 0)
-        )
+        while len(id_list) < max_results:
+            current_batch_size = min(batch_size, max_results - len(id_list))
+
+            search_response = requests.get(
+                PUBMED_SEARCH_URL,
+                params={
+                    "db": "pubmed",
+                    "term": query,
+                    "retmode": "json",
+                    "retstart": retstart,
+                    "retmax": current_batch_size,
+                },
+                timeout=30,
+            )
+            search_response.raise_for_status()
+
+            search_data = search_response.json()
+            esearch_result = search_data.get("esearchresult", {})
+
+            if retstart == 0:
+                total_found = int(esearch_result.get("count", 0))
+
+            batch_ids = esearch_result.get("idlist", [])
+
+            if not batch_ids:
+                break
+
+            id_list.extend(batch_ids)
+            retstart += len(batch_ids)
+
+            if retstart >= total_found:
+                break
+
+            time.sleep(0.35)
 
         if not id_list:
             result = {
@@ -282,29 +305,41 @@ def handle(task_id: str, payload: dict) -> dict:
             set_status(task_id, "completed", result=result)
             return result
 
-        fetch_response = requests.get(
-            PUBMED_FETCH_URL,
-            params={
-                "db": "pubmed",
-                "id": ",".join(id_list),
-                "retmode": "xml",
-            },
-            timeout=60,
-        )
-        fetch_response.raise_for_status()
-
-        root = ET.fromstring(fetch_response.content)
-
         articles = []
-        for node in root.findall("PubmedArticle"):
-            article = _parse_article(node)
-            if article:
-                articles.append(article)
+
+        for batch_start in range(0, len(id_list), batch_size):
+            batch_ids = id_list[batch_start:batch_start + batch_size]
+
+            fetch_response = requests.get(
+                PUBMED_FETCH_URL,
+                params={
+                    "db": "pubmed",
+                    "id": ",".join(batch_ids),
+                    "retmode": "xml",
+                },
+                timeout=60,
+            )
+            fetch_response.raise_for_status()
+
+            root = ET.fromstring(fetch_response.content)
+
+            for node in root.findall("PubmedArticle"):
+                article = _parse_article(node)
+                if article:
+                    articles.append(article)
+
+            if batch_start + batch_size < len(id_list):
+                time.sleep(0.35)
 
         result = {
             "query": query,
             "total_found": total_found,
+            "requested": max_results,
             "returned": len(articles),
+            "id_count": len(id_list),
+            "batch_size": batch_size,
+            "batches": (len(id_list) + batch_size - 1) // batch_size,
+            "truncated": total_found > len(id_list),
             "articles": articles,
         }
 
