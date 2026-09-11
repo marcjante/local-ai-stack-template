@@ -131,8 +131,8 @@ services:
     host: 127.0.0.1
     port: null
     health_endpoint: null
-    start_command: "rq worker -w rq.worker.SimpleWorker --with-scheduler protocol_designer search_strategy_designer pubmed_search screening human_screening --url redis://127.0.0.1:6379/0"
-    stop_command: "pkill -f 'rq worker protocol_designer search_strategy_designer pubmed_search screening human_screening'"
+    start_command: "rq worker -w rq.worker.SimpleWorker --with-scheduler protocol_designer search_strategy_designer pubmed_search screening human_screening data_extraction human_data_extraction --url redis://127.0.0.1:6379/0"
+    stop_command: "pkill -f 'rq worker.*protocol_designer.*search_strategy_designer.*pubmed_search.*screening.*human_screening.*data_extraction.*human_data_extraction'"
     docker_service: null
     depends_on: [queue, database, llm_gateway]
 

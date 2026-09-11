@@ -102,3 +102,27 @@ tools:
     tasks:
       - rag_query
       - evidence_answer
+  - id: data_extraction
+    name: "AI Data Extraction"
+    description: "Genera y registra propuestas estructuradas de extracción de datos de artículos incluidos, preservando procedencia y requiriendo validación humana."
+    queue: data_extraction
+    enabled: true
+    agent_callable: true
+    requires_confirmation_before_execute: true
+    human_review_required: true
+    effect: write
+    category: systematic_review
+    tasks:
+      - data_extraction
+  - id: human_data_extraction
+    name: "Human Data Extraction Review"
+    description: "Registra la validación humana explícita de una extracción propuesta por IA, preservando el valor original y la trazabilidad."
+    queue: human_data_extraction
+    enabled: true
+    agent_callable: false
+    requires_confirmation_before_execute: true
+    human_review_required: false
+    effect: write
+    category: systematic_review
+    tasks:
+      - human_data_extraction

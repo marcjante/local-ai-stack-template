@@ -370,6 +370,113 @@
             line-height: 1.45;
         }
 
+        .extraction-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .extraction-article {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        .extraction-article summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 16px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            background: #fafbfd;
+        }
+
+        .extraction-article summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .extraction-summary-main {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .extraction-summary-title {
+            font-weight: 700;
+            line-height: 1.4;
+            margin-bottom: 5px;
+        }
+
+        .extraction-summary-meta {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .extraction-progress {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            white-space: nowrap;
+        }
+
+        .extraction-progress-bar {
+            width: 110px;
+            height: 7px;
+            background: #e5e7eb;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .extraction-progress-fill {
+            height: 100%;
+            background: var(--success);
+            border-radius: 999px;
+        }
+
+        .extraction-progress-text {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--muted);
+        }
+
+        .extraction-chevron {
+            font-size: 18px;
+            color: var(--muted);
+            transition: transform 0.15s ease;
+        }
+
+        .extraction-article[open] .extraction-chevron {
+            transform: rotate(180deg);
+        }
+
+        .extraction-fields {
+            border-top: 1px solid var(--border);
+        }
+
+        .extraction-fields table {
+            min-width: 1050px;
+        }
+
+        .extraction-source {
+            max-width: 360px;
+            line-height: 1.45;
+        }
+
+        .extraction-value {
+            max-width: 280px;
+            line-height: 1.45;
+        }
+
+        .extraction-overview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
         @media (max-width: 900px) {
             .grid-stats,
             .pico-grid,
@@ -837,6 +944,216 @@
 
         </section>
 
+        <section class="card">
+            <h2>Extracción de datos</h2>
+
+            <div class="notice">
+                La IA propone valores estructurados. El investigador debe revisar
+                cada campo y aceptarlo, editarlo o rechazarlo.
+            </div>
+
+            {% if extractions %}
+
+                <div class="extraction-overview">
+                    <span class="badge badge-pending">
+                        Total: {{ stats.extraction_total }}
+                    </span>
+                    <span class="badge badge-include">
+                        Validadas: {{ stats.extraction_validated }}
+                    </span>
+                    <span class="badge badge-uncertain">
+                        Pendientes: {{ stats.extraction_pending }}
+                    </span>
+                </div>
+
+                <div class="extraction-list">
+
+                    {% for article_group in extractions | groupby("article_id") %}
+                        {% set article_extractions = article_group.list %}
+                        {% set article = article_extractions[0] %}
+                        {% set validated = namespace(value=0) %}
+
+                        {% for extraction in article_extractions %}
+                            {% if extraction.validation_status != "pending" %}
+                                {% set validated.value = validated.value + 1 %}
+                            {% endif %}
+                        {% endfor %}
+
+                        {% set total_fields = article_extractions | length %}
+                        {% set progress = (validated.value * 100 / total_fields) if total_fields else 0 %}
+
+                        <details
+                            class="extraction-article"
+                            {% if validated.value < total_fields %}open{% endif %}
+                        >
+                            <summary>
+                                <div class="extraction-summary-main">
+                                    <div class="extraction-summary-title">
+                                        {{ article.article_title or "Sin título" }}
+                                    </div>
+
+                                    <div class="extraction-summary-meta">
+                                        {% if article.pmid %}
+                                            PMID: {{ article.pmid }}
+                                        {% endif %}
+                                        {% if article.doi %}
+                                            {% if article.pmid %} · {% endif %}
+                                            DOI: {{ article.doi }}
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="extraction-progress">
+                                    <div class="extraction-progress-bar">
+                                        <div
+                                            class="extraction-progress-fill"
+                                            style="width: {{ '%.0f'|format(progress) }}%;"
+                                        ></div>
+                                    </div>
+
+                                    <div class="extraction-progress-text">
+                                        {{ validated.value }}/{{ total_fields }}
+                                    </div>
+
+                                    <div class="extraction-chevron">⌄</div>
+                                </div>
+                            </summary>
+
+                            <div class="extraction-fields table-wrap">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Campo</th>
+                                            <th>Valor IA</th>
+                                            <th>Confianza</th>
+                                            <th>Fuente</th>
+                                            <th>Validación</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                    {% for extraction in article_extractions %}
+                                        <tr id="extraction-{{ extraction.id }}">
+                                            <td>
+                                                <strong>{{ extraction.field_label }}</strong>
+
+                                                {% if extraction.field_description %}
+                                                    <div class="article-meta">
+                                                        {{ extraction.field_description }}
+                                                    </div>
+                                                {% endif %}
+                                            </td>
+
+                                            <td class="extraction-value">
+                                                {% if extraction.ai_value is not none %}
+                                                    {{ extraction.ai_value }}
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+
+                                                {% if extraction.ai_reason %}
+                                                    <div class="article-meta">
+                                                        {{ extraction.ai_reason }}
+                                                    </div>
+                                                {% endif %}
+                                            </td>
+
+                                            <td>
+                                                {% if extraction.ai_confidence is not none %}
+                                                    <span class="confidence">
+                                                        {{ "%.0f"|format(extraction.ai_confidence * 100) }}%
+                                                    </span>
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+                                            </td>
+
+                                            <td class="extraction-source">
+                                                {% if extraction.source_quote %}
+                                                    “{{ extraction.source_quote }}”
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+
+                                                {% if extraction.source_location %}
+                                                    <div class="article-meta">
+                                                        {{ extraction.source_location }}
+                                                    </div>
+                                                {% endif %}
+                                            </td>
+
+                                            <td>
+                                                {% if extraction.validation_status == "accepted" %}
+                                                    <span class="badge badge-include">Aceptado</span>
+                                                    <div class="article-meta">
+                                                        {{ extraction.human_value }}
+                                                    </div>
+
+                                                {% elif extraction.validation_status == "edited" %}
+                                                    <span class="badge badge-uncertain">Editado</span>
+                                                    <div class="article-meta">
+                                                        {{ extraction.human_value }}
+                                                    </div>
+
+                                                {% elif extraction.validation_status == "rejected" %}
+                                                    <span class="badge badge-exclude">Rechazado</span>
+
+                                                {% else %}
+                                                    <span class="badge badge-pending">Pendiente</span>
+                                                {% endif %}
+                                            </td>
+
+                                            <td>
+                                                {% if extraction.validation_status == "pending" %}
+                                                    <div class="decision-buttons">
+                                                        <button
+                                                            class="btn-success"
+                                                            onclick="setExtractionDecision('{{ extraction.id }}','accepted')"
+                                                        >
+                                                            ✓ Aceptar
+                                                        </button>
+
+                                                        <button
+                                                            class="btn-warning"
+                                                            onclick="setExtractionDecision('{{ extraction.id }}','edited')"
+                                                        >
+                                                            ✎ Editar
+                                                        </button>
+
+                                                        <button
+                                                            class="btn-danger"
+                                                            onclick="setExtractionDecision('{{ extraction.id }}','rejected')"
+                                                        >
+                                                            ✕ Rechazar
+                                                        </button>
+                                                    </div>
+                                                {% else %}
+                                                    <span class="article-meta">
+                                                        Revisado por {{ extraction.reviewer_id or "—" }}
+                                                    </span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </details>
+                    {% endfor %}
+
+                </div>
+
+            {% else %}
+
+                <div class="empty">
+                    Todavía no hay extracciones generadas para esta revisión.
+                </div>
+
+            {% endif %}
+
+        </section>
+
     {% endif %}
 
 </div>
@@ -1070,6 +1387,89 @@ async function setHumanDecision(
 
     } catch (error) {
 
+        console.error(error);
+
+        setStatus(
+            `❌ ${error.message}`
+        );
+    }
+}
+
+
+async function setExtractionDecision(
+    extractionId,
+    validationStatus
+) {
+    let humanValue;
+
+    if (validationStatus === "edited") {
+        humanValue = prompt(
+            "Introduce el valor corregido:"
+        );
+
+        if (
+            humanValue === null ||
+            humanValue.trim() === ""
+        ) {
+            return;
+        }
+
+        humanValue = humanValue.trim();
+    }
+
+    const reviewerNotes = prompt(
+        "Notas del revisor (opcional):"
+    );
+
+    setStatus(
+        "Guardando validación de extracción..."
+    );
+
+    const payload = {
+        extraction_id: extractionId,
+        validation_status: validationStatus,
+        reviewer_id: "marc",
+        reviewer_notes:
+            reviewerNotes === null
+                ? null
+                : reviewerNotes.trim()
+    };
+
+    if (validationStatus === "edited") {
+        payload.human_value = humanValue;
+    }
+
+    try {
+        const response = await fetch(
+            "/api/systematic-review/human-data-extraction",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(
+                data.error ||
+                "Error guardando la validación"
+            );
+        }
+
+        setStatus(
+            "✅ Extracción validada correctamente."
+        );
+
+        setTimeout(
+            () => window.location.reload(),
+            350
+        );
+
+    } catch (error) {
         console.error(error);
 
         setStatus(

@@ -1311,6 +1311,53 @@ def systematic_review():
 
             search_strategies = cur.fetchall()
 
+            cur.execute(
+                """
+                SELECT
+                    re.id,
+                    re.review_id,
+                    re.article_id,
+                    re.field_id,
+                    ref.field_key,
+                    ref.label AS field_label,
+                    ref.description AS field_description,
+                    ref.value_type,
+                    ref.required,
+                    ref.display_order,
+                    re.ai_value,
+                    re.ai_reason,
+                    re.ai_confidence,
+                    re.source_type,
+                    re.source_location,
+                    re.source_quote,
+                    re.human_value,
+                    re.validation_status,
+                    re.reviewer_id,
+                    re.reviewer_notes,
+                    re.model,
+                    re.provider,
+                    re.skills_used,
+                    ra.pmid,
+                    ra.doi,
+                    ra.title AS article_title,
+                    ra.journal,
+                    ra.year
+                FROM review_extractions re
+                JOIN review_extraction_fields ref
+                  ON ref.id = re.field_id
+                JOIN review_articles ra
+                  ON ra.id = re.article_id
+                WHERE re.review_id = %s
+                ORDER BY
+                    ra.created_at ASC,
+                    ref.display_order ASC,
+                    ref.label ASC
+                """,
+                (review["id"],),
+            )
+
+            extractions = cur.fetchall()
+
     total = len(articles)
     reviewed = sum(
         1 for article in articles
@@ -1318,10 +1365,20 @@ def systematic_review():
     )
     pending = total - reviewed
 
+    extraction_total = len(extractions)
+    extraction_pending = sum(
+        1 for extraction in extractions
+        if extraction["validation_status"] == "pending"
+    )
+    extraction_validated = extraction_total - extraction_pending
+
     stats = {
         "total": total,
         "reviewed": reviewed,
         "pending": pending,
+        "extraction_total": extraction_total,
+        "extraction_pending": extraction_pending,
+        "extraction_validated": extraction_validated,
     }
 
     return render_template(
@@ -1330,6 +1387,7 @@ def systematic_review():
         review=review,
         articles=articles,
         search_strategies=search_strategies,
+        extractions=extractions,
         stats=stats,
     )
 @app.route("/api/systematic-review/pubmed-search", methods=["POST"])
@@ -1529,6 +1587,76 @@ def systematic_review_human_decision():
 
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
+@app.route("/api/systematic-review/human-data-extraction", methods=["POST"])
+def systematic_review_human_data_extraction():
+    from workers.plugins.human_data_extraction import (
+        handle as human_data_extraction_handle,
+    )
+
+    data = request.get_json(silent=True) or {}
+
+    extraction_id = data.get("extraction_id")
+    validation_status = data.get("validation_status")
+    reviewer_id = data.get("reviewer_id")
+    reviewer_notes = data.get("reviewer_notes")
+
+    if not extraction_id:
+        return jsonify({
+            "ok": False,
+            "error": "extraction_id es obligatorio",
+        }), 400
+
+    if validation_status not in {
+        "accepted",
+        "edited",
+        "rejected",
+    }:
+        return jsonify({
+            "ok": False,
+            "error": (
+                "validation_status debe ser "
+                "accepted, edited o rejected"
+            ),
+        }), 400
+
+    if not reviewer_id:
+        return jsonify({
+            "ok": False,
+            "error": "reviewer_id es obligatorio",
+        }), 400
+
+    payload = {
+        "extraction_id": extraction_id,
+        "validation_status": validation_status,
+        "reviewer_id": reviewer_id,
+        "reviewer_notes": reviewer_notes,
+    }
+
+    if "human_value" in data:
+        payload["human_value"] = data.get("human_value")
+
+    try:
+        result = human_data_extraction_handle(
+            f"human-extraction-ui-{extraction_id}",
+            payload,
+        )
+
+        return jsonify({
+            "ok": True,
+            "result": result,
+        })
+
+    except ValueError as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 400
+
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
 @app.route("/settings")
 def settings_page():
     services = load_services()
