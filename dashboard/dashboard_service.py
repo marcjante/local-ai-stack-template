@@ -209,11 +209,27 @@ def project_import_route():
 # escaneando todos los procesos del sistema por nombre).
 _started_pids = {}
 
+# Puerto real usado por el dashboard en esta ejecución.
+# Se asigna al arrancar la aplicación y permite que los health-checks
+# no dependan del puerto estático definido en services.yaml.
+DASHBOARD_RUNTIME_PORT = None
+
 
 def load_services():
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
-    return data.get("services", [])
+
+    services = data.get("services", [])
+
+    # No modificamos services.yaml en disco. Solo ajustamos en memoria
+    # el servicio dashboard al puerto real elegido en esta ejecución.
+    if DASHBOARD_RUNTIME_PORT is not None:
+        for service in services:
+            if service.get("id") == "dashboard":
+                service["port"] = DASHBOARD_RUNTIME_PORT
+                break
+
+    return services
 
 
 def get_service(service_id):
@@ -240,7 +256,13 @@ def status_for(service: dict) -> dict:
     endpoint = service.get("health_endpoint")
     port = service.get("port")
 
-    if endpoint and port:
+    # El dashboard no necesita hacerse un HTTP health-check a sí mismo.
+    # Si esta función está renderizando el panel y tenemos un puerto
+    # runtime asignado, el servicio dashboard está necesariamente activo.
+    if service.get("id") == "dashboard" and DASHBOARD_RUNTIME_PORT is not None:
+        check_type = "self"
+        status = "up"
+    elif endpoint and port:
         up = http_health_ok(service["host"], port, endpoint)
         check_type = "http"
         status = "up" if up else "down"
@@ -1645,6 +1667,61 @@ def systematic_review_ai_screening():
         }), 400
 
     try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        research_question,
+                        population,
+                        intervention,
+                        comparator,
+                        outcomes,
+                        inclusion_criteria,
+                        exclusion_criteria
+                    FROM systematic_reviews
+                    WHERE id = %s
+                    """,
+                    (review_id,),
+                )
+
+                review = cur.fetchone()
+
+        if not review:
+            return jsonify({
+                "ok": False,
+                "error": "La revisión sistemática no existe"
+            }), 404
+
+        (
+            research_question,
+            population,
+            intervention,
+            comparator,
+            outcomes,
+            inclusion_criteria,
+            exclusion_criteria,
+        ) = review
+
+        missing = []
+
+        if not (research_question or "").strip():
+            missing.append("pregunta de investigación")
+
+        if not (inclusion_criteria or "").strip():
+            missing.append("criterios de inclusión")
+
+        if not (exclusion_criteria or "").strip():
+            missing.append("criterios de exclusión")
+
+        if missing:
+            return jsonify({
+                "ok": False,
+                "error":
+                    "No se puede ejecutar el screening IA. "
+                    "Completa primero: " + ", ".join(missing)
+            }), 400
+
         result = screening_handle(
             f"screening-ui-{review_id}",
             {
@@ -2139,6 +2216,50 @@ def log_stream(service_id):
     return Response(stream_with_context(generator), mimetype="text/event-stream")
 
 
+def find_free_port(start_port=8765, end_port=8795):
+    import socket
+
+    for port in range(start_port, end_port + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+
+    raise RuntimeError(
+        f"No hay puertos libres entre {start_port} y {end_port}"
+    )
+
+
 if __name__ == "__main__":
     ensure_default_collection()
-    app.run(host="0.0.0.0", port=8090, debug=False)
+
+    preferred_port = int(os.environ.get("LOCAL_AI_DASHBOARD_PORT", "8765"))
+    dashboard_port = find_free_port(
+        start_port=preferred_port,
+        end_port=preferred_port + 30,
+    )
+
+    # Compartimos el puerto real con load_services() para que la tarjeta
+    # "Panel de control" y sus health-checks usen el puerto correcto.
+    DASHBOARD_RUNTIME_PORT = dashboard_port
+
+    print("")
+    print("=" * 60)
+    print(f"Local AI Studio: http://127.0.0.1:{dashboard_port}")
+    if dashboard_port != preferred_port:
+        print(
+            f"Puerto {preferred_port} ocupado; "
+            f"se ha seleccionado automáticamente {dashboard_port}."
+        )
+    else:
+        print(f"Puerto {dashboard_port} disponible.")
+    print("=" * 60)
+    print("")
+
+    app.run(
+        host="0.0.0.0",
+        port=dashboard_port,
+        debug=False,
+    )

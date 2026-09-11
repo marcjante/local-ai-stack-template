@@ -41,9 +41,9 @@ services:
     name: "Base de datos vectorial (ChromaDB)"
     description: "Almacena embeddings para búsqueda semántica (RAG)."
     host: 127.0.0.1
-    port: 8000
-    health_endpoint: "/api/v1/heartbeat"
-    start_command: "chroma run --path ./data/chroma --port 8000"
+    port: 8003
+    health_endpoint: "/api/v2/heartbeat"
+    start_command: "chroma run --path ./data/chroma --port 8003"
     stop_command: "pkill -f 'chroma run'"
     docker_service: null
     depends_on: []
@@ -152,7 +152,7 @@ services:
     description: "Punto de entrada único: reparte tráfico hacia dashboard/backend en vez de exponer cada puerto suelto."
     host: 127.0.0.1
     port: 80
-    health_endpoint: "/"
+    health_endpoint: "/nginx-health"
     start_command: "nginx -c $(pwd)/config/nginx.conf"
     stop_command: "nginx -s stop"
     docker_service: null

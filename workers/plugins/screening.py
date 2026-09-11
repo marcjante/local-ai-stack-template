@@ -42,6 +42,62 @@ def _extract_json(text):
     return json.loads(match.group(0))
 
 
+def _call_screening_model(prompt, strict_retry=False):
+    system = (
+        "Eres un asistente metodológico conservador para revisiones "
+        "sistemáticas. No inventes datos. Responde solo JSON válido."
+    )
+
+    if strict_retry:
+        system += (
+            " Tu respuesta anterior no pudo procesarse. "
+            "Responde únicamente con un objeto JSON, sin markdown, "
+            "sin texto antes ni después y sin explicaciones adicionales."
+        )
+
+        prompt += """
+REINTENTO ESTRICTO DE FORMATO.
+
+Devuelve únicamente un objeto JSON con esta estructura:
+{
+  "decision": "include",
+  "reason": "justificación breve",
+  "confidence": 0.5
+}
+
+Los únicos valores válidos para decision son:
+include
+exclude
+uncertain
+
+No añadas ninguna otra frase.
+"""
+
+    response = requests.post(
+        f"{LLM_GATEWAY_URL}/generate",
+        json={
+            "task_type": "rapido",
+            "skill_task": "screening",
+            "prompt": prompt,
+            "system": system,
+            "temperature": 0,
+        },
+        timeout=180,
+    )
+
+    if not response.ok:
+        raise RuntimeError(
+            f"Gateway HTTP {response.status_code}: {response.text[:500]}"
+        )
+
+    payload = response.json()
+
+    if "error" in payload:
+        raise RuntimeError(payload["error"])
+
+    return payload
+
+
 def _ai_screen(article, review):
     prompt = f"""
 Eres un asistente metodológico para screening de revisiones sistemáticas.
@@ -105,32 +161,17 @@ exclude
 uncertain
 """
 
-    response = requests.post(
-        f"{LLM_GATEWAY_URL}/generate",
-        json={
-            "task_type": "rapido",
-            "skill_task": "screening",
-            "prompt": prompt,
-            "system": (
-                "Eres un asistente metodológico conservador para revisiones "
-                "sistemáticas. No inventes datos. Responde solo JSON válido."
-            ),
-            "temperature": 0,
-        },
-        timeout=180,
-    )
+    payload = _call_screening_model(prompt)
 
-    if not response.ok:
-        raise RuntimeError(
-            f"Gateway HTTP {response.status_code}: {response.text[:500]}"
+    try:
+        parsed = _extract_json(payload.get("response", ""))
+    except (ValueError, json.JSONDecodeError) as first_exc:
+        log.warning(
+            "Primer intento de screening sin JSON válido; "
+            f"reintentando en formato estricto. Error: {first_exc}"
         )
-
-    payload = response.json()
-
-    if "error" in payload:
-        raise RuntimeError(payload["error"])
-
-    parsed = _extract_json(payload.get("response", ""))
+        payload = _call_screening_model(prompt, strict_retry=True)
+        parsed = _extract_json(payload.get("response", ""))
 
     decision = str(parsed.get("decision", "uncertain")).strip().lower()
 
@@ -221,6 +262,7 @@ def handle(task_id: str, payload: dict) -> dict:
 
             articles = cur.fetchall()
             results = []
+            errors = []
 
             for article_id, title, abstract in articles:
                 article = {
@@ -236,12 +278,18 @@ def handle(task_id: str, payload: dict) -> dict:
                         f"Fallo screening IA artículo {article_id}: {exc}",
                         extra={"task_id": task_id},
                     )
-                    raise RuntimeError(
-                        "Screening IA detenido porque no se pudo consultar "
-                        f"correctamente el modelo para el artículo {article_id}. "
-                        "No se ha guardado ninguna decisión IA para este artículo. "
-                        f"Error: {exc}"
-                    ) from exc
+
+                    errors.append(
+                        {
+                            "article_id": article_id,
+                            "title": title,
+                            "error": str(exc),
+                        }
+                    )
+
+                    # No se guarda ninguna decisión inventada.
+                    # El artículo conserva ai_decision = NULL para poder reintentarlo.
+                    continue
 
                 cur.execute(
                     """
@@ -274,13 +322,17 @@ def handle(task_id: str, payload: dict) -> dict:
             "review_id": review_id,
             "stage": "title_abstract",
             "screened": len(results),
+            "failed": len(errors),
             "results": results,
+            "errors": errors,
         }
 
         set_status(task_id, "completed", result=result)
 
         log.info(
-            f"Screening IA completado: {len(results)} artículos",
+            "Screening IA completado: "
+            f"{len(results)} procesados correctamente, "
+            f"{len(errors)} con error",
             extra={"task_id": task_id},
         )
 
