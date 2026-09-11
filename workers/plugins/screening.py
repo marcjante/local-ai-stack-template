@@ -132,9 +132,7 @@ uncertain
 
     parsed = _extract_json(payload.get("response", ""))
 
-    decision = str(
-        parsed.get("decision", "uncertain")
-    ).strip().lower()
+    decision = str(parsed.get("decision", "uncertain")).strip().lower()
 
     if decision not in {"include", "exclude", "uncertain"}:
         decision = "uncertain"
@@ -170,15 +168,10 @@ def handle(task_id: str, payload: dict) -> dict:
     if not review_id:
         raise ValueError("Falta el campo 'review_id'")
 
-    set_status(
-        task_id,
-        "running",
-        increment_attempts=True
-    )
+    set_status(task_id, "running", increment_attempts=True)
 
     try:
         with get_conn() as conn, conn.cursor() as cur:
-
             cur.execute(
                 """
                 SELECT
@@ -198,9 +191,7 @@ def handle(task_id: str, payload: dict) -> dict:
             row = cur.fetchone()
 
             if not row:
-                raise ValueError(
-                    f"No existe la revisión {review_id}"
-                )
+                raise ValueError(f"No existe la revisión {review_id}")
 
             review = {
                 "research_question": row[0],
@@ -220,7 +211,8 @@ def handle(task_id: str, payload: dict) -> dict:
                     abstract
                 FROM review_articles
                 WHERE review_id = %s
-                  AND screening_status = 'pending'
+                  AND is_duplicate = false
+                  AND title_abstract_status = 'pending'
                   AND ai_decision IS NULL
                 ORDER BY created_at
                 """,
@@ -228,11 +220,9 @@ def handle(task_id: str, payload: dict) -> dict:
             )
 
             articles = cur.fetchall()
-
             results = []
 
             for article_id, title, abstract in articles:
-
                 article = {
                     "id": article_id,
                     "title": title or "",
@@ -240,17 +230,12 @@ def handle(task_id: str, payload: dict) -> dict:
                 }
 
                 try:
-                    screening = _ai_screen(
-                        article,
-                        review
-                    )
-
+                    screening_result = _ai_screen(article, review)
                 except Exception as exc:
                     log.exception(
                         f"Fallo screening IA artículo {article_id}: {exc}",
                         extra={"task_id": task_id},
                     )
-
                     raise RuntimeError(
                         "Screening IA detenido porque no se pudo consultar "
                         f"correctamente el modelo para el artículo {article_id}. "
@@ -265,13 +250,14 @@ def handle(task_id: str, payload: dict) -> dict:
                         ai_decision = %s,
                         ai_reason = %s,
                         ai_confidence = %s,
+                        screening_stage = 'title_abstract',
                         updated_at = now()
                     WHERE id = %s
                     """,
                     (
-                        screening["decision"],
-                        screening["reason"],
-                        screening["confidence"],
+                        screening_result["decision"],
+                        screening_result["reason"],
+                        screening_result["confidence"],
                         article_id,
                     ),
                 )
@@ -280,21 +266,18 @@ def handle(task_id: str, payload: dict) -> dict:
                     {
                         "article_id": article_id,
                         "title": title,
-                        **screening,
+                        **screening_result,
                     }
                 )
 
         result = {
             "review_id": review_id,
+            "stage": "title_abstract",
             "screened": len(results),
             "results": results,
         }
 
-        set_status(
-            task_id,
-            "completed",
-            result=result
-        )
+        set_status(task_id, "completed", result=result)
 
         log.info(
             f"Screening IA completado: {len(results)} artículos",
@@ -304,16 +287,9 @@ def handle(task_id: str, payload: dict) -> dict:
         return result
 
     except Exception as exc:
-
-        set_status(
-            task_id,
-            "failed",
-            error=str(exc)
-        )
-
+        set_status(task_id, "failed", error=str(exc))
         log.error(
             f"Screening IA falló: {exc}",
             extra={"task_id": task_id},
         )
-
         raise

@@ -12,3 +12,5 @@ beautifulsoup4>=4.12
 alembic>=1.13
 SQLAlchemy>=2.0
 python-dotenv>=1.0
+openpyxl>=3.1
+
