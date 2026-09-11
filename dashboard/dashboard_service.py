@@ -1256,10 +1256,19 @@ def systematic_review():
                     page="systematic_review",
                     review=None,
                     articles=[],
+                    search_strategies=[],
+                    extractions=[],
+                    conflicts=[],
                     stats={
                         "total": 0,
                         "reviewed": 0,
                         "pending": 0,
+                        "conflicts": 0,
+                        "title_abstract_pending": 0,
+                        "full_text_pending": 0,
+                        "extraction_total": 0,
+                        "extraction_pending": 0,
+                        "extraction_validated": 0,
                     },
                 )
 
@@ -1277,7 +1286,16 @@ def systematic_review():
                     ai_confidence,
                     human_decision,
                     exclusion_reason,
-                    screening_status
+                    exclusion_reason_code,
+                    screening_status,
+                    screening_stage,
+                    title_abstract_status,
+                    full_text_status,
+                    full_text_available,
+                    final_decision,
+                    is_duplicate,
+                    duplicate_of_article_id,
+                    duplicate_reason
                 FROM review_articles
                 WHERE review_id = %s
                 ORDER BY created_at ASC
@@ -1285,7 +1303,83 @@ def systematic_review():
                 (review["id"],),
             )
 
-            articles = cur.fetchall()
+            articles = [dict(row) for row in cur.fetchall()]
+            article_map = {article["id"]: article for article in articles}
+
+            for article in articles:
+                article["screening_decisions"] = []
+                article["decisions_by_stage"] = {
+                    "title_abstract": [],
+                    "full_text": [],
+                }
+                article["open_conflicts"] = []
+                article["conflicts_by_stage"] = {}
+
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    review_id,
+                    article_id,
+                    stage,
+                    reviewer_id,
+                    decision,
+                    exclusion_reason_code,
+                    reason,
+                    notes,
+                    created_at,
+                    updated_at
+                FROM review_screening_decisions
+                WHERE review_id = %s
+                ORDER BY created_at ASC, reviewer_id ASC
+                """,
+                (review["id"],),
+            )
+
+            screening_decisions = [dict(row) for row in cur.fetchall()]
+
+            for decision in screening_decisions:
+                article = article_map.get(decision["article_id"])
+                if not article:
+                    continue
+
+                article["screening_decisions"].append(decision)
+                article["decisions_by_stage"].setdefault(
+                    decision["stage"],
+                    [],
+                ).append(decision)
+
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    review_id,
+                    article_id,
+                    stage,
+                    status,
+                    resolution,
+                    resolved_by,
+                    resolution_notes,
+                    created_at,
+                    resolved_at
+                FROM review_screening_conflicts
+                WHERE review_id = %s
+                ORDER BY created_at ASC
+                """,
+                (review["id"],),
+            )
+
+            conflicts = [dict(row) for row in cur.fetchall()]
+
+            for conflict in conflicts:
+                article = article_map.get(conflict["article_id"])
+                if not article:
+                    continue
+
+                article["conflicts_by_stage"][conflict["stage"]] = conflict
+
+                if conflict["status"] == "open":
+                    article["open_conflicts"].append(conflict)
 
             cur.execute(
                 """
@@ -1358,12 +1452,34 @@ def systematic_review():
 
             extractions = cur.fetchall()
 
-    total = len(articles)
+    non_duplicate_articles = [
+        article for article in articles
+        if not article["is_duplicate"]
+    ]
+
+    total = len(non_duplicate_articles)
+
     reviewed = sum(
-        1 for article in articles
+        1 for article in non_duplicate_articles
         if article["screening_status"] == "reviewed"
     )
-    pending = total - reviewed
+
+    conflict_count = sum(
+        1 for conflict in conflicts
+        if conflict["status"] == "open"
+    )
+
+    title_abstract_pending = sum(
+        1 for article in non_duplicate_articles
+        if article["title_abstract_status"] in {"pending", "conflict"}
+    )
+
+    full_text_pending = sum(
+        1 for article in non_duplicate_articles
+        if article["full_text_status"] in {"pending", "conflict"}
+    )
+
+    pending = max(0, total - reviewed)
 
     extraction_total = len(extractions)
     extraction_pending = sum(
@@ -1376,6 +1492,9 @@ def systematic_review():
         "total": total,
         "reviewed": reviewed,
         "pending": pending,
+        "conflicts": conflict_count,
+        "title_abstract_pending": title_abstract_pending,
+        "full_text_pending": full_text_pending,
         "extraction_total": extraction_total,
         "extraction_pending": extraction_pending,
         "extraction_validated": extraction_validated,
@@ -1388,8 +1507,10 @@ def systematic_review():
         articles=articles,
         search_strategies=search_strategies,
         extractions=extractions,
+        conflicts=conflicts,
         stats=stats,
     )
+
 @app.route("/api/systematic-review/pubmed-search", methods=["POST"])
 def systematic_review_pubmed_search():
     from db.db import get_conn
@@ -1550,14 +1671,33 @@ def systematic_review_human_decision():
     review_id = data.get("review_id")
     article_id = data.get("article_id")
     pmid = data.get("pmid")
-    decision = data.get("decision")
+    reviewer_id = (data.get("reviewer_id") or "").strip()
+    stage = (data.get("stage") or "title_abstract").strip().lower()
+    decision = (data.get("decision") or "").strip().lower()
     exclusion_reason = data.get("exclusion_reason")
+    exclusion_reason_code = data.get("exclusion_reason_code")
+    notes = data.get("notes")
 
     if not review_id:
         return jsonify({"ok": False, "error": "review_id es obligatorio"}), 400
 
     if not article_id and not pmid:
-        return jsonify({"ok": False, "error": "article_id o pmid es obligatorio"}), 400
+        return jsonify({
+            "ok": False,
+            "error": "article_id o pmid es obligatorio"
+        }), 400
+
+    if not reviewer_id:
+        return jsonify({
+            "ok": False,
+            "error": "reviewer_id es obligatorio"
+        }), 400
+
+    if stage not in {"title_abstract", "full_text"}:
+        return jsonify({
+            "ok": False,
+            "error": "stage debe ser title_abstract o full_text"
+        }), 400
 
     if decision not in {"include", "exclude", "uncertain"}:
         return jsonify({
@@ -1565,21 +1705,28 @@ def systematic_review_human_decision():
             "error": "decision debe ser include, exclude o uncertain"
         }), 400
 
-    if decision == "exclude" and not exclusion_reason:
+    if decision == "exclude" and not (
+        exclusion_reason or exclusion_reason_code
+    ):
         return jsonify({
             "ok": False,
-            "error": "El motivo de exclusión es obligatorio"
+            "error":
+                "El motivo o código de exclusión es obligatorio"
         }), 400
 
     try:
         result = human_screening_handle(
-            f"human-ui-{article_id or pmid}",
+            f"human-ui-{article_id or pmid}-{stage}-{reviewer_id}",
             {
                 "review_id": review_id,
                 "article_id": article_id,
                 "pmid": pmid,
+                "reviewer_id": reviewer_id,
+                "stage": stage,
                 "decision": decision,
                 "exclusion_reason": exclusion_reason,
+                "exclusion_reason_code": exclusion_reason_code,
+                "notes": notes,
             },
         )
 
@@ -1587,6 +1734,79 @@ def systematic_review_human_decision():
 
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/api/systematic-review/resolve-conflict", methods=["POST"])
+def systematic_review_resolve_conflict():
+    from workers.plugins.resolve_screening_conflict import (
+        handle as resolve_conflict_handle,
+    )
+
+    data = request.get_json(silent=True) or {}
+
+    review_id = data.get("review_id")
+    article_id = data.get("article_id")
+    stage = (data.get("stage") or "").strip().lower()
+    resolution = (data.get("resolution") or "").strip().lower()
+    resolved_by = (data.get("resolved_by") or "").strip()
+    resolution_notes = data.get("resolution_notes")
+    exclusion_reason = data.get("exclusion_reason")
+    exclusion_reason_code = data.get("exclusion_reason_code")
+
+    if not review_id:
+        return jsonify({"ok": False, "error": "review_id es obligatorio"}), 400
+
+    if not article_id:
+        return jsonify({"ok": False, "error": "article_id es obligatorio"}), 400
+
+    if stage not in {"title_abstract", "full_text"}:
+        return jsonify({
+            "ok": False,
+            "error": "stage debe ser title_abstract o full_text"
+        }), 400
+
+    if resolution not in {"include", "exclude", "uncertain"}:
+        return jsonify({
+            "ok": False,
+            "error":
+                "resolution debe ser include, exclude o uncertain"
+        }), 400
+
+    if not resolved_by:
+        return jsonify({
+            "ok": False,
+            "error": "resolved_by es obligatorio"
+        }), 400
+
+    if resolution == "exclude" and not (
+        exclusion_reason or exclusion_reason_code
+    ):
+        return jsonify({
+            "ok": False,
+            "error":
+                "El motivo o código de exclusión es obligatorio"
+        }), 400
+
+    try:
+        result = resolve_conflict_handle(
+            f"resolve-ui-{article_id}-{stage}",
+            {
+                "review_id": review_id,
+                "article_id": article_id,
+                "stage": stage,
+                "resolution": resolution,
+                "resolved_by": resolved_by,
+                "resolution_notes": resolution_notes,
+                "exclusion_reason": exclusion_reason,
+                "exclusion_reason_code": exclusion_reason_code,
+            },
+        )
+
+        return jsonify({"ok": True, "result": result})
+
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
 @app.route("/api/systematic-review/human-data-extraction", methods=["POST"])
 def systematic_review_human_data_extraction():
     from workers.plugins.human_data_extraction import (

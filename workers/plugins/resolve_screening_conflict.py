@@ -1,0 +1,203 @@
+import logging
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
+from db.db import get_conn, set_status
+
+QUEUE_NAME = "resolve_screening_conflict"
+QUEUE_TIMEOUT = 120
+
+logger = logging.getLogger(__name__)
+
+VALID_DECISIONS = {"include", "exclude", "uncertain"}
+VALID_STAGES = {"title_abstract", "full_text"}
+
+
+def handle(task_id, payload):
+    set_status(task_id, "running")
+
+    try:
+        article_id = payload.get("article_id")
+        review_id = payload.get("review_id")
+        stage = (payload.get("stage") or "").strip().lower()
+        resolution = (payload.get("resolution") or "").strip().lower()
+        resolved_by = (payload.get("resolved_by") or "").strip()
+        resolution_notes = payload.get("resolution_notes")
+        exclusion_reason = payload.get("exclusion_reason")
+        exclusion_reason_code = payload.get("exclusion_reason_code")
+
+        if not article_id:
+            raise ValueError("article_id es obligatorio")
+
+        if not review_id:
+            raise ValueError("review_id es obligatorio")
+
+        if stage not in VALID_STAGES:
+            raise ValueError("stage debe ser title_abstract o full_text")
+
+        if resolution not in VALID_DECISIONS:
+            raise ValueError(
+                "resolution debe ser include, exclude o uncertain"
+            )
+
+        if not resolved_by:
+            raise ValueError("resolved_by es obligatorio")
+
+        if resolution == "exclude" and not (
+            exclusion_reason or exclusion_reason_code
+        ):
+            raise ValueError(
+                "Cuando resolution=exclude debes indicar exclusion_reason "
+                "o exclusion_reason_code"
+            )
+
+        if resolution != "exclude":
+            exclusion_reason = None
+            exclusion_reason_code = None
+
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM review_articles
+                    WHERE id = %s
+                      AND review_id = %s
+                    """,
+                    (article_id, review_id),
+                )
+
+                if not cur.fetchone():
+                    raise ValueError(
+                        "El artículo no existe o no pertenece a la revisión"
+                    )
+
+                cur.execute(
+                    """
+                    SELECT id, status
+                    FROM review_screening_conflicts
+                    WHERE article_id = %s
+                      AND review_id = %s
+                      AND stage = %s
+                    """,
+                    (article_id, review_id, stage),
+                )
+
+                conflict = cur.fetchone()
+
+                if not conflict:
+                    raise ValueError(
+                        "No existe un conflicto para este artículo y fase"
+                    )
+
+                conflict_id, conflict_status = conflict
+
+                if conflict_status == "resolved":
+                    raise ValueError("El conflicto ya estaba resuelto")
+
+                cur.execute(
+                    """
+                    UPDATE review_screening_conflicts
+                    SET
+                        status = 'resolved',
+                        resolution = %s,
+                        resolved_by = %s,
+                        resolution_notes = %s,
+                        resolved_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (
+                        resolution,
+                        resolved_by,
+                        resolution_notes,
+                        conflict_id,
+                    ),
+                )
+
+                if stage == "title_abstract":
+                    next_full_text_status = (
+                        "pending"
+                        if resolution in {"include", "uncertain"}
+                        else "not_started"
+                    )
+
+                    cur.execute(
+                        """
+                        UPDATE review_articles
+                        SET
+                            title_abstract_status = %s,
+                            full_text_status = %s,
+                            human_decision = %s,
+                            exclusion_reason_code = %s,
+                            exclusion_reason = %s,
+                            screening_status = 'reviewed',
+                            screening_stage = 'title_abstract',
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (
+                            resolution,
+                            next_full_text_status,
+                            resolution,
+                            exclusion_reason_code,
+                            exclusion_reason,
+                            article_id,
+                        ),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        UPDATE review_articles
+                        SET
+                            full_text_status = %s,
+                            final_decision = %s,
+                            human_decision = %s,
+                            exclusion_reason_code = %s,
+                            exclusion_reason = %s,
+                            screening_status = 'reviewed',
+                            screening_stage = 'full_text',
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (
+                            resolution,
+                            resolution,
+                            resolution,
+                            exclusion_reason_code,
+                            exclusion_reason,
+                            article_id,
+                        ),
+                    )
+
+        result = {
+            "review_id": review_id,
+            "article_id": article_id,
+            "stage": stage,
+            "resolution": resolution,
+            "resolved_by": resolved_by,
+            "status": "resolved",
+            "exclusion_reason": exclusion_reason,
+            "exclusion_reason_code": exclusion_reason_code,
+        }
+
+        set_status(task_id, "completed", result=result)
+
+        logger.info(
+            "task_id=%s — Conflicto resuelto: article=%s stage=%s resolution=%s",
+            task_id,
+            article_id,
+            stage,
+            resolution,
+        )
+
+        return result
+
+    except Exception as exc:
+        logger.exception(
+            "task_id=%s — Error resolviendo conflicto de screening",
+            task_id,
+        )
+        set_status(task_id, "failed", error=str(exc))
+        raise
