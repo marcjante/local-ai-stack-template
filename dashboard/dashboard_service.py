@@ -1244,6 +1244,7 @@ def systematic_reviews_design_search_strategy():
 @app.route("/systematic-review")
 def systematic_review():
     from db.db import get_conn
+    from dashboard.prisma import calculate_prisma
     from psycopg2.extras import RealDictCursor
 
     review_id = request.args.get("review_id")
@@ -1291,6 +1292,20 @@ def systematic_review():
                         "extraction_total": 0,
                         "extraction_pending": 0,
                         "extraction_validated": 0,
+                    },
+                    prisma={
+                        "records_identified": 0,
+                        "records_imported": 0,
+                        "duplicates_removed": 0,
+                        "records_screened": 0,
+                        "records_excluded": 0,
+                        "reports_sought": 0,
+                        "reports_not_retrieved": None,
+                        "reports_assessed": 0,
+                        "reports_excluded": 0,
+                        "studies_included": 0,
+                        "exclusion_reasons": {},
+                        "databases": {},
                     },
                 )
 
@@ -1430,6 +1445,26 @@ def systematic_review():
             cur.execute(
                 """
                 SELECT
+                    id,
+                    review_id,
+                    database_name,
+                    query,
+                    total_found,
+                    imported_count,
+                    searched_at,
+                    strategy_id
+                FROM review_searches
+                WHERE review_id = %s
+                ORDER BY searched_at ASC
+                """,
+                (review["id"],),
+            )
+
+            searches = [dict(row) for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT
                     re.id,
                     re.review_id,
                     re.article_id,
@@ -1522,6 +1557,8 @@ def systematic_review():
         "extraction_validated": extraction_validated,
     }
 
+    prisma = calculate_prisma(searches, articles)
+
     return render_template(
         "systematic_review.html",
         page="systematic_review",
@@ -1531,6 +1568,7 @@ def systematic_review():
         extractions=extractions,
         conflicts=conflicts,
         stats=stats,
+        prisma=prisma,
     )
 
 @app.route("/api/systematic-review/pubmed-search", methods=["POST"])
