@@ -2042,27 +2042,28 @@ def systematic_review_full_text_retrieval():
                 ),
             )
 
-        log_review_audit(
-            project_id=current_project_id(),
-            review_id=review_id,
-            article_id=article_id,
-            action="full_text_retrieval_status_changed",
-            actor_type="system",
-            actor_id="dashboard_api",
-            stage="full_text",
-            before_state={
-                "full_text_retrieval_status": previous_retrieval_status,
-                "full_text_available": previous_full_text_available,
-            },
-            after_state={
-                "full_text_retrieval_status": status,
-                "full_text_available": full_text_available,
-            },
-            details={
-                "source": "dashboard_api",
-                "requested_status": status,
-            },
-        )
+            log_review_audit(
+                project_id=current_project_id(),
+                review_id=review_id,
+                article_id=article_id,
+                action="full_text_retrieval_status_changed",
+                actor_type="system",
+                actor_id="dashboard_api",
+                stage="full_text",
+                before_state={
+                    "full_text_retrieval_status": previous_retrieval_status,
+                    "full_text_available": previous_full_text_available,
+                },
+                after_state={
+                    "full_text_retrieval_status": status,
+                    "full_text_available": full_text_available,
+                },
+                details={
+                    "source": "dashboard_api",
+                    "requested_status": status,
+                },
+                conn=conn,
+            )
 
         return jsonify({
             "ok": True,
@@ -2271,6 +2272,33 @@ def systematic_review_full_text_upload():
                 ),
             )
 
+            log_review_audit(
+                project_id=project_id,
+                review_id=review_id,
+                article_id=article_id,
+                action="full_text_uploaded",
+                actor_type="system",
+                actor_id="dashboard_api",
+                stage="full_text",
+                before_state={
+                    "full_text_document_id": previous_document_id,
+                    "full_text_retrieval_status": previous_retrieval_status,
+                    "full_text_available": previous_full_text_available,
+                },
+                after_state={
+                    "full_text_document_id": document_id,
+                    "full_text_retrieval_status": "retrieved",
+                    "full_text_available": True,
+                },
+                details={
+                    "filename": file.filename,
+                    "content_type": file.content_type,
+                    "n_chunks": n_chunks,
+                    "replaced_document_id": previous_document_id,
+                },
+                conn=conn,
+            )
+
         if (
             previous_document_id
             and previous_document_id != document_id
@@ -2296,32 +2324,6 @@ def systematic_review_full_text_upload():
                     previous_document_id,
                     article_id,
                 )
-
-        log_review_audit(
-            project_id=project_id,
-            review_id=review_id,
-            article_id=article_id,
-            action="full_text_uploaded",
-            actor_type="system",
-            actor_id="dashboard_api",
-            stage="full_text",
-            before_state={
-                "full_text_document_id": previous_document_id,
-                "full_text_retrieval_status": previous_retrieval_status,
-                "full_text_available": previous_full_text_available,
-            },
-            after_state={
-                "full_text_document_id": document_id,
-                "full_text_retrieval_status": "retrieved",
-                "full_text_available": True,
-            },
-            details={
-                "filename": file.filename,
-                "content_type": file.content_type,
-                "n_chunks": n_chunks,
-                "replaced_document_id": previous_document_id,
-            },
-        )
 
         return jsonify({
             "ok": True,
