@@ -371,3 +371,260 @@ def test_ai_screening_continues_after_malformed_model_response(
             (task_id,),
         )
         assert cur.fetchone()[0] == "completed"
+
+
+def test_full_text_consensus_exclusion_requires_reason_and_sets_final_decision(
+    dashboard_client,
+    project_id,
+):
+    review_id, article_id = _insert_review_and_article(project_id)
+
+    # 1. Ambos revisores incluyen en título/resumen.
+    for reviewer_id in ("reviewer_1", "reviewer_2"):
+        response = dashboard_client.post(
+            "/api/systematic-review/human-decision",
+            json={
+                "review_id": review_id,
+                "article_id": article_id,
+                "reviewer_id": reviewer_id,
+                "stage": "title_abstract",
+                "decision": "include",
+            },
+        )
+        assert response.status_code == 200, response.get_data(as_text=True)
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT title_abstract_status, full_text_status
+            FROM review_articles
+            WHERE id = %s
+            """,
+            (article_id,),
+        )
+        article = cur.fetchone()
+
+        assert article[0] == "include"
+        assert article[1] == "pending"
+
+    # 2. Una exclusión en texto completo SIN motivo debe rechazarse.
+    response = dashboard_client.post(
+        "/api/systematic-review/human-decision",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "reviewer_id": "reviewer_1",
+            "stage": "full_text",
+            "decision": "exclude",
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+
+    # No debe haberse guardado la decisión inválida.
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*)
+            FROM review_screening_decisions
+            WHERE article_id = %s
+              AND stage = 'full_text'
+            """,
+            (article_id,),
+        )
+        assert cur.fetchone()[0] == 0
+
+    # 3. Ambos revisores excluyen correctamente en texto completo.
+    for reviewer_id in ("reviewer_1", "reviewer_2"):
+        response = dashboard_client.post(
+            "/api/systematic-review/human-decision",
+            json={
+                "review_id": review_id,
+                "article_id": article_id,
+                "reviewer_id": reviewer_id,
+                "stage": "full_text",
+                "decision": "exclude",
+                "exclusion_reason_code": "WRONG_POPULATION",
+                "exclusion_reason": "La población no cumple los criterios.",
+            },
+        )
+        assert response.status_code == 200, response.get_data(as_text=True)
+
+    # 4. Debe existir consenso final de exclusión sin conflicto.
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                full_text_status,
+                final_decision,
+                human_decision,
+                exclusion_reason_code,
+                exclusion_reason,
+                screening_status,
+                screening_stage
+            FROM review_articles
+            WHERE id = %s
+            """,
+            (article_id,),
+        )
+        article = cur.fetchone()
+
+        assert article[0] == "exclude"
+        assert article[1] == "exclude"
+        assert article[2] == "exclude"
+        assert article[3] == "WRONG_POPULATION"
+        assert article[4] == "La población no cumple los criterios."
+        assert article[5] == "reviewed"
+        assert article[6] == "full_text"
+
+        cur.execute(
+            """
+            SELECT COUNT(*)
+            FROM review_screening_conflicts
+            WHERE article_id = %s
+              AND stage = 'full_text'
+              AND status = 'open'
+            """,
+            (article_id,),
+        )
+        assert cur.fetchone()[0] == 0
+
+
+def test_full_text_conflict_resolved_by_adjudicator(
+    dashboard_client,
+    project_id,
+):
+    review_id, article_id = _insert_review_and_article(project_id)
+
+    # 1. Consenso de inclusión en título/resumen.
+    for reviewer_id in ("reviewer_1", "reviewer_2"):
+        response = dashboard_client.post(
+            "/api/systematic-review/human-decision",
+            json={
+                "review_id": review_id,
+                "article_id": article_id,
+                "reviewer_id": reviewer_id,
+                "stage": "title_abstract",
+                "decision": "include",
+            },
+        )
+        assert response.status_code == 200
+
+    # 2. Revisor 1 incluye en texto completo.
+    response = dashboard_client.post(
+        "/api/systematic-review/human-decision",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "reviewer_id": "reviewer_1",
+            "stage": "full_text",
+            "decision": "include",
+        },
+    )
+    assert response.status_code == 200
+
+    # 3. Revisor 2 excluye -> debe aparecer conflicto.
+    response = dashboard_client.post(
+        "/api/systematic-review/human-decision",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "reviewer_id": "reviewer_2",
+            "stage": "full_text",
+            "decision": "exclude",
+            "exclusion_reason_code": "WRONG_OUTCOME",
+            "exclusion_reason": "No evalúa el outcome requerido.",
+        },
+    )
+    assert response.status_code == 200
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT full_text_status, final_decision
+            FROM review_articles
+            WHERE id = %s
+            """,
+            (article_id,),
+        )
+        article = cur.fetchone()
+
+        assert article[0] == "conflict"
+        assert article[1] is None
+
+        cur.execute(
+            """
+            SELECT status
+            FROM review_screening_conflicts
+            WHERE article_id = %s
+              AND stage = 'full_text'
+            """,
+            (article_id,),
+        )
+        assert cur.fetchone()[0] == "open"
+
+    # 4. Adjudicador resuelve excluyendo.
+    response = dashboard_client.post(
+        "/api/systematic-review/resolve-conflict",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "stage": "full_text",
+            "resolution": "exclude",
+            "resolved_by": "adjudicator",
+            "exclusion_reason_code": "WRONG_OUTCOME",
+            "exclusion_reason": "No evalúa el outcome requerido.",
+            "resolution_notes": "Exclusión confirmada tras revisión del texto completo.",
+        },
+    )
+
+    assert response.status_code == 200, response.get_data(as_text=True)
+
+    # 5. Verificar resolución y decisión final.
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                status,
+                resolution,
+                resolved_by,
+                resolved_at
+            FROM review_screening_conflicts
+            WHERE article_id = %s
+              AND stage = 'full_text'
+            """,
+            (article_id,),
+        )
+        conflict = cur.fetchone()
+
+        assert conflict[0] == "resolved"
+        assert conflict[1] == "exclude"
+        assert conflict[2] == "adjudicator"
+        assert conflict[3] is not None
+
+        cur.execute(
+            """
+            SELECT
+                full_text_status,
+                final_decision,
+                human_decision,
+                exclusion_reason_code,
+                exclusion_reason,
+                screening_status,
+                screening_stage
+            FROM review_articles
+            WHERE id = %s
+            """,
+            (article_id,),
+        )
+        article = cur.fetchone()
+
+        assert article[0] == "exclude"
+        assert article[1] == "exclude"
+        assert article[2] == "exclude"
+        assert article[3] == "WRONG_OUTCOME"
+        assert article[4] == "No evalúa el outcome requerido."
+        assert article[5] == "reviewed"
+        assert article[6] == "full_text"
