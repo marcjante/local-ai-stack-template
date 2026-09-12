@@ -1,7 +1,7 @@
 import io
 import uuid
 
-from db.db import get_conn
+from db.db import get_conn, get_review_audit_trail
 
 
 def _create_review_with_article(project_id, *, full_text_status="pending", is_duplicate=False):
@@ -129,6 +129,28 @@ def test_full_text_upload_success(dashboard_client, project_id):
         assert payload["n_chunks"] > 0
         assert payload["full_text_retrieval_status"] == "retrieved"
         assert payload["full_text_available"] is True
+
+        audit_trail = get_review_audit_trail(
+            review_id,
+            project_id=project_id,
+            article_id=article_id,
+        )
+
+        upload_events = [
+            event
+            for event in audit_trail
+            if event["action"] == "full_text_uploaded"
+        ]
+
+        assert len(upload_events) == 1
+
+        upload_event = upload_events[0]
+
+        assert upload_event["after_state"]["full_text_document_id"] == payload["document_id"]
+        assert upload_event["after_state"]["full_text_retrieval_status"] == "retrieved"
+        assert upload_event["after_state"]["full_text_available"] is True
+        assert upload_event["details"]["filename"] == "article.txt"
+        assert upload_event["details"]["n_chunks"] > 0
 
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(

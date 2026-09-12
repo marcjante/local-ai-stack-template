@@ -1910,6 +1910,8 @@ def systematic_review_ai_screening():
     methods=["POST"],
 )
 def systematic_review_full_text_retrieval():
+    from db.db import log_review_audit
+
     data = request.get_json(silent=True) or {}
 
     review_id = data.get("review_id")
@@ -1959,7 +1961,9 @@ def systematic_review_full_text_retrieval():
                 SELECT
                     id,
                     is_duplicate,
-                    full_text_status
+                    full_text_status,
+                    full_text_retrieval_status,
+                    full_text_available
                 FROM review_articles
                 WHERE id = %s
                   AND review_id = %s
@@ -2017,6 +2021,9 @@ def systematic_review_full_text_retrieval():
 
             full_text_available = status == "retrieved"
 
+            previous_retrieval_status = article[3]
+            previous_full_text_available = article[4]
+
             cur.execute(
                 """
                 UPDATE review_articles
@@ -2034,6 +2041,28 @@ def systematic_review_full_text_retrieval():
                     review_id,
                 ),
             )
+
+        log_review_audit(
+            project_id=current_project_id(),
+            review_id=review_id,
+            article_id=article_id,
+            action="full_text_retrieval_status_changed",
+            actor_type="system",
+            actor_id="dashboard_api",
+            stage="full_text",
+            before_state={
+                "full_text_retrieval_status": previous_retrieval_status,
+                "full_text_available": previous_full_text_available,
+            },
+            after_state={
+                "full_text_retrieval_status": status,
+                "full_text_available": full_text_available,
+            },
+            details={
+                "source": "dashboard_api",
+                "requested_status": status,
+            },
+        )
 
         return jsonify({
             "ok": True,
@@ -2070,6 +2099,7 @@ def systematic_review_full_text_upload():
     chunks obsoletos de versiones anteriores del mismo PDF.
     """
     import uuid
+    from db.db import log_review_audit
 
     file = request.files.get("file")
     review_id = (request.form.get("review_id") or "").strip()
@@ -2107,6 +2137,8 @@ def systematic_review_full_text_upload():
                 ra.is_duplicate,
                 ra.full_text_status,
                 ra.full_text_document_id,
+                ra.full_text_retrieval_status,
+                ra.full_text_available,
                 sr.project_id
             FROM review_articles ra
             JOIN systematic_reviews sr
@@ -2133,6 +2165,8 @@ def systematic_review_full_text_upload():
         is_duplicate,
         full_text_status,
         previous_document_id,
+        previous_retrieval_status,
+        previous_full_text_available,
         project_id,
     ) = article
 
@@ -2262,6 +2296,32 @@ def systematic_review_full_text_upload():
                     previous_document_id,
                     article_id,
                 )
+
+        log_review_audit(
+            project_id=project_id,
+            review_id=review_id,
+            article_id=article_id,
+            action="full_text_uploaded",
+            actor_type="system",
+            actor_id="dashboard_api",
+            stage="full_text",
+            before_state={
+                "full_text_document_id": previous_document_id,
+                "full_text_retrieval_status": previous_retrieval_status,
+                "full_text_available": previous_full_text_available,
+            },
+            after_state={
+                "full_text_document_id": document_id,
+                "full_text_retrieval_status": "retrieved",
+                "full_text_available": True,
+            },
+            details={
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "n_chunks": n_chunks,
+                "replaced_document_id": previous_document_id,
+            },
+        )
 
         return jsonify({
             "ok": True,

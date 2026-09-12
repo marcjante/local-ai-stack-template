@@ -222,3 +222,39 @@ CREATE TABLE IF NOT EXISTS project_members (
     added_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (project_id, username)
 );
+
+-- Auditoría científica de revisiones sistemáticas.
+-- Separada de audit_log, que está orientada a tasks/subagentes.
+CREATE TABLE IF NOT EXISTS review_audit_log (
+    id              BIGSERIAL PRIMARY KEY,
+    project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    review_id       TEXT NOT NULL REFERENCES systematic_reviews(id) ON DELETE CASCADE,
+    article_id      TEXT REFERENCES review_articles(id) ON DELETE CASCADE,
+    extraction_id   TEXT REFERENCES review_extractions(id) ON DELETE SET NULL,
+    action          TEXT NOT NULL,
+    actor_type      TEXT NOT NULL,
+    actor_id        TEXT,
+    stage           TEXT,
+    before_state    JSONB,
+    after_state     JSONB,
+    model           TEXT,
+    provider        TEXT,
+    prompt_version  TEXT,
+    details         JSONB,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_audit_project
+    ON review_audit_log (project_id);
+
+CREATE INDEX IF NOT EXISTS idx_review_audit_review
+    ON review_audit_log (review_id);
+
+CREATE INDEX IF NOT EXISTS idx_review_audit_article
+    ON review_audit_log (article_id);
+
+CREATE INDEX IF NOT EXISTS idx_review_audit_extraction
+    ON review_audit_log (extraction_id);
+
+CREATE INDEX IF NOT EXISTS idx_review_audit_created_at
+    ON review_audit_log (created_at);

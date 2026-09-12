@@ -4,7 +4,7 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from db.db import get_conn, set_status
+from db.db import get_conn, log_review_audit, set_status
 
 QUEUE_NAME = "resolve_screening_conflict"
 QUEUE_TIMEOUT = 120
@@ -61,18 +61,41 @@ def handle(task_id, payload):
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id
-                    FROM review_articles
-                    WHERE id = %s
-                      AND review_id = %s
+                    SELECT
+                        ra.id,
+                        sr.project_id,
+                        ra.title_abstract_status,
+                        ra.full_text_status,
+                        ra.human_decision,
+                        ra.final_decision,
+                        ra.screening_status,
+                        ra.screening_stage
+                    FROM review_articles ra
+                    JOIN systematic_reviews sr
+                      ON sr.id = ra.review_id
+                    WHERE ra.id = %s
+                      AND ra.review_id = %s
                     """,
                     (article_id, review_id),
                 )
 
-                if not cur.fetchone():
+                article_before = cur.fetchone()
+
+                if not article_before:
                     raise ValueError(
                         "El artículo no existe o no pertenece a la revisión"
                     )
+
+                (
+                    _db_article_id,
+                    project_id,
+                    before_title_abstract_status,
+                    before_full_text_status,
+                    before_human_decision,
+                    before_final_decision,
+                    before_screening_status,
+                    before_screening_stage,
+                ) = article_before
 
                 cur.execute(
                     """
@@ -170,6 +193,57 @@ def handle(task_id, payload):
                             article_id,
                         ),
                     )
+
+                cur.execute(
+                    """
+                    SELECT
+                        title_abstract_status,
+                        full_text_status,
+                        human_decision,
+                        final_decision,
+                        screening_status,
+                        screening_stage
+                    FROM review_articles
+                    WHERE id = %s
+                    """,
+                    (article_id,),
+                )
+                article_after = cur.fetchone()
+
+        log_review_audit(
+            project_id=project_id,
+            review_id=review_id,
+            article_id=article_id,
+            action="screening_conflict_resolved",
+            actor_type="human",
+            actor_id=resolved_by,
+            stage=stage,
+            before_state={
+                "title_abstract_status": before_title_abstract_status,
+                "full_text_status": before_full_text_status,
+                "human_decision": before_human_decision,
+                "final_decision": before_final_decision,
+                "screening_status": before_screening_status,
+                "screening_stage": before_screening_stage,
+                "conflict_status": conflict_status,
+            },
+            after_state={
+                "title_abstract_status": article_after[0],
+                "full_text_status": article_after[1],
+                "human_decision": article_after[2],
+                "final_decision": article_after[3],
+                "screening_status": article_after[4],
+                "screening_stage": article_after[5],
+                "conflict_status": "resolved",
+            },
+            details={
+                "resolution": resolution,
+                "resolution_notes": resolution_notes,
+                "exclusion_reason": exclusion_reason,
+                "exclusion_reason_code": exclusion_reason_code,
+                "conflict_id": conflict_id,
+            },
+        )
 
         result = {
             "review_id": review_id,

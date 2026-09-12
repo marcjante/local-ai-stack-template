@@ -133,6 +133,108 @@ def get_audit_trail(task_id: str):
         return cur.fetchall()
 
 
+def log_review_audit(
+    project_id: str,
+    review_id: str,
+    action: str,
+    actor_type: str,
+    *,
+    article_id: str = None,
+    extraction_id: str = None,
+    actor_id: str = None,
+    stage: str = None,
+    before_state: dict = None,
+    after_state: dict = None,
+    model: str = None,
+    provider: str = None,
+    prompt_version: str = None,
+    details: dict = None,
+):
+    """
+    Registra una acción reproducible dentro de una revisión sistemática.
+
+    Esta auditoría es independiente de audit_log:
+    - audit_log sigue tareas/subagentes.
+    - review_audit_log sigue el flujo científico y humano de una revisión.
+    """
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO review_audit_log (
+                project_id,
+                review_id,
+                article_id,
+                extraction_id,
+                action,
+                actor_type,
+                actor_id,
+                stage,
+                before_state,
+                after_state,
+                model,
+                provider,
+                prompt_version,
+                details
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s
+            )
+            RETURNING id
+            """,
+            (
+                project_id,
+                review_id,
+                article_id,
+                extraction_id,
+                action,
+                actor_type,
+                actor_id,
+                stage,
+                json.dumps(before_state) if before_state is not None else None,
+                json.dumps(after_state) if after_state is not None else None,
+                model,
+                provider,
+                prompt_version,
+                json.dumps(details) if details is not None else None,
+            ),
+        )
+        return cur.fetchone()[0]
+
+
+def get_review_audit_trail(
+    review_id: str,
+    *,
+    project_id: str = None,
+    article_id: str = None,
+):
+    """Devuelve la trazabilidad cronológica de una revisión."""
+    clauses = ["review_id = %s"]
+    params = [review_id]
+
+    if project_id is not None:
+        clauses.append("project_id = %s")
+        params.append(project_id)
+
+    if article_id is not None:
+        clauses.append("article_id = %s")
+        params.append(article_id)
+
+    where_clause = " AND ".join(clauses)
+
+    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            f"""
+            SELECT *
+            FROM review_audit_log
+            WHERE {where_clause}
+            ORDER BY created_at, id
+            """,
+            tuple(params),
+        )
+        return cur.fetchall()
+
+
 def is_integration_enabled(flow_name: str, project_id: str = "default") -> bool:
     """
     Comprueba si un flujo de n8n está activado PARA ESE PROYECTO. Si no
