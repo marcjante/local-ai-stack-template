@@ -98,6 +98,171 @@
             font-weight: 700;
         }
 
+        .prisma-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 22px;
+            margin-bottom: 22px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+        }
+
+        .prisma-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .prisma-header h2 {
+            margin: 0 0 5px;
+            font-size: 21px;
+        }
+
+        .prisma-subtitle {
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .prisma-flow {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            align-items: stretch;
+        }
+
+        .prisma-stage {
+            position: relative;
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 17px;
+            background: #fbfcfe;
+            min-height: 170px;
+        }
+
+        .prisma-stage:not(:last-child)::after {
+            content: "→";
+            position: absolute;
+            right: -22px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+            z-index: 2;
+        }
+
+        .prisma-stage-title {
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--primary-dark);
+            margin-bottom: 14px;
+        }
+
+        .prisma-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 7px 0;
+            border-bottom: 1px solid #edf0f4;
+            font-size: 13px;
+        }
+
+        .prisma-row:last-child {
+            border-bottom: 0;
+        }
+
+        .prisma-row span:first-child {
+            color: var(--muted);
+        }
+
+        .prisma-row strong {
+            color: var(--text);
+            font-size: 15px;
+        }
+
+        .prisma-final {
+            background: var(--soft-green);
+            border-color: #b9e7d5;
+        }
+
+        .prisma-final .prisma-stage-title {
+            color: var(--success);
+        }
+
+        .prisma-reasons,
+        .prisma-databases {
+            margin-top: 18px;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+
+        .prisma-detail-title {
+            margin: 0 0 10px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .prisma-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .prisma-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: var(--soft-blue);
+            border: 1px solid #d8e4ff;
+            font-size: 12px;
+        }
+
+        .prisma-chip strong {
+            color: var(--primary-dark);
+        }
+
+        .prisma-note {
+            margin-top: 14px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--soft-yellow);
+            color: #725315;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        @media (max-width: 1100px) {
+            .prisma-flow {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .prisma-stage::after {
+                display: none;
+            }
+        }
+
+        @media (max-width: 650px) {
+            .prisma-flow {
+                grid-template-columns: 1fr;
+            }
+
+            .prisma-header {
+                flex-direction: column;
+            }
+
+            .prisma-card {
+                padding: 16px;
+            }
+        }
+
         .card {
             background: var(--card);
             border: 1px solid var(--border);
@@ -601,6 +766,123 @@
                 <div class="stat-label">Pendientes</div>
                 <div class="stat-value">{{ stats.pending }}</div>
             </div>
+        </section>
+
+        <section class="prisma-card">
+            <div class="prisma-header">
+                <div>
+                    <h2>Flujo PRISMA</h2>
+                    <p class="prisma-subtitle">
+                        Resumen automático calculado a partir del estado real de la revisión.
+                    </p>
+                </div>
+            </div>
+
+            <div class="prisma-flow">
+                <div class="prisma-stage">
+                    <div class="prisma-stage-title">Identificación</div>
+
+                    <div class="prisma-row">
+                        <span>Registros identificados</span>
+                        <strong>{{ prisma.records_identified }}</strong>
+                    </div>
+
+                    <div class="prisma-row">
+                        <span>Registros importados</span>
+                        <strong>{{ prisma.records_imported }}</strong>
+                    </div>
+
+                    <div class="prisma-row">
+                        <span>Duplicados eliminados</span>
+                        <strong>{{ prisma.duplicates_removed }}</strong>
+                    </div>
+                </div>
+
+                <div class="prisma-stage">
+                    <div class="prisma-stage-title">Cribado</div>
+
+                    <div class="prisma-row">
+                        <span>Registros cribados</span>
+                        <strong>{{ prisma.records_screened }}</strong>
+                    </div>
+
+                    <div class="prisma-row">
+                        <span>Excluidos</span>
+                        <strong>{{ prisma.records_excluded }}</strong>
+                    </div>
+                </div>
+
+                <div class="prisma-stage">
+                    <div class="prisma-stage-title">Texto completo</div>
+
+                    <div class="prisma-row">
+                        <span>Buscados</span>
+                        <strong>{{ prisma.reports_sought }}</strong>
+                    </div>
+
+                    <div class="prisma-row">
+                        <span>Evaluados</span>
+                        <strong>{{ prisma.reports_assessed }}</strong>
+                    </div>
+
+                    <div class="prisma-row">
+                        <span>Excluidos</span>
+                        <strong>{{ prisma.reports_excluded }}</strong>
+                    </div>
+                </div>
+
+                <div class="prisma-stage prisma-final">
+                    <div class="prisma-stage-title">Inclusión</div>
+
+                    <div class="prisma-row">
+                        <span>Estudios incluidos</span>
+                        <strong>{{ prisma.studies_included }}</strong>
+                    </div>
+                </div>
+            </div>
+
+            {% if prisma.databases %}
+            <div class="prisma-databases">
+                <div class="prisma-detail-title">Registros por base de datos</div>
+
+                <div class="prisma-chips">
+                    {% for database_name, values in prisma.databases.items() %}
+                    <div class="prisma-chip">
+                        <strong>{{ database_name }}</strong>
+                        <span>
+                            {{ values.records_identified }} identificados ·
+                            {{ values.records_imported }} importados
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if prisma.exclusion_reasons %}
+            <div class="prisma-reasons">
+                <div class="prisma-detail-title">
+                    Motivos de exclusión a texto completo
+                </div>
+
+                <div class="prisma-chips">
+                    {% for reason, count in prisma.exclusion_reasons.items() %}
+                    <div class="prisma-chip">
+                        <span>{{ reason }}</span>
+                        <strong>{{ count }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if prisma.reports_not_retrieved is none %}
+            <div class="prisma-note">
+                Los textos completos no recuperados todavía no se calculan:
+                el esquema actual no distingue entre “no buscado” y
+                “buscado pero no recuperado”.
+            </div>
+            {% endif %}
         </section>
 
         <section class="card">
