@@ -54,8 +54,8 @@ services:
     host: 127.0.0.1
     port: 6379
     health_endpoint: null
-    start_command: "redis-server --port 6379"
-    stop_command: "redis-cli -p 6379 shutdown"
+    start_command: "if command -v brew >/dev/null 2>&1 && brew list --versions redis >/dev/null 2>&1; then brew services start redis; else redis-server --daemonize yes --port 6379; fi"
+    stop_command: "if command -v brew >/dev/null 2>&1 && brew list --versions redis >/dev/null 2>&1; then brew services stop redis; else redis-cli -p 6379 shutdown; fi"
     docker_service: "redis"
     depends_on: []
 
@@ -65,8 +65,8 @@ services:
     host: 127.0.0.1
     port: 5432
     health_endpoint: null
-    start_command: "pg_ctl -D ./data/pgdata -l ./data/pg.log start"
-    stop_command: "pg_ctl -D ./data/pgdata stop"
+    start_command: "if command -v brew >/dev/null 2>&1 && brew list --versions postgresql@16 >/dev/null 2>&1; then brew services start postgresql@16; elif [ -n \"${PGDATA:-}\" ]; then pg_ctl -D \"$PGDATA\" start; else echo 'PostgreSQL: define PGDATA o instala postgresql@16 con Homebrew'; exit 1; fi"
+    stop_command: "if command -v brew >/dev/null 2>&1 && brew list --versions postgresql@16 >/dev/null 2>&1; then brew services stop postgresql@16; elif [ -n \"${PGDATA:-}\" ]; then pg_ctl -D \"$PGDATA\" stop; fi"
     docker_service: "postgres"
     depends_on: []
 
@@ -140,9 +140,9 @@ services:
     name: "Panel de control"
     description: "Comprueba salud real (HTTP) de cada servicio, muestra CPU/RAM y profundidad de colas."
     host: 127.0.0.1
-    port: 8090
+    port: 8765
     health_endpoint: "/"
-    start_command: "python3 dashboard/dashboard_service.py"
+    start_command: "LOCAL_AI_DASHBOARD_PORT=8765 python3 dashboard/dashboard_service.py"
     stop_command: "pkill -f 'dashboard_service.py'"
     docker_service: "dashboard"
     depends_on: [backend_api]

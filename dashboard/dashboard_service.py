@@ -175,6 +175,7 @@ def project_settings_save(project_id):
 
 
 from common.project_export import export_project, import_project  # noqa: E402
+from common.systematic_review_export import export_systematic_review_xlsx  # noqa: E402
 
 
 @app.route("/api/projects/<project_id>/export")
@@ -186,6 +187,42 @@ def project_export_route(project_id):
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     return send_file(zip_path, as_attachment=True, download_name=zip_path.name)
+
+
+
+@app.route("/api/systematic-review/<review_id>/export.xlsx")
+def systematic_review_export_xlsx(review_id):
+    project_id = current_project_id()
+
+    try:
+        xlsx_path = export_systematic_review_xlsx(
+            review_id=review_id,
+            project_id=project_id,
+        )
+    except ValueError as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 404
+    except Exception as exc:
+        app.logger.exception(
+            "Error exporting systematic review %s",
+            review_id,
+        )
+        return jsonify({
+            "ok": False,
+            "error": f"Error generando Excel: {exc}",
+        }), 500
+
+    return send_file(
+        xlsx_path,
+        as_attachment=True,
+        download_name=f"systematic-review-{review_id}.xlsx",
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+    )
 
 
 @app.route("/api/projects/import", methods=["POST"])
@@ -1258,8 +1295,12 @@ def systematic_review():
                     SELECT *
                     FROM systematic_reviews
                     WHERE id = %s
+                      AND project_id = %s
                     """,
-                    (review_id,),
+                    (
+                        review_id,
+                        current_project_id(),
+                    ),
                 )
             else:
                 cur.execute(
@@ -1312,31 +1353,36 @@ def systematic_review():
             cur.execute(
                 """
                 SELECT
-                    id,
-                    pmid,
-                    doi,
-                    title,
-                    journal,
-                    year,
-                    ai_decision,
-                    ai_reason,
-                    ai_confidence,
-                    human_decision,
-                    exclusion_reason,
-                    exclusion_reason_code,
-                    screening_status,
-                    screening_stage,
-                    title_abstract_status,
-                    full_text_status,
-                    full_text_available,
-                    full_text_retrieval_status,
-                    final_decision,
-                    is_duplicate,
-                    duplicate_of_article_id,
-                    duplicate_reason
-                FROM review_articles
-                WHERE review_id = %s
-                ORDER BY created_at ASC
+                    ra.id,
+                    ra.pmid,
+                    ra.doi,
+                    ra.title,
+                    ra.journal,
+                    ra.year,
+                    ra.ai_decision,
+                    ra.ai_reason,
+                    ra.ai_confidence,
+                    ra.human_decision,
+                    ra.exclusion_reason,
+                    ra.exclusion_reason_code,
+                    ra.screening_status,
+                    ra.screening_stage,
+                    ra.title_abstract_status,
+                    ra.full_text_status,
+                    ra.full_text_available,
+                    ra.full_text_retrieval_status,
+                    ra.full_text_document_id,
+                    ra.final_decision,
+                    ra.is_duplicate,
+                    ra.duplicate_of_article_id,
+                    ra.duplicate_reason,
+                    d.filename AS full_text_filename,
+                    d.n_chunks AS full_text_n_chunks
+                FROM review_articles ra
+                LEFT JOIN documents d
+                    ON d.doc_id = ra.full_text_document_id
+                WHERE ra.review_id = %s
+                ORDER BY ra.created_at ASC
                 """,
                 (review["id"],),
             )
@@ -1913,6 +1959,239 @@ def systematic_review_full_text_retrieval():
         return jsonify({
             "ok": False,
             "error": str(exc),
+        }), 500
+
+
+
+@app.route(
+    "/api/systematic-review/full-text-upload",
+    methods=["POST"],
+)
+def systematic_review_full_text_upload():
+    """
+    Sube e indexa el texto completo de un artículo de una revisión.
+
+    Flujo:
+    - valida revisión y artículo,
+    - obtiene el project_id real de la revisión,
+    - extrae el texto del fichero,
+    - lo indexa en documents/rag_chunks,
+    - enlaza review_articles.full_text_document_id,
+    - marca el informe como recuperado.
+
+    Cada nueva subida recibe un doc_id único para evitar que queden
+    chunks obsoletos de versiones anteriores del mismo PDF.
+    """
+    import uuid
+
+    file = request.files.get("file")
+    review_id = (request.form.get("review_id") or "").strip()
+    article_id = (request.form.get("article_id") or "").strip()
+
+    if not review_id:
+        return jsonify({
+            "ok": False,
+            "error": "review_id es obligatorio",
+        }), 400
+
+    if not article_id:
+        return jsonify({
+            "ok": False,
+            "error": "article_id es obligatorio",
+        }), 400
+
+    if not file or not file.filename:
+        return jsonify({
+            "ok": False,
+            "error": "Debe seleccionarse un archivo de texto completo",
+        }), 400
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                ra.id,
+                ra.is_duplicate,
+                ra.full_text_status,
+                ra.full_text_document_id,
+                sr.project_id
+            FROM review_articles ra
+            JOIN systematic_reviews sr
+              ON sr.id = ra.review_id
+            WHERE ra.id = %s
+              AND ra.review_id = %s
+            """,
+            (
+                article_id,
+                review_id,
+            ),
+        )
+
+        article = cur.fetchone()
+
+    if not article:
+        return jsonify({
+            "ok": False,
+            "error": "Artículo no encontrado en esta revisión",
+        }), 404
+
+    (
+        _article_id,
+        is_duplicate,
+        full_text_status,
+        previous_document_id,
+        project_id,
+    ) = article
+
+    if is_duplicate:
+        return jsonify({
+            "ok": False,
+            "error": (
+                "No se puede asociar texto completo "
+                "a un registro marcado como duplicado"
+            ),
+        }), 400
+
+    if full_text_status == "not_started":
+        return jsonify({
+            "ok": False,
+            "error": (
+                "El artículo todavía no ha alcanzado "
+                "la fase de texto completo"
+            ),
+        }), 409
+
+    content = file.read()
+
+    try:
+        extracted_text = extract_text(
+            file.filename,
+            content,
+        )
+    except ValueError as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 400
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": (
+                f"No se pudo extraer texto de "
+                f"'{file.filename}': {exc}"
+            ),
+        }), 400
+
+    if not extracted_text or not extracted_text.strip():
+        return jsonify({
+            "ok": False,
+            "error": (
+                f"'{file.filename}' no contiene texto extraíble. "
+                "Puede ser un PDF escaneado que requiera OCR."
+            ),
+        }), 400
+
+    document_id = (
+        f"review-fulltext-{article_id}-"
+        f"{uuid.uuid4().hex[:12]}"
+    )
+
+    try:
+        ensure_default_collection(
+            project_id=project_id,
+        )
+
+        n_chunks = _index_and_register(
+            document_id,
+            extracted_text,
+            "default",
+            filename=file.filename,
+            content_type=file.content_type,
+            doc_version="v1",
+            project_id=project_id,
+        )
+
+        if n_chunks <= 0:
+            try:
+                delete_document(document_id)
+            except Exception:
+                pass
+
+            return jsonify({
+                "ok": False,
+                "error": (
+                    "El documento se procesó pero no generó "
+                    "ningún fragmento indexable"
+                ),
+            }), 400
+
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE review_articles
+                SET
+                    full_text_document_id = %s,
+                    full_text_retrieval_status = 'retrieved',
+                    full_text_available = TRUE,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND review_id = %s
+                """,
+                (
+                    document_id,
+                    article_id,
+                    review_id,
+                ),
+            )
+
+        if (
+            previous_document_id
+            and previous_document_id != document_id
+        ):
+            try:
+                with get_conn() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM review_articles
+                        WHERE full_text_document_id = %s
+                        """,
+                        (previous_document_id,),
+                    )
+                    remaining_references = cur.fetchone()[0]
+
+                if remaining_references == 0:
+                    delete_document(previous_document_id)
+            except Exception:
+                app.logger.warning(
+                    "No se pudo comprobar/eliminar el documento anterior %s "
+                    "del artículo %s",
+                    previous_document_id,
+                    article_id,
+                )
+
+        return jsonify({
+            "ok": True,
+            "article_id": article_id,
+            "document_id": document_id,
+            "filename": file.filename,
+            "n_chunks": n_chunks,
+            "full_text_retrieval_status": "retrieved",
+            "full_text_available": True,
+        }), 201
+
+    except Exception as exc:
+        try:
+            delete_document(document_id)
+        except Exception:
+            pass
+
+        return jsonify({
+            "ok": False,
+            "error": (
+                "No se pudo indexar y asociar "
+                f"el texto completo: {exc}"
+            ),
         }), 500
 
 

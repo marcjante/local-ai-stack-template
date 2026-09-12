@@ -742,12 +742,36 @@
     {% else %}
 
         <section class="card">
-            <div class="review-title">
-                {{ review.title }}
-            </div>
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-start;
+                gap:16px;
+                flex-wrap:wrap;
+            ">
+                <div>
+                    <div class="review-title">
+                        {{ review.title }}
+                    </div>
 
-            <div class="review-question">
-                {{ review.research_question or "Pregunta de investigación no especificada" }}
+                    <div class="review-question">
+                        {{ review.research_question or "Pregunta de investigación no especificada" }}
+                    </div>
+                </div>
+
+                <a
+                    href="/api/systematic-review/{{ review.id }}/export.xlsx"
+                    class="btn-primary"
+                    style="
+                        text-decoration:none;
+                        display:inline-flex;
+                        align-items:center;
+                        gap:8px;
+                        white-space:nowrap;
+                    "
+                >
+                    📊 Exportar Excel
+                </a>
             </div>
         </section>
 
@@ -1335,6 +1359,48 @@
                                                         </option>
                                                     </select>
 
+                                                    <div
+                                                        style="
+                                                            margin-bottom:10px;
+                                                            padding:8px;
+                                                            border:1px solid rgba(148,163,184,.25);
+                                                            border-radius:8px;
+                                                        "
+                                                    >
+                                                        <div
+                                                            class="screening-stage-title"
+                                                            style="margin-bottom:6px;"
+                                                        >
+                                                            Archivo de texto completo
+                                                        </div>
+
+                                                        <input
+                                                            type="file"
+                                                            id="full-text-file-{{ article.id }}"
+                                                            accept=".pdf,.docx,.txt,.md"
+                                                            style="
+                                                                display:block;
+                                                                width:100%;
+                                                                margin-bottom:6px;
+                                                            "
+                                                        >
+
+                                                        <button
+                                                            type="button"
+                                                            class="btn-secondary"
+                                                            id="full-text-upload-button-{{ article.id }}"
+                                                            onclick="uploadFullText('{{ article.id }}')"
+                                                        >
+                                                            Subir texto completo
+                                                        </button>
+
+                                                        <div
+                                                            id="full-text-upload-status-{{ article.id }}"
+                                                            class="article-meta"
+                                                            style="margin-top:5px;"
+                                                        ></div>
+                                                    </div>
+
                                                     <div class="screening-stage-title">
                                                         Texto completo
                                                     </div>
@@ -1761,6 +1827,137 @@ async function runAIScreening() {
 }
 
 
+
+async function uploadFullText(articleId) {
+    const input = document.getElementById(
+        `full-text-file-${articleId}`
+    );
+
+    const button = document.getElementById(
+        `full-text-upload-button-${articleId}`
+    );
+
+    const localStatus = document.getElementById(
+        `full-text-upload-status-${articleId}`
+    );
+
+    if (!input || !input.files || input.files.length === 0) {
+        setStatus("❌ Selecciona primero un archivo.");
+        if (localStatus) {
+            localStatus.textContent = "Selecciona un archivo.";
+        }
+        return;
+    }
+
+    const file = input.files[0];
+
+    const allowedExtensions = [
+        ".pdf",
+        ".docx",
+        ".txt",
+        ".md"
+    ];
+
+    const filename = file.name.toLowerCase();
+
+    if (!allowedExtensions.some(ext => filename.endsWith(ext))) {
+        setStatus(
+            "❌ Formato no admitido. Usa PDF, DOCX, TXT o MD."
+        );
+
+        if (localStatus) {
+            localStatus.textContent =
+                "Formato no admitido.";
+        }
+
+        return;
+    }
+
+    const formData = new FormData();
+
+    formData.append(
+        "review_id",
+        REVIEW_ID
+    );
+
+    formData.append(
+        "article_id",
+        articleId
+    );
+
+    formData.append(
+        "file",
+        file
+    );
+
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Procesando...";
+    }
+
+    if (localStatus) {
+        localStatus.textContent =
+            "Extrayendo texto e indexando documento...";
+    }
+
+    setStatus(
+        `Procesando texto completo: ${file.name}...`
+    );
+
+    try {
+        const response = await fetch(
+            "/api/systematic-review/full-text-upload",
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(
+                data.error ||
+                "Error subiendo el texto completo"
+            );
+        }
+
+        if (localStatus) {
+            localStatus.textContent =
+                `✅ ${data.filename} · ${data.n_chunks} fragmentos indexados`;
+        }
+
+        setStatus(
+            `✅ Texto completo indexado: ` +
+            `${data.n_chunks} fragmentos.`
+        );
+
+        setTimeout(
+            () => window.location.reload(),
+            700
+        );
+
+    } catch (error) {
+        console.error(error);
+
+        setStatus(
+            `❌ ${error.message}`
+        );
+
+        if (localStatus) {
+            localStatus.textContent =
+                `❌ ${error.message}`;
+        }
+
+        if (button) {
+            button.disabled = false;
+            button.textContent =
+                "Subir texto completo";
+        }
+    }
+}
+
+
 async function setFullTextRetrieval(
     articleId,
     status
@@ -1819,6 +2016,69 @@ async function setFullTextRetrieval(
 }
 
 
+
+function askExclusionReason(finalDecision = false) {
+    const options = [
+        ["WRONG_POPULATION", "Población no elegible"],
+        ["WRONG_INTERVENTION", "Intervención o exposición no elegible"],
+        ["WRONG_COMPARATOR", "Comparador no elegible"],
+        ["WRONG_OUTCOME", "Outcome / resultado no relevante"],
+        ["WRONG_STUDY_DESIGN", "Diseño de estudio no elegible"],
+        ["DUPLICATE_PUBLICATION", "Publicación duplicada"],
+        ["FULL_TEXT_UNAVAILABLE", "Texto completo no disponible"],
+        ["WRONG_LANGUAGE", "Idioma no elegible"],
+        ["OUT_OF_DATE_RANGE", "Fuera del periodo definido"],
+        ["NOT_RELEVANT", "No relevante para la revisión"],
+        ["OTHER", "Otro motivo"]
+    ];
+
+    const menu = options
+        .map(
+            ([code, label], index) =>
+                `${index + 1}. ${label}\n   ${code}`
+        )
+        .join("\n\n");
+
+    const title = finalDecision
+        ? "Selecciona el motivo FINAL de exclusión:"
+        : "Selecciona el motivo de exclusión:";
+
+    const answer = prompt(
+        `${title}\n\n${menu}\n\nIntroduce un número del 1 al ${options.length}:`
+    );
+
+    if (answer === null) {
+        return null;
+    }
+
+    const index = Number.parseInt(answer.trim(), 10) - 1;
+
+    if (
+        Number.isNaN(index) ||
+        index < 0 ||
+        index >= options.length
+    ) {
+        alert("Motivo de exclusión no válido.");
+        return null;
+    }
+
+    const [code, label] = options[index];
+
+    const notes = prompt(
+        `Motivo seleccionado:\n${label}\n\n` +
+        "Añade una explicación opcional:"
+    );
+
+    return {
+        code: code,
+        reason:
+            notes && notes.trim()
+                ? notes.trim()
+                : label
+    };
+}
+
+
 async function setHumanDecision(
     articleId,
     stage,
@@ -1838,15 +2098,17 @@ async function setHumanDecision(
     }
 
     let exclusionReason = null;
+    let exclusionReasonCode = null;
 
     if (decision === "exclude") {
-        exclusionReason = prompt("Indica el motivo de exclusión:");
+        const exclusion = askExclusionReason(false);
 
-        if (exclusionReason === null || exclusionReason.trim() === "") {
+        if (!exclusion) {
             return;
         }
 
-        exclusionReason = exclusionReason.trim();
+        exclusionReason = exclusion.reason;
+        exclusionReasonCode = exclusion.code;
     }
 
     setStatus(`Guardando decisión de ${reviewerId}...`);
@@ -1863,7 +2125,8 @@ async function setHumanDecision(
                     reviewer_id: reviewerId,
                     stage: stage,
                     decision: decision,
-                    exclusion_reason: exclusionReason
+                    exclusion_reason: exclusionReason,
+                    exclusion_reason_code: exclusionReasonCode
                 })
             }
         );
@@ -1871,28 +2134,42 @@ async function setHumanDecision(
         const data = await response.json();
 
         if (!response.ok || !data.ok) {
-            throw new Error(data.error || "Error guardando la decisión");
+            throw new Error(
+                data.error || "Error guardando la decisión"
+            );
         }
 
         const result = data.result || {};
 
         if (result.conflict) {
-            setStatus("⚠️ Decisión guardada. Existe un conflicto entre revisores.");
+            setStatus(
+                "⚠️ Decisión guardada. Existe un conflicto entre revisores."
+            );
         } else if (result.consensus) {
-            setStatus("✅ Decisión guardada. Hay consenso entre revisores.");
+            setStatus(
+                "✅ Decisión guardada. Hay consenso entre revisores."
+            );
         } else {
-            setStatus("✅ Decisión guardada. Pendiente del segundo revisor.");
+            setStatus(
+                "✅ Decisión guardada. Pendiente del segundo revisor."
+            );
         }
 
-        localStorage.setItem("systematicReviewReviewer", reviewerId);
-        setTimeout(() => window.location.reload(), 350);
+        localStorage.setItem(
+            "systematicReviewReviewer",
+            reviewerId
+        );
+
+        setTimeout(
+            () => window.location.reload(),
+            350
+        );
 
     } catch (error) {
         console.error(error);
         setStatus(`❌ ${error.message}`);
     }
 }
-
 
 async function resolveConflict(
     articleId,
@@ -1908,18 +2185,22 @@ async function resolveConflict(
     }
 
     let exclusionReason = null;
+    let exclusionReasonCode = null;
 
     if (resolution === "exclude") {
-        exclusionReason = prompt("Indica el motivo final de exclusión:");
+        const exclusion = askExclusionReason(true);
 
-        if (exclusionReason === null || exclusionReason.trim() === "") {
+        if (!exclusion) {
             return;
         }
 
-        exclusionReason = exclusionReason.trim();
+        exclusionReason = exclusion.reason;
+        exclusionReasonCode = exclusion.code;
     }
 
-    const resolutionNotes = prompt("Notas de adjudicación (opcional):");
+    const resolutionNotes = prompt(
+        "Notas de adjudicación (opcional):"
+    );
 
     setStatus("Resolviendo conflicto...");
 
@@ -1936,8 +2217,11 @@ async function resolveConflict(
                     resolution: resolution,
                     resolved_by: resolvedBy,
                     resolution_notes:
-                        resolutionNotes === null ? null : resolutionNotes.trim(),
-                    exclusion_reason: exclusionReason
+                        resolutionNotes === null
+                            ? null
+                            : resolutionNotes.trim(),
+                    exclusion_reason: exclusionReason,
+                    exclusion_reason_code: exclusionReasonCode
                 })
             }
         );
@@ -1945,18 +2229,23 @@ async function resolveConflict(
         const data = await response.json();
 
         if (!response.ok || !data.ok) {
-            throw new Error(data.error || "Error resolviendo el conflicto");
+            throw new Error(
+                data.error || "Error resolviendo el conflicto"
+            );
         }
 
         setStatus("✅ Conflicto resuelto correctamente.");
-        setTimeout(() => window.location.reload(), 350);
+
+        setTimeout(
+            () => window.location.reload(),
+            350
+        );
 
     } catch (error) {
         console.error(error);
         setStatus(`❌ ${error.message}`);
     }
 }
-
 
 document.addEventListener("DOMContentLoaded", () => {
     const reviewerSelect = document.getElementById("screening-reviewer");
