@@ -21,6 +21,7 @@ def split_into_chunks(
     overlap: int = 20,
     page_number=None,
     section=None,
+    position_offset: int = 0,
 ) -> list:
     words = text.split()
     if not words:
@@ -28,7 +29,7 @@ def split_into_chunks(
 
     chunks = []
     start = 0
-    position = 0
+    position = position_offset
     search_from = 0
 
     while start < len(words):

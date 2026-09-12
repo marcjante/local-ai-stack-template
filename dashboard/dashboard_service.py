@@ -55,7 +55,10 @@ from db.db import (  # noqa: E402
     ensure_default_collection, create_collection, list_collections,
     register_document, list_documents, get_document, delete_document, get_document_chunks,
 )
-from rag.file_parsers import extract_text  # noqa: E402
+from rag.file_parsers import (
+    extract_text,
+    extract_structured_text,
+)  # noqa: E402
 from rag.chunking import split_into_chunks  # noqa: E402
 from rag.embeddings import embed_text  # noqa: E402
 from rag.vector_store import add_chunks as vs_add_chunks  # noqa: E402
@@ -551,16 +554,71 @@ def playground_compare():
 EMBEDDING_MODEL_NAME = "hashing_trick_256"
 
 
-def _index_and_register(doc_id, text, collection_id, filename=None, content_type=None, doc_version="v1", project_id="default"):
+def _index_and_register(
+    doc_id,
+    text,
+    collection_id,
+    filename=None,
+    content_type=None,
+    doc_version="v1",
+    project_id="default",
+    structured_blocks=None,
+):
     settings = get_project_settings(project_id)
     chunk_size = settings["chunk_size"] if settings else 120
     chunk_overlap = settings["chunk_overlap"] if settings else 20
-    chunks = split_into_chunks(doc_id, text, chunk_size=chunk_size, overlap=chunk_overlap)
+
+    if structured_blocks:
+        chunks = []
+        position_offset = 0
+
+        for block in structured_blocks:
+            block_text = (block.get("text") or "").strip()
+
+            if not block_text:
+                continue
+
+            block_chunks = split_into_chunks(
+                doc_id,
+                block_text,
+                chunk_size=chunk_size,
+                overlap=chunk_overlap,
+                page_number=block.get("page_number"),
+                section=block.get("section"),
+                position_offset=position_offset,
+            )
+
+            chunks.extend(block_chunks)
+            position_offset += len(block_chunks)
+    else:
+        chunks = split_into_chunks(
+            doc_id,
+            text,
+            chunk_size=chunk_size,
+            overlap=chunk_overlap,
+        )
+
     embeddings = [embed_text(c["text"]) for c in chunks]
+
     if chunks:
-        vs_add_chunks(chunks, embeddings, doc_version=doc_version)
-    register_document(doc_id, collection_id, filename, content_type, doc_version,
-                       EMBEDDING_MODEL_NAME, text, len(chunks), project_id=project_id)
+        vs_add_chunks(
+            chunks,
+            embeddings,
+            doc_version=doc_version,
+        )
+
+    register_document(
+        doc_id,
+        collection_id,
+        filename,
+        content_type,
+        doc_version,
+        EMBEDDING_MODEL_NAME,
+        text,
+        len(chunks),
+        project_id=project_id,
+    )
+
     return len(chunks)
 
 
@@ -623,7 +681,15 @@ def knowledge_upload():
     doc_id = request.form.get("doc_id") or file.filename
     content = file.read()
     try:
-        text = extract_text(file.filename, content)
+        structured_blocks = extract_structured_text(
+            file.filename,
+            content,
+        )
+        text = "\n".join(
+            block["text"]
+            for block in structured_blocks
+            if block.get("text")
+        )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -632,9 +698,16 @@ def knowledge_upload():
     if not text.strip():
         return jsonify({"error": f"'{file.filename}' se procesó pero no se extrajo ningún texto (¿PDF escaneado sin OCR?)"}), 400
 
-    n_chunks = _index_and_register(doc_id, text, collection_id, filename=file.filename,
-                                    content_type=file.content_type, doc_version=doc_version,
-                                    project_id=current_project_id())
+    n_chunks = _index_and_register(
+        doc_id,
+        text,
+        collection_id,
+        filename=file.filename,
+        content_type=file.content_type,
+        doc_version=doc_version,
+        project_id=current_project_id(),
+        structured_blocks=structured_blocks,
+    )
     return jsonify({"doc_id": doc_id, "filename": file.filename, "n_chunks": n_chunks}), 201
 
 
@@ -2192,9 +2265,14 @@ def systematic_review_full_text_upload():
     content = file.read()
 
     try:
-        extracted_text = extract_text(
+        structured_blocks = extract_structured_text(
             file.filename,
             content,
+        )
+        extracted_text = "\n".join(
+            block["text"]
+            for block in structured_blocks
+            if block.get("text")
         )
     except ValueError as exc:
         return jsonify({
@@ -2237,6 +2315,7 @@ def systematic_review_full_text_upload():
             content_type=file.content_type,
             doc_version="v1",
             project_id=project_id,
+            structured_blocks=structured_blocks,
         )
 
         if n_chunks <= 0:

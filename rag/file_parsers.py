@@ -94,3 +94,56 @@ def extract_text(filename: str, content: bytes) -> str:
     if not extractor:
         raise ValueError(f"Formato no soportado: '{ext}'. Soportados: {', '.join(EXTRACTORS)}")
     return extractor(content)
+
+
+def extract_structured_text(filename: str, content: bytes) -> list:
+    """
+    Extrae texto conservando metadatos de procedencia cuando el formato
+    permite conocerlos.
+
+    PDF:
+        un bloque por página, con page_number real (1-based).
+
+    Resto de formatos:
+        un único bloque sin número de página.
+
+    extract_text() se mantiene sin cambios para compatibilidad con el
+    resto del proyecto.
+    """
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+    if ext not in EXTRACTORS:
+        raise ValueError(
+            f"Formato no soportado: '{ext}'. "
+            f"Soportados: {', '.join(EXTRACTORS)}"
+        )
+
+    if ext == ".pdf":
+        reader = PdfReader(io.BytesIO(content))
+        blocks = []
+
+        for page_number, page in enumerate(reader.pages, start=1):
+            page_text = page.extract_text() or ""
+
+            if not page_text.strip():
+                continue
+
+            blocks.append({
+                "text": page_text,
+                "page_number": page_number,
+                "section": None,
+            })
+
+        return blocks
+
+    plain_text = EXTRACTORS[ext](content)
+
+    if not plain_text.strip():
+        return []
+
+    return [{
+        "text": plain_text,
+        "page_number": None,
+        "section": None,
+    }]
+
