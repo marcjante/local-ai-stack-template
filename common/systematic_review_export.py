@@ -335,6 +335,47 @@ def export_systematic_review_xlsx(
             (review_id,),
         )
 
+
+        audit_rows = _fetch_rows(
+            cur,
+            """
+            SELECT
+                ral.id,
+                ral.project_id,
+                ral.review_id,
+                ral.article_id,
+                a.title AS article_title,
+                ral.extraction_id,
+                f.field_key,
+                f.label AS field_label,
+                ral.action,
+                ral.actor_type,
+                ral.actor_id,
+                ral.stage,
+                ral.before_state,
+                ral.after_state,
+                ral.model,
+                ral.provider,
+                ral.prompt_version,
+                ral.details,
+                ral.created_at
+            FROM review_audit_log ral
+            LEFT JOIN review_articles a
+                ON a.id = ral.article_id
+            LEFT JOIN review_extractions e
+                ON e.id = ral.extraction_id
+            LEFT JOIN review_extraction_fields f
+                ON f.id = e.field_id
+            WHERE ral.review_id = %s
+              AND ral.project_id = %s
+            ORDER BY ral.created_at ASC, ral.id ASC
+            """,
+            (
+                review_id,
+                project_id,
+            ),
+        )
+
     prisma = calculate_prisma(
         searches,
         articles,
@@ -473,6 +514,7 @@ def export_systematic_review_xlsx(
         ("Estrategias", strategies),
         ("Extracciones", extractions),
         ("Campos_extraccion", extraction_fields),
+        ("Auditoria", audit_rows),
     ]
 
     for sheet_name, rows in table_specs:

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from openpyxl import load_workbook
 
 from common.systematic_review_export import export_systematic_review_xlsx
-from db.db import get_conn
+from db.db import get_conn, log_review_audit
 
 
 def _create_review(project_id):
@@ -100,6 +100,27 @@ def _create_review(project_id):
             ),
         )
 
+    log_review_audit(
+        project_id=project_id,
+        review_id=review_id,
+        article_id=article_id,
+        action="test_export_audit_event",
+        actor_type="ai",
+        actor_id="test-model",
+        stage="data_extraction",
+        after_state={
+            "ai_value": 120,
+            "ai_confidence": 0.95,
+        },
+        model="test-model",
+        provider="test-provider",
+        prompt_version="test-prompt-v1",
+        details={
+            "field_key": "sample_size",
+            "quote_verified": True,
+        },
+    )
+
     return review_id
 
 
@@ -136,6 +157,7 @@ def test_systematic_review_excel_export(project_id):
             "Estrategias",
             "Extracciones",
             "Campos_extraccion",
+            "Auditoria",
         ]
 
         resumen = workbook["Resumen"]
@@ -161,6 +183,68 @@ def test_systematic_review_excel_export(project_id):
                 column=title_col,
             ).value
             == "Export test article"
+        )
+
+        auditoria = workbook["Auditoria"]
+
+        audit_headers = [
+            cell.value
+            for cell in auditoria[1]
+        ]
+
+        assert "action" in audit_headers
+        assert "actor_type" in audit_headers
+        assert "model" in audit_headers
+        assert "provider" in audit_headers
+        assert "prompt_version" in audit_headers
+        assert "after_state" in audit_headers
+        assert "details" in audit_headers
+        assert "created_at" in audit_headers
+
+        action_col = audit_headers.index("action") + 1
+        actor_type_col = audit_headers.index("actor_type") + 1
+        model_col = audit_headers.index("model") + 1
+        provider_col = audit_headers.index("provider") + 1
+        prompt_col = audit_headers.index("prompt_version") + 1
+
+        assert (
+            auditoria.cell(
+                row=2,
+                column=action_col,
+            ).value
+            == "test_export_audit_event"
+        )
+
+        assert (
+            auditoria.cell(
+                row=2,
+                column=actor_type_col,
+            ).value
+            == "ai"
+        )
+
+        assert (
+            auditoria.cell(
+                row=2,
+                column=model_col,
+            ).value
+            == "test-model"
+        )
+
+        assert (
+            auditoria.cell(
+                row=2,
+                column=provider_col,
+            ).value
+            == "test-provider"
+        )
+
+        assert (
+            auditoria.cell(
+                row=2,
+                column=prompt_col,
+            ).value
+            == "test-prompt-v1"
         )
 
         # Regression test:
