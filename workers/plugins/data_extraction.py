@@ -15,6 +15,8 @@ sys.path.append(
 )
 
 from db.db import get_conn, log_audit, set_status
+from rag.retrieval import retrieve
+from rag.rerank import rerank
 
 
 QUEUE_NAME = "data_extraction"
@@ -97,12 +99,13 @@ def _normalise_confidence(value):
     return max(0.0, min(1.0, value))
 
 
-def _validate_source_quote(source_quote, abstract):
+def _validate_source_quote(source_quote, source_text):
     """
-    Solo conserva una cita si aparece literalmente en el abstract.
+    Solo conserva una cita si aparece literalmente en la fuente
+    documental realmente enviada al modelo.
 
     Esto evita guardar como evidencia una cita inventada
-    o parafraseada por el modelo.
+    o parafraseada por el LLM.
     """
 
     if not source_quote:
@@ -113,10 +116,130 @@ def _validate_source_quote(source_quote, abstract):
     if not quote:
         return None
 
-    abstract = abstract or ""
+    source_text = source_text or ""
 
-    if quote in abstract:
+    if quote in source_text:
         return quote
+
+    return None
+
+
+def _build_field_query(article, field):
+    """
+    Construye una consulta de retrieval específica para un campo.
+
+    No intenta contestar el campo: únicamente genera términos
+    semánticos para encontrar los fragmentos más relevantes.
+    """
+
+    parts = [
+        field.get("field_key"),
+        field.get("label"),
+        field.get("description"),
+        article.get("title"),
+    ]
+
+    return " ".join(
+        str(part).strip()
+        for part in parts
+        if part and str(part).strip()
+    )
+
+
+def _prepare_source(article, field, top_k=12, top_n=5):
+    """
+    Selecciona la mejor fuente disponible para la extracción.
+
+    Prioridad:
+    1. Texto completo indexado, restringido al documento y proyecto.
+    2. Abstract como fallback.
+
+    Devuelve además metadatos suficientes para trazabilidad.
+    """
+
+    document_id = article.get("full_text_document_id")
+    project_id = article.get("project_id")
+
+    if document_id and project_id:
+        query = _build_field_query(article, field)
+
+        candidates = retrieve(
+            query,
+            top_k=top_k,
+            doc_id=document_id,
+            project_id=project_id,
+        )
+
+        if candidates:
+            ranked = rerank(
+                query,
+                candidates,
+                top_n=top_n,
+            )
+
+            if ranked:
+                evidence_parts = []
+                chunk_locations = []
+
+                for chunk in ranked:
+                    chunk_id = chunk.get("chunk_id")
+                    position = chunk.get("position")
+                    chunk_text = chunk.get("text") or ""
+
+                    evidence_parts.append(
+                        (
+                            f"[chunk_id={chunk_id} "
+                            f"position={position}]\n"
+                            f"{chunk_text}"
+                        )
+                    )
+
+                    chunk_locations.append(
+                        {
+                            "chunk_id": chunk_id,
+                            "position": position,
+                            "doc_version": chunk.get("doc_version"),
+                            "score": round(
+                                float(
+                                    chunk.get(
+                                        "combined_score",
+                                        chunk.get("score", 0.0),
+                                    )
+                                    or 0.0
+                                ),
+                                6,
+                            ),
+                        }
+                    )
+
+                evidence = "\n\n".join(evidence_parts)
+
+                return {
+                    "source_type": "full_text",
+                    "source_location": json.dumps(
+                        {
+                            "doc_id": document_id,
+                            "chunks": chunk_locations,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "source_text": evidence,
+                    "document_id": document_id,
+                    "chunks": ranked,
+                    "retrieval_query": query,
+                }
+
+    abstract = article.get("abstract") or ""
+
+    if abstract.strip():
+        return {
+            "source_type": "abstract",
+            "source_location": "abstract",
+            "source_text": abstract,
+            "document_id": None,
+            "chunks": [],
+            "retrieval_query": None,
+        }
 
     return None
 
@@ -136,7 +259,7 @@ def _load_extraction_context(review_id, article_ids=None):
 
             cur.execute(
                 """
-                SELECT id, title
+                SELECT id, title, project_id
                 FROM systematic_reviews
                 WHERE id = %s
                 """,
@@ -198,7 +321,8 @@ def _load_extraction_context(review_id, article_ids=None):
                     abstract,
                     final_decision,
                     screening_status,
-                    full_text_retrieval_status
+                    full_text_retrieval_status,
+                    full_text_document_id
                 FROM review_articles
                 WHERE review_id = %s
                   AND final_decision = 'include'
@@ -226,6 +350,8 @@ def _load_extraction_context(review_id, article_ids=None):
                     "final_decision": row[5],
                     "screening_status": row[6],
                     "full_text_retrieval_status": row[7],
+                    "full_text_document_id": row[8],
+                    "project_id": review[2],
                 }
                 for row in article_rows
             ]
@@ -234,6 +360,7 @@ def _load_extraction_context(review_id, article_ids=None):
         "review": {
             "id": review[0],
             "title": review[1],
+            "project_id": review[2],
         },
         "fields": fields,
         "articles": articles,
@@ -244,11 +371,41 @@ def _extract_field(article, field):
     """
     Solicita al LLM una propuesta para UN campo y UN artículo.
 
-    Actualmente la única fuente documental disponible es el abstract.
+    Usa primero evidencia recuperada del texto completo mediante RAG.
+    Si no existe documento indexado o no se recuperan chunks,
+    utiliza el abstract como fallback.
+
     El modelo tiene prohibido inferir datos ausentes.
     """
 
-    abstract = article.get("abstract") or ""
+    source = _prepare_source(
+        article,
+        field,
+    )
+
+    if source is None:
+        raise ValueError(
+            "El artículo no dispone de texto completo indexado "
+            "ni de abstract utilizable"
+        )
+
+    source_type = source["source_type"]
+    source_text = source["source_text"]
+
+    if source_type == "full_text":
+        source_description = (
+            "Fragmentos recuperados del texto completo del artículo."
+        )
+        quote_rule = (
+            "Si aportas source_quote, debe ser una cita LITERAL "
+            "contenida en uno de los fragmentos proporcionados."
+        )
+    else:
+        source_description = "Abstract del artículo."
+        quote_rule = (
+            "Si aportas source_quote, debe ser una cita LITERAL "
+            "del abstract proporcionado."
+        )
 
     prompt = f"""
 Eres un asistente de extracción de datos para revisiones sistemáticas.
@@ -256,24 +413,27 @@ Eres un asistente de extracción de datos para revisiones sistemáticas.
 Tu tarea es PROPONER una extracción estructurada.
 NO estás tomando una decisión científica definitiva.
 
-FUENTE DISPONIBLE:
-Únicamente el título y el abstract proporcionados abajo.
+FUENTE DOCUMENTAL:
+{source_description}
 
 REGLAS OBLIGATORIAS:
 1. No inventes información.
 2. No uses conocimiento externo.
-3. No supongas que tienes acceso al texto completo.
+3. Usa exclusivamente la evidencia proporcionada.
 4. Si el dato no aparece explícitamente, devuelve value=null.
-5. Si aportas source_quote, debe ser una cita LITERAL del abstract.
+5. {quote_rule}
 6. confidence debe estar entre 0 y 1.
 7. La propuesta será posteriormente revisada por una persona.
+8. No conviertas una inferencia o cálculo propio en un hecho explícito.
+9. Si existen datos contradictorios en los fragmentos, indícalo
+   en reason y reduce confidence.
 
 ARTÍCULO
 Título:
 {article.get("title") or ""}
 
-Abstract:
-{abstract}
+EVIDENCIA:
+{source_text}
 
 CAMPO A EXTRAER
 Clave: {field.get("field_key")}
@@ -286,7 +446,7 @@ Devuelve exclusivamente JSON válido con esta estructura:
 
 {{
   "value": null,
-  "reason": "explicación breve basada únicamente en el abstract",
+  "reason": "explicación breve basada únicamente en la evidencia",
   "confidence": 0.0,
   "source_quote": null
 }}
@@ -320,7 +480,7 @@ Devuelve exclusivamente JSON válido con esta estructura:
 
     verified_quote = _validate_source_quote(
         proposed_quote,
-        abstract,
+        source_text,
     )
 
     quote_verified = (
@@ -332,7 +492,7 @@ Devuelve exclusivamente JSON válido con esta estructura:
         reason = (
             f"{reason or ''} "
             "[La cita propuesta por la IA no pudo verificarse "
-            "literalmente en el abstract y no se ha guardado.]"
+            "literalmente en la evidencia recuperada y no se ha guardado.]"
         ).strip()
 
     return {
@@ -341,12 +501,27 @@ Devuelve exclusivamente JSON válido con esta estructura:
         "confidence": confidence,
         "source_quote": verified_quote,
         "quote_verified": quote_verified,
+        "source_type": source["source_type"],
+        "source_location": source["source_location"],
+        "document_id": source["document_id"],
+        "retrieval_query": source["retrieval_query"],
+        "retrieved_chunks": [
+            {
+                "chunk_id": chunk.get("chunk_id"),
+                "position": chunk.get("position"),
+                "doc_version": chunk.get("doc_version"),
+                "score": chunk.get(
+                    "combined_score",
+                    chunk.get("score"),
+                ),
+            }
+            for chunk in source["chunks"]
+        ],
         "model": gateway_data.get("_model_used"),
         "provider": gateway_data.get("_provider_used"),
         "skill_task": gateway_data.get("_skill_task"),
         "skills_used": gateway_data.get("_skills_used") or [],
     }
-
 
 def _save_extraction(
     review_id,
@@ -404,8 +579,8 @@ def _save_extraction(
                         ai_value = %s,
                         ai_reason = %s,
                         ai_confidence = %s,
-                        source_type = 'abstract',
-                        source_location = 'abstract',
+                        source_type = %s,
+                        source_location = %s,
                         source_quote = %s,
                         model = %s,
                         provider = %s,
@@ -417,6 +592,8 @@ def _save_extraction(
                         Json(proposal["value"]),
                         proposal["reason"],
                         proposal["confidence"],
+                        proposal["source_type"],
+                        proposal["source_location"],
                         proposal["source_quote"],
                         proposal["model"],
                         proposal["provider"],
@@ -453,8 +630,8 @@ def _save_extraction(
                 VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
-                    'abstract',
-                    'abstract',
+                    %s,
+                    %s,
                     %s,
                     'pending',
                     %s, %s, %s
@@ -468,6 +645,8 @@ def _save_extraction(
                     Json(proposal["value"]),
                     proposal["reason"],
                     proposal["confidence"],
+                    proposal["source_type"],
+                    proposal["source_location"],
                     proposal["source_quote"],
                     proposal["model"],
                     proposal["provider"],
@@ -528,14 +707,17 @@ def handle(task_id, payload):
 
         for article in articles:
 
-            if not article.get("abstract"):
+            if (
+                not article.get("full_text_document_id")
+                and not article.get("abstract")
+            ):
                 errors.append(
                     {
                         "article_id": article["id"],
                         "pmid": article.get("pmid"),
                         "error": (
-                            "El artículo no dispone de abstract. "
-                            "No se ha intentado extraer información."
+                            "El artículo no dispone de texto completo "
+                            "indexado ni de abstract."
                         ),
                     }
                 )
@@ -565,9 +747,12 @@ def handle(task_id, payload):
                         "field_label": field["label"],
                         "ai_value": proposal["value"],
                         "ai_confidence": proposal["confidence"],
-                        "source_type": "abstract",
-                        "source_location": "abstract",
+                        "source_type": proposal["source_type"],
+                        "source_location": proposal["source_location"],
                         "source_quote": proposal["source_quote"],
+                        "document_id": proposal["document_id"],
+                        "retrieval_query": proposal["retrieval_query"],
+                        "retrieved_chunks": proposal["retrieved_chunks"],
                         "quote_verified": proposal["quote_verified"],
                         "validation_status": "pending",
                         "saved": saved["saved"],
@@ -603,7 +788,7 @@ def handle(task_id, payload):
         result = {
             "review_id": review_id,
             "review_title": review["title"],
-            "source_scope": "title_abstract_only",
+            "source_scope": "full_text_rag_with_abstract_fallback",
             "articles_selected": len(articles),
             "fields_configured": len(fields),
             "possible_extractions": (
@@ -627,7 +812,7 @@ def handle(task_id, payload):
                 "fields_configured": len(fields),
                 "results_count": len(results),
                 "errors_count": len(errors),
-                "source_scope": "title_abstract_only",
+                "source_scope": "full_text_rag_with_abstract_fallback",
                 "human_review_required": True,
             },
         )
