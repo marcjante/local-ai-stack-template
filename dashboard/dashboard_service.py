@@ -1329,6 +1329,7 @@ def systematic_review():
                     title_abstract_status,
                     full_text_status,
                     full_text_available,
+                    full_text_retrieval_status,
                     final_decision,
                     is_duplicate,
                     duplicate_of_article_id,
@@ -1777,6 +1778,144 @@ def systematic_review_ai_screening():
             "ok": False,
             "error": str(exc),
         }), 500
+@app.route(
+    "/api/systematic-review/full-text-retrieval",
+    methods=["POST"],
+)
+def systematic_review_full_text_retrieval():
+    data = request.get_json(silent=True) or {}
+
+    review_id = data.get("review_id")
+    article_id = data.get("article_id")
+    status = (
+        data.get("status")
+        or ""
+    ).strip().lower()
+
+    allowed_statuses = {
+        "not_sought",
+        "sought",
+        "retrieved",
+        "not_retrieved",
+    }
+
+    if not review_id:
+        return jsonify({
+            "ok": False,
+            "error": "review_id es obligatorio",
+        }), 400
+
+    if not article_id:
+        return jsonify({
+            "ok": False,
+            "error": "article_id es obligatorio",
+        }), 400
+
+    if status not in allowed_statuses:
+        return jsonify({
+            "ok": False,
+            "error":
+                "status debe ser not_sought, sought, "
+                "retrieved o not_retrieved",
+        }), 400
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    is_duplicate,
+                    full_text_status
+                FROM review_articles
+                WHERE id = %s
+                  AND review_id = %s
+                """,
+                (article_id, review_id),
+            )
+
+            article = cur.fetchone()
+
+            if not article:
+                return jsonify({
+                    "ok": False,
+                    "error": "Artículo no encontrado",
+                }), 404
+
+            if article[1]:
+                return jsonify({
+                    "ok": False,
+                    "error":
+                        "Un artículo duplicado no requiere "
+                        "recuperación de texto completo",
+                }), 400
+
+            if article[2] == "not_started":
+                return jsonify({
+                    "ok": False,
+                    "error":
+                        "El artículo todavía no ha pasado "
+                        "a la fase de texto completo",
+                }), 409
+
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM review_screening_decisions
+                WHERE article_id = %s
+                  AND stage = 'full_text'
+                """,
+                (article_id,),
+            )
+
+            full_text_decisions = cur.fetchone()[0]
+
+            if (
+                full_text_decisions > 0
+                and status != "retrieved"
+            ):
+                return jsonify({
+                    "ok": False,
+                    "error":
+                        "No se puede cambiar el texto completo "
+                        "a no disponible porque ya existen "
+                        "decisiones de cribado",
+                }), 409
+
+            full_text_available = status == "retrieved"
+
+            cur.execute(
+                """
+                UPDATE review_articles
+                SET
+                    full_text_retrieval_status = %s,
+                    full_text_available = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                  AND review_id = %s
+                """,
+                (
+                    status,
+                    full_text_available,
+                    article_id,
+                    review_id,
+                ),
+            )
+
+        return jsonify({
+            "ok": True,
+            "article_id": article_id,
+            "status": status,
+            "full_text_available": full_text_available,
+        })
+
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+
+
 @app.route("/api/systematic-review/human-decision", methods=["POST"])
 def systematic_review_human_decision():
     from workers.plugins.human_screening import handle as human_screening_handle
@@ -1825,6 +1964,34 @@ def systematic_review_human_decision():
             "ok": False,
             "error": "decision debe ser include, exclude o uncertain"
         }), 400
+
+    if stage == "full_text":
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT full_text_retrieval_status
+                FROM review_articles
+                WHERE id = %s
+                  AND review_id = %s
+                """,
+                (article_id, review_id),
+            )
+
+            row = cur.fetchone()
+
+        if not row:
+            return jsonify({
+                "ok": False,
+                "error": "Artículo no encontrado"
+            }), 404
+
+        if row[0] != "retrieved":
+            return jsonify({
+                "ok": False,
+                "error":
+                    "El texto completo debe estar recuperado "
+                    "antes de realizar el cribado"
+            }), 409
 
     if decision == "exclude" and not (
         exclusion_reason or exclusion_reason_code

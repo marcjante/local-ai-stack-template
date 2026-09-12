@@ -407,6 +407,17 @@ def test_full_text_consensus_exclusion_requires_reason_and_sets_final_decision(
         assert article[0] == "include"
         assert article[1] == "pending"
 
+    # El texto completo debe marcarse como recuperado antes del cribado.
+    response = dashboard_client.post(
+        "/api/systematic-review/full-text-retrieval",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "status": "retrieved",
+        },
+    )
+    assert response.status_code == 200, response.get_data(as_text=True)
+
     # 2. Una exclusión en texto completo SIN motivo debe rechazarse.
     response = dashboard_client.post(
         "/api/systematic-review/human-decision",
@@ -511,6 +522,16 @@ def test_full_text_conflict_resolved_by_adjudicator(
             },
         )
         assert response.status_code == 200
+
+    response = dashboard_client.post(
+        "/api/systematic-review/full-text-retrieval",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "status": "retrieved",
+        },
+    )
+    assert response.status_code == 200, response.get_data(as_text=True)
 
     # 2. Revisor 1 incluye en texto completo.
     response = dashboard_client.post(
@@ -628,3 +649,170 @@ def test_full_text_conflict_resolved_by_adjudicator(
         assert article[4] == "No evalúa el outcome requerido."
         assert article[5] == "reviewed"
         assert article[6] == "full_text"
+
+
+
+def test_full_text_retrieval_status_and_available_are_synchronised(
+    dashboard_client,
+    project_id,
+):
+    review_id, article_id = _insert_review_and_article(project_id)
+
+    for reviewer_id in ("reviewer_1", "reviewer_2"):
+        response = dashboard_client.post(
+            "/api/systematic-review/human-decision",
+            json={
+                "review_id": review_id,
+                "article_id": article_id,
+                "reviewer_id": reviewer_id,
+                "stage": "title_abstract",
+                "decision": "include",
+            },
+        )
+        assert response.status_code == 200
+
+    response = dashboard_client.post(
+        "/api/systematic-review/full-text-retrieval",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "status": "sought",
+        },
+    )
+
+    assert response.status_code == 200
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                full_text_retrieval_status,
+                full_text_available
+            FROM review_articles
+            WHERE id = %s
+            """,
+            (article_id,),
+        )
+        assert cur.fetchone() == ("sought", False)
+
+    response = dashboard_client.post(
+        "/api/systematic-review/full-text-retrieval",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "status": "retrieved",
+        },
+    )
+
+    assert response.status_code == 200
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                full_text_retrieval_status,
+                full_text_available
+            FROM review_articles
+            WHERE id = %s
+            """,
+            (article_id,),
+        )
+        assert cur.fetchone() == ("retrieved", True)
+
+    response = dashboard_client.post(
+        "/api/systematic-review/full-text-retrieval",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "status": "not_retrieved",
+        },
+    )
+
+    assert response.status_code == 200
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                full_text_retrieval_status,
+                full_text_available
+            FROM review_articles
+            WHERE id = %s
+            """,
+            (article_id,),
+        )
+        assert cur.fetchone() == ("not_retrieved", False)
+
+
+def test_full_text_screening_requires_retrieved_report(
+    dashboard_client,
+    project_id,
+):
+    review_id, article_id = _insert_review_and_article(project_id)
+
+    for reviewer_id in ("reviewer_1", "reviewer_2"):
+        response = dashboard_client.post(
+            "/api/systematic-review/human-decision",
+            json={
+                "review_id": review_id,
+                "article_id": article_id,
+                "reviewer_id": reviewer_id,
+                "stage": "title_abstract",
+                "decision": "include",
+            },
+        )
+        assert response.status_code == 200
+
+    response = dashboard_client.post(
+        "/api/systematic-review/human-decision",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "reviewer_id": "reviewer_1",
+            "stage": "full_text",
+            "decision": "include",
+        },
+    )
+
+    assert response.status_code == 409
+
+    payload = response.get_json()
+
+    assert payload["ok"] is False
+    assert "debe estar recuperado" in payload["error"]
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*)
+            FROM review_screening_decisions
+            WHERE article_id = %s
+              AND stage = 'full_text'
+            """,
+            (article_id,),
+        )
+        assert cur.fetchone()[0] == 0
+
+    response = dashboard_client.post(
+        "/api/systematic-review/full-text-retrieval",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "status": "retrieved",
+        },
+    )
+
+    assert response.status_code == 200
+
+    response = dashboard_client.post(
+        "/api/systematic-review/human-decision",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "reviewer_id": "reviewer_1",
+            "stage": "full_text",
+            "decision": "include",
+        },
+    )
+
+    assert response.status_code == 200

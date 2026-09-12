@@ -876,13 +876,10 @@
             </div>
             {% endif %}
 
-            {% if prisma.reports_not_retrieved is none %}
             <div class="prisma-note">
-                Los textos completos no recuperados todavía no se calculan:
-                el esquema actual no distingue entre “no buscado” y
-                “buscado pero no recuperado”.
+                Textos completos no recuperados:
+                <strong>{{ prisma.reports_not_retrieved }}</strong>
             </div>
-            {% endif %}
         </section>
 
         <section class="card">
@@ -1220,6 +1217,20 @@
                                         <div class="screening-stage-title">
                                             Estado: {{ article.full_text_status or "not_started" }}
                                         </div>
+
+                                        <div class="article-meta" style="margin-bottom:7px;">
+                                            Recuperación:
+                                            {% if article.full_text_retrieval_status == "retrieved" %}
+                                                <span class="badge badge-include">Recuperado</span>
+                                            {% elif article.full_text_retrieval_status == "not_retrieved" %}
+                                                <span class="badge badge-exclude">No recuperado</span>
+                                            {% elif article.full_text_retrieval_status == "sought" %}
+                                                <span class="badge badge-uncertain">Buscando</span>
+                                            {% else %}
+                                                <span class="badge badge-pending">No buscado</span>
+                                            {% endif %}
+                                        </div>
+
                                         <div class="reviewer-decision-list">
                                             {% for decision in ft_decisions %}
                                                 <div class="reviewer-decision">
@@ -1287,12 +1298,70 @@
 
                                             {% if article.full_text_status != "not_started" %}
                                                 <div>
-                                                    <div class="screening-stage-title">Texto completo</div>
-                                                    <div class="screening-actions-row">
-                                                        <button class="btn-success" onclick="setHumanDecision('{{ article.id }}','full_text','include')">✓</button>
-                                                        <button class="btn-danger" onclick="setHumanDecision('{{ article.id }}','full_text','exclude')">✕</button>
-                                                        <button class="btn-warning" onclick="setHumanDecision('{{ article.id }}','full_text','uncertain')">?</button>
+                                                    <div class="screening-stage-title">
+                                                        Recuperación del texto
                                                     </div>
+
+                                                    <select
+                                                        onchange="setFullTextRetrieval('{{ article.id }}', this.value)"
+                                                        style="margin-bottom:8px;"
+                                                    >
+                                                        <option
+                                                            value="not_sought"
+                                                            {% if article.full_text_retrieval_status == "not_sought" %}selected{% endif %}
+                                                        >
+                                                            No buscado
+                                                        </option>
+
+                                                        <option
+                                                            value="sought"
+                                                            {% if article.full_text_retrieval_status == "sought" %}selected{% endif %}
+                                                        >
+                                                            Buscando
+                                                        </option>
+
+                                                        <option
+                                                            value="retrieved"
+                                                            {% if article.full_text_retrieval_status == "retrieved" %}selected{% endif %}
+                                                        >
+                                                            Recuperado
+                                                        </option>
+
+                                                        <option
+                                                            value="not_retrieved"
+                                                            {% if article.full_text_retrieval_status == "not_retrieved" %}selected{% endif %}
+                                                        >
+                                                            No recuperado
+                                                        </option>
+                                                    </select>
+
+                                                    <div class="screening-stage-title">
+                                                        Texto completo
+                                                    </div>
+
+                                                    {% if article.full_text_retrieval_status == "retrieved" %}
+                                                        <div class="screening-actions-row">
+                                                            <button
+                                                                class="btn-success"
+                                                                onclick="setHumanDecision('{{ article.id }}','full_text','include')"
+                                                            >✓</button>
+
+                                                            <button
+                                                                class="btn-danger"
+                                                                onclick="setHumanDecision('{{ article.id }}','full_text','exclude')"
+                                                            >✕</button>
+
+                                                            <button
+                                                                class="btn-warning"
+                                                                onclick="setHumanDecision('{{ article.id }}','full_text','uncertain')"
+                                                            >?</button>
+                                                        </div>
+                                                    {% else %}
+                                                        <div class="article-meta">
+                                                            Recupera primero el texto completo
+                                                            para poder evaluarlo.
+                                                        </div>
+                                                    {% endif %}
                                                 </div>
                                             {% endif %}
                                         </div>
@@ -1688,6 +1757,64 @@ async function runAIScreening() {
         );
 
         button.disabled = false;
+    }
+}
+
+
+async function setFullTextRetrieval(
+    articleId,
+    status
+) {
+    setStatus("Actualizando recuperación del texto completo...");
+
+    try {
+        const response = await fetch(
+            "/api/systematic-review/full-text-retrieval",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    review_id: REVIEW_ID,
+                    article_id: articleId,
+                    status: status
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(
+                data.error ||
+                "Error actualizando el texto completo"
+            );
+        }
+
+        if (status === "retrieved") {
+            setStatus("✅ Texto completo recuperado.");
+        } else if (status === "not_retrieved") {
+            setStatus("⚠️ Texto completo no recuperado.");
+        } else if (status === "sought") {
+            setStatus("🔎 Búsqueda del texto completo iniciada.");
+        } else {
+            setStatus("✅ Estado actualizado.");
+        }
+
+        setTimeout(
+            () => window.location.reload(),
+            350
+        );
+
+    } catch (error) {
+        console.error(error);
+        setStatus(`❌ ${error.message}`);
+
+        setTimeout(
+            () => window.location.reload(),
+            900
+        );
     }
 }
 
