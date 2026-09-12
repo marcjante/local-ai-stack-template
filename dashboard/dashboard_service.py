@@ -1770,6 +1770,12 @@ def systematic_review_human_decision():
             "error": "reviewer_id es obligatorio"
         }), 400
 
+    if reviewer_id == "adjudicator":
+        return jsonify({
+            "ok": False,
+            "error": "El adjudicador solo puede resolver conflictos"
+        }), 400
+
     if stage not in {"title_abstract", "full_text"}:
         return jsonify({
             "ok": False,
