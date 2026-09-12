@@ -157,6 +157,38 @@ def handle(task_id, payload):
                     ),
                 )
 
+                log_review_audit(
+                    project_id=project_id,
+                    review_id=review_id,
+                    article_id=article_id,
+                    extraction_id=db_extraction_id,
+                    action="human_extraction_validation",
+                    actor_type="human",
+                    actor_id=reviewer_id,
+                    stage="data_extraction",
+                    before_state={
+                        "validation_status": previous_status,
+                        "human_value": None,
+                    },
+                    after_state={
+                        "validation_status": validation_status,
+                        "human_value": final_human_value,
+                    },
+                    details={
+                        "field_id": field_id,
+                        "field_key": field_key,
+                        "field_label": field_label,
+                        "ai_value": ai_value,
+                        "reviewer_notes": reviewer_notes,
+                        "agreement_with_ai": (
+                            final_human_value == ai_value
+                            if validation_status != "rejected"
+                            else False
+                        ),
+                    },
+                    conn=conn,
+                )
+
         result = {
             "extraction_id": db_extraction_id,
             "review_id": review_id,
@@ -193,37 +225,6 @@ def handle(task_id, payload):
                 "previous_status": previous_status,
                 "validation_status": validation_status,
                 "reviewer_id": reviewer_id,
-            },
-        )
-
-        log_review_audit(
-            project_id=project_id,
-            review_id=review_id,
-            article_id=article_id,
-            extraction_id=db_extraction_id,
-            action="human_extraction_validation",
-            actor_type="human",
-            actor_id=reviewer_id,
-            stage="data_extraction",
-            before_state={
-                "validation_status": previous_status,
-                "human_value": None,
-            },
-            after_state={
-                "validation_status": validation_status,
-                "human_value": final_human_value,
-            },
-            details={
-                "field_id": field_id,
-                "field_key": field_key,
-                "field_label": field_label,
-                "ai_value": ai_value,
-                "reviewer_notes": reviewer_notes,
-                "agreement_with_ai": (
-                    final_human_value == ai_value
-                    if validation_status != "rejected"
-                    else False
-                ),
             },
         )
 

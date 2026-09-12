@@ -210,40 +210,41 @@ def handle(task_id, payload):
                 )
                 article_after = cur.fetchone()
 
-        log_review_audit(
-            project_id=project_id,
-            review_id=review_id,
-            article_id=article_id,
-            action="screening_conflict_resolved",
-            actor_type="human",
-            actor_id=resolved_by,
-            stage=stage,
-            before_state={
-                "title_abstract_status": before_title_abstract_status,
-                "full_text_status": before_full_text_status,
-                "human_decision": before_human_decision,
-                "final_decision": before_final_decision,
-                "screening_status": before_screening_status,
-                "screening_stage": before_screening_stage,
-                "conflict_status": conflict_status,
-            },
-            after_state={
-                "title_abstract_status": article_after[0],
-                "full_text_status": article_after[1],
-                "human_decision": article_after[2],
-                "final_decision": article_after[3],
-                "screening_status": article_after[4],
-                "screening_stage": article_after[5],
-                "conflict_status": "resolved",
-            },
-            details={
-                "resolution": resolution,
-                "resolution_notes": resolution_notes,
-                "exclusion_reason": exclusion_reason,
-                "exclusion_reason_code": exclusion_reason_code,
-                "conflict_id": conflict_id,
-            },
-        )
+                log_review_audit(
+                    project_id=project_id,
+                    review_id=review_id,
+                    article_id=article_id,
+                    action="screening_conflict_resolved",
+                    actor_type="human",
+                    actor_id=resolved_by,
+                    stage=stage,
+                    before_state={
+                        "title_abstract_status": before_title_abstract_status,
+                        "full_text_status": before_full_text_status,
+                        "human_decision": before_human_decision,
+                        "final_decision": before_final_decision,
+                        "screening_status": before_screening_status,
+                        "screening_stage": before_screening_stage,
+                        "conflict_status": conflict_status,
+                    },
+                    after_state={
+                        "title_abstract_status": article_after[0],
+                        "full_text_status": article_after[1],
+                        "human_decision": article_after[2],
+                        "final_decision": article_after[3],
+                        "screening_status": article_after[4],
+                        "screening_stage": article_after[5],
+                        "conflict_status": "resolved",
+                    },
+                    details={
+                        "resolution": resolution,
+                        "resolution_notes": resolution_notes,
+                        "exclusion_reason": exclusion_reason,
+                        "exclusion_reason_code": exclusion_reason_code,
+                        "conflict_id": conflict_id,
+                    },
+                    conn=conn,
+                )
 
         result = {
             "review_id": review_id,

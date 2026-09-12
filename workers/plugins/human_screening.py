@@ -393,39 +393,40 @@ def handle(task_id, payload):
                 )
                 audit_after = cur.fetchone()
 
-        log_review_audit(
-            project_id=project_id,
-            review_id=db_review_id,
-            article_id=db_article_id,
-            action="human_screening_decision",
-            actor_type="human",
-            actor_id=reviewer_id,
-            stage=stage,
-            before_state={
-                "title_abstract_status": before_title_abstract_status,
-                "full_text_status": before_full_text_status,
-                "human_decision": before_human_decision,
-                "final_decision": before_final_decision,
-                "screening_status": before_screening_status,
-                "screening_stage": before_screening_stage,
-            },
-            after_state={
-                "title_abstract_status": audit_after[0],
-                "full_text_status": audit_after[1],
-                "human_decision": audit_after[2],
-                "final_decision": audit_after[3],
-                "screening_status": audit_after[4],
-                "screening_stage": audit_after[5],
-            },
-            details={
-                "decision": decision,
-                "exclusion_reason": exclusion_reason,
-                "exclusion_reason_code": exclusion_reason_code,
-                "notes": notes,
-                "consensus": consensus,
-                "ai_decision": ai_decision,
-            },
-        )
+                log_review_audit(
+                    project_id=project_id,
+                    review_id=db_review_id,
+                    article_id=db_article_id,
+                    action="human_screening_decision",
+                    actor_type="human",
+                    actor_id=reviewer_id,
+                    stage=stage,
+                    before_state={
+                        "title_abstract_status": before_title_abstract_status,
+                        "full_text_status": before_full_text_status,
+                        "human_decision": before_human_decision,
+                        "final_decision": before_final_decision,
+                        "screening_status": before_screening_status,
+                        "screening_stage": before_screening_stage,
+                    },
+                    after_state={
+                        "title_abstract_status": audit_after[0],
+                        "full_text_status": audit_after[1],
+                        "human_decision": audit_after[2],
+                        "final_decision": audit_after[3],
+                        "screening_status": audit_after[4],
+                        "screening_stage": audit_after[5],
+                    },
+                    details={
+                        "decision": decision,
+                        "exclusion_reason": exclusion_reason,
+                        "exclusion_reason_code": exclusion_reason_code,
+                        "notes": notes,
+                        "consensus": consensus,
+                        "ai_decision": ai_decision,
+                    },
+                    conn=conn,
+                )
 
         agreement_with_ai = None
         if stage == "title_abstract" and ai_decision:
