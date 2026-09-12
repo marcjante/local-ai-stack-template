@@ -196,12 +196,14 @@ def _load_extraction_context(review_id, article_ids=None):
                     doi,
                     title,
                     abstract,
-                    human_decision,
-                    screening_status
+                    final_decision,
+                    screening_status,
+                    full_text_retrieval_status
                 FROM review_articles
                 WHERE review_id = %s
-                  AND human_decision = 'include'
+                  AND final_decision = 'include'
                   AND screening_status = 'reviewed'
+                  AND full_text_retrieval_status = 'retrieved'
             """
 
             if article_ids:
@@ -221,8 +223,9 @@ def _load_extraction_context(review_id, article_ids=None):
                     "doi": row[2],
                     "title": row[3],
                     "abstract": row[4],
-                    "human_decision": row[5],
+                    "final_decision": row[5],
                     "screening_status": row[6],
+                    "full_text_retrieval_status": row[7],
                 }
                 for row in article_rows
             ]
@@ -516,8 +519,8 @@ def handle(task_id, payload):
 
         if not articles:
             raise ValueError(
-                "No hay artículos incluidos por decisión humana "
-                "disponibles para extracción"
+                "No hay artículos con decisión final de inclusión "
+                "y texto completo recuperado disponibles para extracción"
             )
 
         results = []
