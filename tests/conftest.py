@@ -56,10 +56,14 @@ def backend_client(monkeypatch):
 
 
 @pytest.fixture
-def dashboard_client():
-    """Cliente de test del panel Flask."""
+def dashboard_client(project_id):
+    """Cliente de test del panel Flask con proyecto activo."""
     import dashboard.dashboard_service as dash
     dash.app.testing = True
     dash.app.secret_key = "test"
+
     with dash.app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess["project_id"] = project_id
+
         yield client

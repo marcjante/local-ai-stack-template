@@ -17,7 +17,17 @@ VALID_STAGES = {"title_abstract", "full_text"}
 
 
 def _resolve_article(cur, article_id=None, review_id=None, pmid=None):
-    if article_id:
+    if article_id and review_id:
+        cur.execute(
+            """
+            SELECT id, review_id, pmid, title, ai_decision
+            FROM review_articles
+            WHERE id = %s
+              AND review_id = %s
+            """,
+            (article_id, review_id),
+        )
+    elif article_id:
         cur.execute(
             """
             SELECT id, review_id, pmid, title, ai_decision

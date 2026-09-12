@@ -107,6 +107,75 @@ def current_project_id() -> str:
     return session.get("project_id", "default")
 
 
+def _review_in_current_project(review_id: str) -> bool:
+    """Comprueba que la revisión pertenece al proyecto activo."""
+    if not review_id:
+        return False
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM systematic_reviews
+            WHERE id = %s
+              AND project_id = %s
+            """,
+            (review_id, current_project_id()),
+        )
+        return cur.fetchone() is not None
+
+
+def _article_in_current_project(
+    article_id: str,
+    review_id: str,
+) -> bool:
+    """Comprueba artículo + revisión + proyecto activo."""
+    if not article_id or not review_id:
+        return False
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM review_articles ra
+            JOIN systematic_reviews sr
+              ON sr.id = ra.review_id
+            WHERE ra.id = %s
+              AND ra.review_id = %s
+              AND sr.project_id = %s
+            """,
+            (
+                article_id,
+                review_id,
+                current_project_id(),
+            ),
+        )
+        return cur.fetchone() is not None
+
+
+def _extraction_in_current_project(extraction_id: str) -> bool:
+    """Comprueba que una extracción pertenece al proyecto activo."""
+    if not extraction_id:
+        return False
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM review_extractions re
+            JOIN systematic_reviews sr
+              ON sr.id = re.review_id
+            WHERE re.id = %s
+              AND sr.project_id = %s
+            """,
+            (
+                extraction_id,
+                current_project_id(),
+            ),
+        )
+        return cur.fetchone() is not None
+
+
 @app.route("/projects")
 def projects_page():
     installed_models, _ = list_installed()
@@ -983,6 +1052,12 @@ def systematic_reviews_save_search_strategy():
             "error": "review_id es obligatorio"
         }), 400
 
+    if not _review_in_current_project(review_id):
+        return jsonify({
+            "ok": False,
+            "error": "Revisión no encontrada en el proyecto activo"
+        }), 404
+
     if not query:
         return jsonify({
             "ok": False,
@@ -1751,6 +1826,12 @@ def systematic_review_ai_screening():
             "error": "review_id es obligatorio"
         }), 400
 
+    if not _review_in_current_project(review_id):
+        return jsonify({
+            "ok": False,
+            "error": "Revisión no encontrada en el proyecto activo"
+        }), 404
+
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
@@ -1864,6 +1945,12 @@ def systematic_review_full_text_retrieval():
                 "status debe ser not_sought, sought, "
                 "retrieved o not_retrieved",
         }), 400
+
+    if not _article_in_current_project(article_id, review_id):
+        return jsonify({
+            "ok": False,
+            "error": "Artículo no encontrado en el proyecto activo",
+        }), 404
 
     try:
         with get_conn() as conn, conn.cursor() as cur:
@@ -2005,6 +2092,12 @@ def systematic_review_full_text_upload():
             "ok": False,
             "error": "Debe seleccionarse un archivo de texto completo",
         }), 400
+
+    if not _article_in_current_project(article_id, review_id):
+        return jsonify({
+            "ok": False,
+            "error": "Artículo no encontrado en el proyecto activo",
+        }), 404
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -2226,6 +2319,21 @@ def systematic_review_human_decision():
             "error": "reviewer_id es obligatorio"
         }), 400
 
+    if not _review_in_current_project(review_id):
+        return jsonify({
+            "ok": False,
+            "error": "Revisión no encontrada en el proyecto activo"
+        }), 404
+
+    if article_id and not _article_in_current_project(
+        article_id,
+        review_id,
+    ):
+        return jsonify({
+            "ok": False,
+            "error": "Artículo no encontrado en el proyecto activo"
+        }), 404
+
     if reviewer_id == "adjudicator":
         return jsonify({
             "ok": False,
@@ -2345,6 +2453,12 @@ def systematic_review_resolve_conflict():
             "error": "resolved_by es obligatorio"
         }), 400
 
+    if not _article_in_current_project(article_id, review_id):
+        return jsonify({
+            "ok": False,
+            "error": "Artículo no encontrado en el proyecto activo"
+        }), 404
+
     if resolution == "exclude" and not (
         exclusion_reason or exclusion_reason_code
     ):
@@ -2411,6 +2525,12 @@ def systematic_review_human_data_extraction():
             "ok": False,
             "error": "reviewer_id es obligatorio",
         }), 400
+
+    if not _extraction_in_current_project(extraction_id):
+        return jsonify({
+            "ok": False,
+            "error": "Extracción no encontrada en el proyecto activo",
+        }), 404
 
     payload = {
         "extraction_id": extraction_id,
