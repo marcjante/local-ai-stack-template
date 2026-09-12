@@ -397,3 +397,202 @@ def test_source_quote_must_exist_in_retrieved_evidence():
         )
         is None
     )
+
+
+def test_ai_data_extraction_creates_review_audit_event(monkeypatch):
+    import uuid
+
+    from db.db import get_conn, get_review_audit_trail
+    from workers.plugins import data_extraction
+
+    project_id = str(uuid.uuid4())
+    review_id = str(uuid.uuid4())
+    article_id = str(uuid.uuid4())
+    field_id = str(uuid.uuid4())
+    task_id = str(uuid.uuid4())
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO projects (id, name)
+            VALUES (%s, %s)
+            """,
+            (project_id, "AI audit extraction project"),
+        )
+
+        cur.execute(
+            """
+            INSERT INTO systematic_reviews (
+                id,
+                project_id,
+                title
+            )
+            VALUES (%s, %s, %s)
+            """,
+            (
+                review_id,
+                project_id,
+                "AI audit extraction review",
+            ),
+        )
+
+        cur.execute(
+            """
+            INSERT INTO review_extraction_fields (
+                id,
+                review_id,
+                field_key,
+                label,
+                description,
+                value_type,
+                required,
+                display_order
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                field_id,
+                review_id,
+                "sample_size",
+                "Sample size",
+                "Number of participants",
+                "integer",
+                False,
+                1,
+            ),
+        )
+
+        cur.execute(
+            """
+            INSERT INTO review_articles (
+                id,
+                review_id,
+                title,
+                abstract,
+                screening_status,
+                final_decision,
+                full_text_retrieval_status
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                article_id,
+                review_id,
+                "Test article",
+                "A total of 120 participants were enrolled.",
+                "reviewed",
+                "include",
+                "retrieved",
+            ),
+        )
+
+        cur.execute(
+            """
+            INSERT INTO tasks (
+                id,
+                queue,
+                status,
+                project_id
+            )
+            VALUES (%s, %s, %s, %s)
+            """,
+            (
+                task_id,
+                "data_extraction",
+                "pending",
+                project_id,
+            ),
+        )
+
+    def fake_extract_field(article, field):
+        return {
+            "value": 120,
+            "reason": "Sample size explicitly reported.",
+            "confidence": 0.98,
+            "source_quote": (
+                "A total of 120 participants were enrolled."
+            ),
+            "quote_verified": True,
+            "source_type": "abstract",
+            "source_location": "abstract",
+            "document_id": None,
+            "retrieval_query": None,
+            "retrieved_chunks": [],
+            "model": "test-model",
+            "provider": "test-provider",
+            "skill_task": "data_extraction",
+            "skills_used": ["data_extraction"],
+        }
+
+    monkeypatch.setattr(
+        data_extraction,
+        "_extract_field",
+        fake_extract_field,
+    )
+
+    try:
+        result = data_extraction.handle(
+            task_id,
+            {
+                "review_id": review_id,
+                "article_ids": [article_id],
+            },
+        )
+
+        assert result["results_count"] == 1
+
+        events = get_review_audit_trail(
+            review_id,
+            project_id=project_id,
+            article_id=article_id,
+        )
+
+        ai_events = [
+            event
+            for event in events
+            if event["action"] == "ai_data_extraction_proposed"
+        ]
+
+        assert len(ai_events) == 1
+
+        event = ai_events[0]
+
+        assert event["project_id"] == project_id
+        assert event["review_id"] == review_id
+        assert event["article_id"] == article_id
+        assert event["actor_type"] == "ai"
+        assert event["actor_id"] == "test-model"
+        assert event["stage"] == "data_extraction"
+
+        assert event["model"] == "test-model"
+        assert event["provider"] == "test-provider"
+        assert (
+            event["prompt_version"]
+            == data_extraction.DATA_EXTRACTION_PROMPT_VERSION
+        )
+
+        assert event["after_state"]["ai_value"] == 120
+        assert event["after_state"]["ai_confidence"] == 0.98
+        assert event["after_state"]["source_type"] == "abstract"
+
+        assert event["details"]["field_id"] == field_id
+        assert event["details"]["field_key"] == "sample_size"
+        assert event["details"]["quote_verified"] is True
+
+    finally:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM tasks
+                WHERE id = %s
+                """,
+                (task_id,),
+            )
+
+            cur.execute(
+                """
+                DELETE FROM projects
+                WHERE id = %s
+                """,
+                (project_id,),
+            )

@@ -14,13 +14,15 @@ sys.path.append(
     )
 )
 
-from db.db import get_conn, log_audit, set_status
+from db.db import get_conn, log_audit, log_review_audit, set_status
 from rag.retrieval import retrieve
 from rag.rerank import rerank
 
 
 QUEUE_NAME = "data_extraction"
 QUEUE_TIMEOUT = 600
+
+DATA_EXTRACTION_PROMPT_VERSION = "full-text-rag-v1"
 
 LLM_GATEWAY_URL = os.getenv(
     "LLM_GATEWAY_URL",
@@ -737,6 +739,50 @@ def handle(task_id, payload):
                         field,
                         proposal,
                     )
+
+                    if saved["saved"] and not saved["skipped"]:
+                        log_review_audit(
+                            project_id=review["project_id"],
+                            review_id=review_id,
+                            article_id=article["id"],
+                            extraction_id=saved["id"],
+                            action="ai_data_extraction_proposed",
+                            actor_type="ai",
+                            actor_id=proposal.get("model") or "llm_gateway",
+                            stage="data_extraction",
+                            after_state={
+                                "ai_value": proposal["value"],
+                                "ai_confidence": proposal["confidence"],
+                                "source_type": proposal["source_type"],
+                                "source_location": proposal["source_location"],
+                                "source_quote": proposal["source_quote"],
+                            },
+                            model=proposal.get("model"),
+                            provider=proposal.get("provider"),
+                            prompt_version=DATA_EXTRACTION_PROMPT_VERSION,
+                            details={
+                                "field_id": field["id"],
+                                "field_key": field["field_key"],
+                                "field_label": field["label"],
+                                "document_id": proposal.get("document_id"),
+                                "retrieval_query": proposal.get(
+                                    "retrieval_query"
+                                ),
+                                "retrieved_chunks": proposal.get(
+                                    "retrieved_chunks"
+                                ) or [],
+                                "quote_verified": proposal.get(
+                                    "quote_verified"
+                                ),
+                                "skills_used": proposal.get(
+                                    "skills_used"
+                                ) or [],
+                                "updated_existing_extraction": saved.get(
+                                    "updated",
+                                    False,
+                                ),
+                            },
+                        )
 
                     result_item = {
                         "extraction_id": saved["id"],
