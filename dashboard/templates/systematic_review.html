@@ -497,7 +497,59 @@
                 align-items: stretch;
             }
         }
-    </style>
+    
+/* Screening workflow v3 */
+.screening-workflow-toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    margin: 0 0 18px 0;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.02);
+}
+.screening-workflow-toolbar .field-group { min-width: 220px; }
+.screening-workflow-toolbar label {
+    display: block; font-size: 0.82rem; font-weight: 700;
+    margin-bottom: 6px; color: var(--muted);
+}
+.screening-workflow-toolbar select {
+    width: 100%; min-height: 40px; border: 1px solid var(--border);
+    border-radius: 9px; padding: 8px 10px; background: var(--card); color: var(--text);
+}
+.screening-stage { display: flex; flex-direction: column; gap: 7px; min-width: 170px; }
+.screening-stage-title {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--muted); font-weight: 700;
+}
+.reviewer-decision-list { display: flex; flex-direction: column; gap: 5px; }
+.reviewer-decision { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.82rem; }
+.reviewer-name { font-weight: 700; }
+.screening-state {
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px;
+    border-radius: 999px; font-size: 0.76rem; font-weight: 700;
+}
+.screening-state-resolved { background: #e8f5e9; color: #1f6a2d; }
+.screening-state-duplicate { background: #eceff1; color: #455a64; }
+.screening-actions { display: flex; flex-direction: column; gap: 8px; min-width: 205px; }
+.screening-actions-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.screening-actions-row button { padding: 6px 9px; font-size: 0.78rem; }
+.conflict-box {
+    margin-top: 7px; padding: 8px; border: 1px solid #e0b100;
+    border-radius: 9px; background: #fff8d8;
+}
+.conflict-box strong { display: block; margin-bottom: 6px; }
+.final-decision { display: flex; flex-direction: column; gap: 5px; }
+
+@media (max-width: 900px) {
+    .screening-workflow-toolbar { align-items: stretch; }
+    .screening-workflow-toolbar .field-group { width: 100%; }
+}
+
+</style>
 </head>
 
 <body>
@@ -771,167 +823,203 @@
 
             {% if articles %}
 
+                <div class="screening-workflow-toolbar">
+                    <div class="field-group">
+                        <label for="screening-reviewer">Revisor activo</label>
+                        <select id="screening-reviewer">
+                            <option value="reviewer_1">Revisor 1</option>
+                            <option value="reviewer_2">Revisor 2</option>
+                            <option value="adjudicator">Adjudicador</option>
+                        </select>
+                    </div>
+
+                    <div class="article-meta">
+                        Cada revisor registra su decisión de forma independiente.
+                        Si las dos primeras decisiones no coinciden, el artículo pasa a conflicto.
+                    </div>
+                </div>
+
                 <div class="table-wrap">
-
                     <table>
-
                         <thead>
                             <tr>
                                 <th>Artículo</th>
                                 <th>IA</th>
-                                <th>Confianza</th>
-                                <th>Motivo IA</th>
-                                <th>Decisión humana</th>
+                                <th>Título / resumen</th>
+                                <th>Texto completo</th>
+                                <th>Decisión final</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
-
                         <tbody>
-
                         {% for article in articles %}
+                            {% set ta_decisions = article.decisions_by_stage.get("title_abstract", []) %}
+                            {% set ft_decisions = article.decisions_by_stage.get("full_text", []) %}
+                            {% set ta_conflict = article.conflicts_by_stage.get("title_abstract") %}
+                            {% set ft_conflict = article.conflicts_by_stage.get("full_text") %}
 
                             <tr id="article-{{ article.id }}">
-
                                 <td>
-                                    <div class="article-title">
-                                        {{ article.title or "Sin título" }}
-                                    </div>
-
+                                    <div class="article-title">{{ article.title or "Sin título" }}</div>
                                     <div class="article-meta">
-                                        {% if article.journal %}
-                                            {{ article.journal }}
-                                        {% endif %}
-
-                                        {% if article.year %}
-                                            · {{ article.year }}
-                                        {% endif %}
-
-                                        {% if article.pmid %}
-                                            <br>PMID: {{ article.pmid }}
-                                        {% endif %}
-
-                                        {% if article.doi %}
-                                            <br>DOI: {{ article.doi }}
-                                        {% endif %}
+                                        {% if article.journal %}{{ article.journal }}{% endif %}
+                                        {% if article.year %} · {{ article.year }}{% endif %}
+                                        {% if article.pmid %}<br>PMID: {{ article.pmid }}{% endif %}
+                                        {% if article.doi %}<br>DOI: {{ article.doi }}{% endif %}
                                     </div>
+                                    {% if article.is_duplicate %}
+                                        <div style="margin-top:7px;">
+                                            <span class="screening-state screening-state-duplicate">Duplicado</span>
+                                        </div>
+                                    {% endif %}
                                 </td>
 
                                 <td>
-
                                     {% if article.ai_decision == "include" %}
-                                        <span class="badge badge-include">
-                                            Include
-                                        </span>
-
+                                        <span class="badge badge-include">Include</span>
                                     {% elif article.ai_decision == "exclude" %}
-                                        <span class="badge badge-exclude">
-                                            Exclude
-                                        </span>
-
+                                        <span class="badge badge-exclude">Exclude</span>
                                     {% elif article.ai_decision == "uncertain" %}
-                                        <span class="badge badge-uncertain">
-                                            Uncertain
-                                        </span>
-
+                                        <span class="badge badge-uncertain">Uncertain</span>
                                     {% else %}
-                                        <span class="badge badge-pending">
-                                            Sin evaluar
-                                        </span>
+                                        <span class="badge badge-pending">Sin evaluar</span>
                                     {% endif %}
-
-                                </td>
-
-                                <td>
                                     {% if article.ai_confidence is not none %}
-                                        <span class="confidence">
-                                            {{ "%.0f"|format(article.ai_confidence * 100) }}%
-                                        </span>
-                                    {% else %}
-                                        —
+                                        <div class="article-meta">
+                                            Confianza: {{ "%.0f"|format(article.ai_confidence * 100) }}%
+                                        </div>
                                     {% endif %}
-                                </td>
-
-                                <td class="ai-reason">
-                                    {{ article.ai_reason or "—" }}
-                                </td>
-
-                                <td id="human-decision-{{ article.id }}">
-
-                                    {% if article.human_decision == "include" %}
-                                        <span class="badge badge-include">
-                                            Include
-                                        </span>
-
-                                    {% elif article.human_decision == "exclude" %}
-                                        <span class="badge badge-exclude">
-                                            Exclude
-                                        </span>
-
-                                        {% if article.exclusion_reason %}
-                                            <div class="article-meta">
-                                                {{ article.exclusion_reason }}
-                                            </div>
-                                        {% endif %}
-
-                                    {% elif article.human_decision == "uncertain" %}
-                                        <span class="badge badge-uncertain">
-                                            Uncertain
-                                        </span>
-
-                                    {% else %}
-                                        <span class="badge badge-pending">
-                                            Pendiente
-                                        </span>
+                                    {% if article.ai_reason %}
+                                        <div class="article-meta" style="margin-top:5px;">{{ article.ai_reason }}</div>
                                     {% endif %}
-
                                 </td>
 
                                 <td>
+                                    <div class="screening-stage">
+                                        <div class="screening-stage-title">
+                                            Estado: {{ article.title_abstract_status or "pending" }}
+                                        </div>
+                                        <div class="reviewer-decision-list">
+                                            {% for decision in ta_decisions %}
+                                                <div class="reviewer-decision">
+                                                    <span class="reviewer-name">{{ decision.reviewer_id }}</span>
+                                                    {% if decision.decision == "include" %}
+                                                        <span class="badge badge-include">Incluir</span>
+                                                    {% elif decision.decision == "exclude" %}
+                                                        <span class="badge badge-exclude">Excluir</span>
+                                                    {% else %}
+                                                        <span class="badge badge-uncertain">Dudoso</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <span class="article-meta">Sin decisiones humanas.</span>
+                                            {% endfor %}
+                                        </div>
 
-                                    <div class="decision-buttons">
-
-                                        <button
-                                            class="btn-success"
-                                            onclick="setHumanDecision(
-                                                '{{ article.id }}',
-                                                'include'
-                                            )"
-                                        >
-                                            ✓ Incluir
-                                        </button>
-
-                                        <button
-                                            class="btn-danger"
-                                            onclick="setHumanDecision(
-                                                '{{ article.id }}',
-                                                'exclude'
-                                            )"
-                                        >
-                                            ✕ Excluir
-                                        </button>
-
-                                        <button
-                                            class="btn-warning"
-                                            onclick="setHumanDecision(
-                                                '{{ article.id }}',
-                                                'uncertain'
-                                            )"
-                                        >
-                                            ? Dudoso
-                                        </button>
-
+                                        {% if ta_conflict and ta_conflict.status == "open" %}
+                                            <div class="conflict-box">
+                                                <strong>⚠ Conflicto abierto</strong>
+                                                <div class="screening-actions-row">
+                                                    <button class="btn-success" onclick="resolveConflict('{{ article.id }}','title_abstract','include')">Incluir</button>
+                                                    <button class="btn-danger" onclick="resolveConflict('{{ article.id }}','title_abstract','exclude')">Excluir</button>
+                                                    <button class="btn-warning" onclick="resolveConflict('{{ article.id }}','title_abstract','uncertain')">Dudoso</button>
+                                                </div>
+                                            </div>
+                                        {% elif ta_conflict and ta_conflict.status == "resolved" %}
+                                            <span class="screening-state screening-state-resolved">
+                                                Conflicto resuelto: {{ ta_conflict.resolution }}
+                                            </span>
+                                        {% endif %}
                                     </div>
-
                                 </td>
 
+                                <td>
+                                    <div class="screening-stage">
+                                        <div class="screening-stage-title">
+                                            Estado: {{ article.full_text_status or "not_started" }}
+                                        </div>
+                                        <div class="reviewer-decision-list">
+                                            {% for decision in ft_decisions %}
+                                                <div class="reviewer-decision">
+                                                    <span class="reviewer-name">{{ decision.reviewer_id }}</span>
+                                                    {% if decision.decision == "include" %}
+                                                        <span class="badge badge-include">Incluir</span>
+                                                    {% elif decision.decision == "exclude" %}
+                                                        <span class="badge badge-exclude">Excluir</span>
+                                                    {% else %}
+                                                        <span class="badge badge-uncertain">Dudoso</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <span class="article-meta">Sin decisiones humanas.</span>
+                                            {% endfor %}
+                                        </div>
+
+                                        {% if ft_conflict and ft_conflict.status == "open" %}
+                                            <div class="conflict-box">
+                                                <strong>⚠ Conflicto abierto</strong>
+                                                <div class="screening-actions-row">
+                                                    <button class="btn-success" onclick="resolveConflict('{{ article.id }}','full_text','include')">Incluir</button>
+                                                    <button class="btn-danger" onclick="resolveConflict('{{ article.id }}','full_text','exclude')">Excluir</button>
+                                                    <button class="btn-warning" onclick="resolveConflict('{{ article.id }}','full_text','uncertain')">Dudoso</button>
+                                                </div>
+                                            </div>
+                                        {% elif ft_conflict and ft_conflict.status == "resolved" %}
+                                            <span class="screening-state screening-state-resolved">
+                                                Conflicto resuelto: {{ ft_conflict.resolution }}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="final-decision">
+                                        {% if article.final_decision == "include" %}
+                                            <span class="badge badge-include">Incluido</span>
+                                        {% elif article.final_decision == "exclude" %}
+                                            <span class="badge badge-exclude">Excluido</span>
+                                        {% elif article.final_decision == "uncertain" %}
+                                            <span class="badge badge-uncertain">Dudoso</span>
+                                        {% else %}
+                                            <span class="badge badge-pending">Sin decisión final</span>
+                                        {% endif %}
+                                        {% if article.exclusion_reason %}
+                                            <div class="article-meta">{{ article.exclusion_reason }}</div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <td>
+                                    {% if article.is_duplicate %}
+                                        <span class="article-meta">No requiere screening.</span>
+                                    {% else %}
+                                        <div class="screening-actions">
+                                            <div>
+                                                <div class="screening-stage-title">Título / resumen</div>
+                                                <div class="screening-actions-row">
+                                                    <button class="btn-success" onclick="setHumanDecision('{{ article.id }}','title_abstract','include')">✓</button>
+                                                    <button class="btn-danger" onclick="setHumanDecision('{{ article.id }}','title_abstract','exclude')">✕</button>
+                                                    <button class="btn-warning" onclick="setHumanDecision('{{ article.id }}','title_abstract','uncertain')">?</button>
+                                                </div>
+                                            </div>
+
+                                            {% if article.full_text_status != "not_started" %}
+                                                <div>
+                                                    <div class="screening-stage-title">Texto completo</div>
+                                                    <div class="screening-actions-row">
+                                                        <button class="btn-success" onclick="setHumanDecision('{{ article.id }}','full_text','include')">✓</button>
+                                                        <button class="btn-danger" onclick="setHumanDecision('{{ article.id }}','full_text','exclude')">✕</button>
+                                                        <button class="btn-warning" onclick="setHumanDecision('{{ article.id }}','full_text','uncertain')">?</button>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                </td>
                             </tr>
-
                         {% endfor %}
-
                         </tbody>
-
                     </table>
-
                 </div>
 
             {% else %}
@@ -1324,44 +1412,47 @@ async function runAIScreening() {
 
 async function setHumanDecision(
     articleId,
+    stage,
     decision
 ) {
+    const reviewerSelect = document.getElementById("screening-reviewer");
+    const reviewerId = reviewerSelect?.value?.trim();
+
+    if (!reviewerId) {
+        setStatus("❌ Selecciona un revisor.");
+        return;
+    }
+
+    if (reviewerId === "adjudicator") {
+        setStatus("❌ El adjudicador solo puede resolver conflictos.");
+        return;
+    }
 
     let exclusionReason = null;
 
     if (decision === "exclude") {
+        exclusionReason = prompt("Indica el motivo de exclusión:");
 
-        exclusionReason = prompt(
-            "Indica el motivo de exclusión:"
-        );
-
-        if (
-            exclusionReason === null ||
-            exclusionReason.trim() === ""
-        ) {
+        if (exclusionReason === null || exclusionReason.trim() === "") {
             return;
         }
 
-        exclusionReason =
-            exclusionReason.trim();
+        exclusionReason = exclusionReason.trim();
     }
 
-    setStatus(
-        "Guardando decisión humana..."
-    );
+    setStatus(`Guardando decisión de ${reviewerId}...`);
 
     try {
-
         const response = await fetch(
             "/api/systematic-review/human-decision",
             {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
                     review_id: REVIEW_ID,
                     article_id: articleId,
+                    reviewer_id: reviewerId,
+                    stage: stage,
                     decision: decision,
                     exclusion_reason: exclusionReason
                 })
@@ -1371,29 +1462,113 @@ async function setHumanDecision(
         const data = await response.json();
 
         if (!response.ok || !data.ok) {
-            throw new Error(
-                data.error || "Error guardando la decisión"
-            );
+            throw new Error(data.error || "Error guardando la decisión");
         }
 
-        setStatus(
-            "✅ Decisión humana guardada."
-        );
+        const result = data.result || {};
 
-        setTimeout(
-            () => window.location.reload(),
-            350
-        );
+        if (result.conflict) {
+            setStatus("⚠️ Decisión guardada. Existe un conflicto entre revisores.");
+        } else if (result.consensus) {
+            setStatus("✅ Decisión guardada. Hay consenso entre revisores.");
+        } else {
+            setStatus("✅ Decisión guardada. Pendiente del segundo revisor.");
+        }
+
+        localStorage.setItem("systematicReviewReviewer", reviewerId);
+        setTimeout(() => window.location.reload(), 350);
 
     } catch (error) {
-
         console.error(error);
-
-        setStatus(
-            `❌ ${error.message}`
-        );
+        setStatus(`❌ ${error.message}`);
     }
 }
+
+
+async function resolveConflict(
+    articleId,
+    stage,
+    resolution
+) {
+    const reviewerSelect = document.getElementById("screening-reviewer");
+    const resolvedBy = reviewerSelect?.value?.trim();
+
+    if (!resolvedBy) {
+        setStatus("❌ Selecciona el adjudicador.");
+        return;
+    }
+
+    let exclusionReason = null;
+
+    if (resolution === "exclude") {
+        exclusionReason = prompt("Indica el motivo final de exclusión:");
+
+        if (exclusionReason === null || exclusionReason.trim() === "") {
+            return;
+        }
+
+        exclusionReason = exclusionReason.trim();
+    }
+
+    const resolutionNotes = prompt("Notas de adjudicación (opcional):");
+
+    setStatus("Resolviendo conflicto...");
+
+    try {
+        const response = await fetch(
+            "/api/systematic-review/resolve-conflict",
+            {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    review_id: REVIEW_ID,
+                    article_id: articleId,
+                    stage: stage,
+                    resolution: resolution,
+                    resolved_by: resolvedBy,
+                    resolution_notes:
+                        resolutionNotes === null ? null : resolutionNotes.trim(),
+                    exclusion_reason: exclusionReason
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "Error resolviendo el conflicto");
+        }
+
+        setStatus("✅ Conflicto resuelto correctamente.");
+        setTimeout(() => window.location.reload(), 350);
+
+    } catch (error) {
+        console.error(error);
+        setStatus(`❌ ${error.message}`);
+    }
+}
+
+
+document.addEventListener("DOMContentLoaded", () => {
+    const reviewerSelect = document.getElementById("screening-reviewer");
+
+    if (!reviewerSelect) {
+        return;
+    }
+
+    const savedReviewer = localStorage.getItem("systematicReviewReviewer");
+
+    if (
+        savedReviewer &&
+        [...reviewerSelect.options].some(option => option.value === savedReviewer)
+    ) {
+        reviewerSelect.value = savedReviewer;
+    }
+
+    reviewerSelect.addEventListener("change", () => {
+        localStorage.setItem("systematicReviewReviewer", reviewerSelect.value);
+    });
+});
 
 
 async function setExtractionDecision(
