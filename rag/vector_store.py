@@ -41,13 +41,41 @@ def add_chunks(chunks: list, embeddings: list, doc_version: str = "v1"):
         for chunk, emb in zip(chunks, embeddings):
             cur.execute(
                 """
-                INSERT INTO rag_chunks (chunk_id, doc_id, position, text, embedding, doc_version)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO rag_chunks (
+                    chunk_id,
+                    doc_id,
+                    position,
+                    text,
+                    embedding,
+                    doc_version,
+                    page_number,
+                    section,
+                    char_start,
+                    char_end
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (chunk_id) DO UPDATE
-                SET text = EXCLUDED.text, embedding = EXCLUDED.embedding, doc_version = EXCLUDED.doc_version
+                SET
+                    text = EXCLUDED.text,
+                    embedding = EXCLUDED.embedding,
+                    doc_version = EXCLUDED.doc_version,
+                    page_number = EXCLUDED.page_number,
+                    section = EXCLUDED.section,
+                    char_start = EXCLUDED.char_start,
+                    char_end = EXCLUDED.char_end
                 """,
-                (chunk["chunk_id"], chunk["doc_id"], chunk["position"], chunk["text"],
-                 json.dumps(emb), doc_version),
+                (
+                    chunk["chunk_id"],
+                    chunk["doc_id"],
+                    chunk["position"],
+                    chunk["text"],
+                    json.dumps(emb),
+                    doc_version,
+                    chunk.get("page_number"),
+                    chunk.get("section"),
+                    chunk.get("char_start"),
+                    chunk.get("char_end"),
+                ),
             )
 
 
@@ -72,7 +100,17 @@ def search(query_embedding: list, top_k: int = 5, doc_id: str = None, project_id
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         cur.execute(
             f"""
-            SELECT rc.chunk_id, rc.doc_id, rc.position, rc.text, rc.embedding, rc.doc_version
+            SELECT
+                rc.chunk_id,
+                rc.doc_id,
+                rc.position,
+                rc.text,
+                rc.embedding,
+                rc.doc_version,
+                rc.page_number,
+                rc.section,
+                rc.char_start,
+                rc.char_end
             FROM rag_chunks rc
             LEFT JOIN documents d ON d.doc_id = rc.doc_id
             {where}
@@ -82,12 +120,31 @@ def search(query_embedding: list, top_k: int = 5, doc_id: str = None, project_id
         rows = cur.fetchall()
 
     scored = []
-    for chunk_id, doc_id_, position, text, embedding, doc_version in rows:
+    for (
+        chunk_id,
+        doc_id_,
+        position,
+        text,
+        embedding,
+        doc_version,
+        page_number,
+        section,
+        char_start,
+        char_end,
+    ) in rows:
         emb = json.loads(embedding) if isinstance(embedding, str) else embedding
         score = cosine_similarity(query_embedding, emb)
         scored.append({
-            "chunk_id": chunk_id, "doc_id": doc_id_, "position": position,
-            "text": text, "doc_version": doc_version, "score": score,
+            "chunk_id": chunk_id,
+            "doc_id": doc_id_,
+            "position": position,
+            "text": text,
+            "doc_version": doc_version,
+            "page_number": page_number,
+            "section": section,
+            "char_start": char_start,
+            "char_end": char_end,
+            "score": score,
         })
 
     scored.sort(key=lambda x: x["score"], reverse=True)

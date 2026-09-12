@@ -87,13 +87,17 @@ CREATE INDEX IF NOT EXISTS idx_audit_task_id ON audit_log (task_id);
 -- -> collections.project_id, para no duplicar la columna en la tabla
 -- más grande (potencialmente miles de filas por documento).
 CREATE TABLE IF NOT EXISTS rag_chunks (
-    chunk_id    TEXT PRIMARY KEY,
-    doc_id      TEXT NOT NULL,
-    position    INTEGER NOT NULL,
-    text        TEXT NOT NULL,
-    embedding   JSONB NOT NULL,
-    doc_version TEXT NOT NULL DEFAULT 'v1',
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    chunk_id     TEXT PRIMARY KEY,
+    doc_id       TEXT NOT NULL,
+    position     INTEGER NOT NULL,
+    text         TEXT NOT NULL,
+    embedding    JSONB NOT NULL,
+    doc_version  TEXT NOT NULL DEFAULT 'v1',
+    page_number  INTEGER,
+    section      TEXT,
+    char_start   INTEGER,
+    char_end     INTEGER,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_rag_chunks_doc_id ON rag_chunks (doc_id);

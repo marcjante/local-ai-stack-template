@@ -84,3 +84,67 @@ def test_retrieve_scoped_to_single_doc(project_id):
 
     results = retrieve("cualquier consulta", top_k=10, doc_id="doc-x", project_id=project_id)
     assert all(r["doc_id"] == "doc-x" for r in results)
+
+
+def test_chunk_metadata_is_persisted_and_retrieved(project_id):
+    from db.db import create_collection, register_document
+    from rag.chunking import split_into_chunks
+    from rag.embeddings import embed_text
+    from rag.vector_store import add_chunks
+    from rag.retrieval import retrieve
+
+    doc_id = "doc-metadata-test"
+    text = (
+        "Primera frase de prueba para comprobar los offsets. "
+        "Segunda frase sobre tuberculosis y tratamiento."
+    )
+
+    create_collection("default", "Default", project_id=project_id)
+
+    chunks = split_into_chunks(
+        doc_id,
+        text,
+        chunk_size=8,
+        overlap=2,
+        page_number=7,
+        section="Resultados",
+    )
+
+    embeddings = [embed_text(c["text"]) for c in chunks]
+    add_chunks(chunks, embeddings)
+
+    register_document(
+        doc_id,
+        "default",
+        "metadata-test.txt",
+        "text/plain",
+        "v1",
+        "hashing_trick_256",
+        text,
+        len(chunks),
+        project_id=project_id,
+    )
+
+    results = retrieve(
+        "tuberculosis tratamiento",
+        top_k=10,
+        doc_id=doc_id,
+        project_id=project_id,
+    )
+
+    assert results
+    assert all(r["page_number"] == 7 for r in results)
+    assert all(r["section"] == "Resultados" for r in results)
+
+    for result in results:
+        assert result["char_start"] is not None
+        assert result["char_end"] is not None
+        assert result["char_start"] >= 0
+        assert result["char_end"] > result["char_start"]
+
+        quoted = text[
+            result["char_start"]:
+            result["char_end"]
+        ]
+
+        assert quoted == result["text"]
