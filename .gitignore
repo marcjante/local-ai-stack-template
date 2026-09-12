@@ -17,3 +17,6 @@ logs/*.log
 *_v2.py
 *_v3.py
 workers/plugins.backup/
+
+.runtime/
+*.bak
