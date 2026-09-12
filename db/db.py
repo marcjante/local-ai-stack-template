@@ -149,6 +149,7 @@ def log_review_audit(
     provider: str = None,
     prompt_version: str = None,
     details: dict = None,
+    conn=None,
 ):
     """
     Registra una acción reproducible dentro de una revisión sistemática.
@@ -156,51 +157,73 @@ def log_review_audit(
     Esta auditoría es independiente de audit_log:
     - audit_log sigue tareas/subagentes.
     - review_audit_log sigue el flujo científico y humano de una revisión.
-    """
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO review_audit_log (
-                project_id,
-                review_id,
-                article_id,
-                extraction_id,
-                action,
-                actor_type,
-                actor_id,
-                stage,
-                before_state,
-                after_state,
-                model,
-                provider,
-                prompt_version,
-                details
-            )
-            VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s
-            )
-            RETURNING id
-            """,
-            (
-                project_id,
-                review_id,
-                article_id,
-                extraction_id,
-                action,
-                actor_type,
-                actor_id,
-                stage,
-                json.dumps(before_state) if before_state is not None else None,
-                json.dumps(after_state) if after_state is not None else None,
-                model,
-                provider,
-                prompt_version,
-                json.dumps(details) if details is not None else None,
-            ),
-        )
-        return cur.fetchone()[0]
 
+    Si se proporciona ``conn``, el evento se escribe dentro de la
+    transacción existente y NO se realiza un commit independiente.
+    Esto permite que la modificación científica y su auditoría sean
+    atómicas.
+
+    Si no se proporciona ``conn``, mantiene el comportamiento anterior
+    y crea su propia conexión/transacción.
+    """
+
+    params = (
+        project_id,
+        review_id,
+        article_id,
+        extraction_id,
+        action,
+        actor_type,
+        actor_id,
+        stage,
+        json.dumps(before_state)
+        if before_state is not None
+        else None,
+        json.dumps(after_state)
+        if after_state is not None
+        else None,
+        model,
+        provider,
+        prompt_version,
+        json.dumps(details)
+        if details is not None
+        else None,
+    )
+
+    query = """
+        INSERT INTO review_audit_log (
+            project_id,
+            review_id,
+            article_id,
+            extraction_id,
+            action,
+            actor_type,
+            actor_id,
+            stage,
+            before_state,
+            after_state,
+            model,
+            provider,
+            prompt_version,
+            details
+        )
+        VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s
+        )
+        RETURNING id
+    """
+
+    def _insert(active_conn):
+        with active_conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchone()[0]
+
+    if conn is not None:
+        return _insert(conn)
+
+    with get_conn() as owned_conn:
+        return _insert(owned_conn)
 
 def get_review_audit_trail(
     review_id: str,
