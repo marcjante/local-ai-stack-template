@@ -47,7 +47,7 @@ def project_id():
 def backend_client(monkeypatch):
     """Cliente de test del backend Flask, con API_KEY conocida."""
     monkeypatch.setenv("API_KEY", "test-key")
-    monkeypatch.setenv("JWT_SECRET", "test-jwt-secret")
+    monkeypatch.setenv("JWT_SECRET", "test-jwt-secret-32-bytes-minimum-key")
     import importlib
     import backend.main as backend_main
     importlib.reload(backend_main)
