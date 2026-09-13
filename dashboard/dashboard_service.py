@@ -28,6 +28,7 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import psutil
@@ -43,10 +44,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 sys.path.insert(0, str(BASE_DIR))
-from db.db import list_tasks, task_counts_by_status  # noqa: E402
+from db.db import (
+    list_tasks,
+    task_counts_by_status,
+    create_task,
+    get_task,
+)  # noqa: E402
 sys.path.insert(0, str(BASE_DIR))
 from db.db import list_integrations, set_integration_enabled, get_audit_trail  # noqa: E402
 from workers.plugin_loader import discover_plugins  # noqa: E402
+from workers.queue_conn import redis_conn, DEFAULT_RETRY  # noqa: E402
+from rq import Queue  # noqa: E402
 from rag.retrieval import index_document, retrieve  # noqa: E402
 from rag.rerank import rerank  # noqa: E402
 from rag.citations import format_citations  # noqa: E402
@@ -1123,6 +1131,153 @@ def systematic_reviews_create():
         }), 500
 
 
+
+@app.route(
+    "/api/systematic-review/update-protocol",
+    methods=["POST"],
+)
+def systematic_review_update_protocol():
+    from db.db import get_conn, log_review_audit
+
+    data = request.get_json(silent=True) or {}
+
+    review_id = (data.get("review_id") or "").strip()
+
+    if not review_id:
+        return jsonify({
+            "ok": False,
+            "error": "review_id es obligatorio",
+        }), 400
+
+    if not _review_in_current_project(review_id):
+        return jsonify({
+            "ok": False,
+            "error": "Revisión no encontrada en el proyecto actual",
+        }), 404
+
+    fields = {
+        "research_question": (
+            data.get("research_question") or ""
+        ).strip(),
+        "population": (
+            data.get("population") or ""
+        ).strip(),
+        "intervention": (
+            data.get("intervention") or ""
+        ).strip(),
+        "comparator": (
+            data.get("comparator") or ""
+        ).strip(),
+        "outcomes": (
+            data.get("outcomes") or ""
+        ).strip(),
+        "inclusion_criteria": (
+            data.get("inclusion_criteria") or ""
+        ).strip(),
+        "exclusion_criteria": (
+            data.get("exclusion_criteria") or ""
+        ).strip(),
+    }
+
+    try:
+        project_id = current_project_id()
+
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        research_question,
+                        population,
+                        intervention,
+                        comparator,
+                        outcomes,
+                        inclusion_criteria,
+                        exclusion_criteria
+                    FROM systematic_reviews
+                    WHERE id = %s
+                      AND project_id = %s
+                    FOR UPDATE
+                    """,
+                    (review_id, project_id),
+                )
+
+                previous = cur.fetchone()
+
+                if not previous:
+                    return jsonify({
+                        "ok": False,
+                        "error": "No se pudo actualizar la revisión",
+                    }), 404
+
+                before_state = {
+                    "research_question": previous[0] or "",
+                    "population": previous[1] or "",
+                    "intervention": previous[2] or "",
+                    "comparator": previous[3] or "",
+                    "outcomes": previous[4] or "",
+                    "inclusion_criteria": previous[5] or "",
+                    "exclusion_criteria": previous[6] or "",
+                }
+
+                cur.execute(
+                    """
+                    UPDATE systematic_reviews
+                    SET
+                        research_question = %s,
+                        population = %s,
+                        intervention = %s,
+                        comparator = %s,
+                        outcomes = %s,
+                        inclusion_criteria = %s,
+                        exclusion_criteria = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                      AND project_id = %s
+                    """,
+                    (
+                        fields["research_question"],
+                        fields["population"],
+                        fields["intervention"],
+                        fields["comparator"],
+                        fields["outcomes"],
+                        fields["inclusion_criteria"],
+                        fields["exclusion_criteria"],
+                        review_id,
+                        project_id,
+                    ),
+                )
+
+                if cur.rowcount != 1:
+                    raise RuntimeError(
+                        "No se pudo actualizar la revisión"
+                    )
+
+                log_review_audit(
+                    project_id=project_id,
+                    review_id=review_id,
+                    action="protocol_updated",
+                    actor_type="human",
+                    before_state=before_state,
+                    after_state=fields,
+                    details={
+                        "source": "systematic_review_protocol_editor",
+                    },
+                    conn=conn,
+                )
+
+        return jsonify({
+            "ok": True,
+            "review_id": review_id,
+        })
+
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+
+
 @app.route(
     "/api/systematic-reviews/save-search-strategy",
     methods=["POST"]
@@ -1919,20 +2074,21 @@ def systematic_review_ai_screening():
     from workers.plugins.screening import handle as screening_handle
 
     data = request.get_json(silent=True) or {}
-
-    review_id = data.get("review_id")
+    review_id = (data.get("review_id") or "").strip()
 
     if not review_id:
         return jsonify({
             "ok": False,
-            "error": "review_id es obligatorio"
+            "error": "review_id es obligatorio",
         }), 400
 
     if not _review_in_current_project(review_id):
         return jsonify({
             "ok": False,
-            "error": "Revisión no encontrada en el proyecto activo"
+            "error": "Revisión no encontrada en el proyecto activo",
         }), 404
+
+    project_id = current_project_id()
 
     try:
         with get_conn() as conn:
@@ -1949,16 +2105,16 @@ def systematic_review_ai_screening():
                         exclusion_criteria
                     FROM systematic_reviews
                     WHERE id = %s
+                      AND project_id = %s
                     """,
-                    (review_id,),
+                    (review_id, project_id),
                 )
-
                 review = cur.fetchone()
 
         if not review:
             return jsonify({
                 "ok": False,
-                "error": "La revisión sistemática no existe"
+                "error": "La revisión sistemática no existe",
             }), 404
 
         (
@@ -1987,26 +2143,162 @@ def systematic_review_ai_screening():
                 "ok": False,
                 "error":
                     "No se puede ejecutar el screening IA. "
-                    "Completa primero: " + ", ".join(missing)
+                    "Completa primero: " + ", ".join(missing),
             }), 400
 
-        result = screening_handle(
-            f"screening-ui-{review_id}",
-            {
-                "review_id": review_id
-            },
+        # No lanzar dos screenings simultáneos para la misma revisión.
+        for task in list_tasks(limit=100, project_id=project_id):
+            if task.get("queue") != "screening":
+                continue
+
+            if task.get("status") not in {"pending", "running"}:
+                continue
+
+            task_payload = task.get("payload") or {}
+
+            if isinstance(task_payload, str):
+                try:
+                    task_payload = json.loads(task_payload)
+                except (TypeError, json.JSONDecodeError):
+                    task_payload = {}
+
+            if task_payload.get("review_id") == review_id:
+                return jsonify({
+                    "ok": True,
+                    "task_id": task["id"],
+                    "queue": "screening",
+                    "status": task["status"],
+                    "already_running": True,
+                }), 202
+
+        # Comprobar si realmente queda algún artículo que analizar.
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT count(*)
+                    FROM review_articles
+                    WHERE review_id = %s
+                      AND is_duplicate = false
+                      AND title_abstract_status = 'pending'
+                      AND ai_decision IS NULL
+                    """,
+                    (review_id,),
+                )
+                pending_count = cur.fetchone()[0]
+
+        if pending_count == 0:
+            return jsonify({
+                "ok": True,
+                "status": "completed",
+                "screened": 0,
+                "no_pending": True,
+            })
+
+        task_id = str(uuid.uuid4())
+
+        payload = {
+            "review_id": review_id,
+            "project_id": project_id,
+        }
+
+        create_task(
+            task_id,
+            "screening",
+            payload,
+            project_id=project_id,
         )
+
+        queue = Queue(
+            "screening",
+            connection=redis_conn,
+            default_timeout=300,
+        )
+
+        try:
+            queue.enqueue(
+                screening_handle,
+                task_id,
+                payload,
+                retry=DEFAULT_RETRY,
+                job_id=task_id,
+            )
+        except Exception:
+            from db.db import set_status
+            set_status(
+                task_id,
+                "failed",
+                error="No se pudo encolar la tarea de screening IA",
+            )
+            raise
 
         return jsonify({
             "ok": True,
-            "result": result,
-        })
+            "task_id": task_id,
+            "queue": "screening",
+            "status": "pending",
+            "pending_articles": pending_count,
+        }), 202
 
     except Exception as exc:
         return jsonify({
             "ok": False,
             "error": str(exc),
         }), 500
+
+
+@app.route("/api/systematic-review/tasks/<task_id>", methods=["GET"])
+def systematic_review_task_status(task_id):
+    task = get_task(task_id)
+
+    if not task:
+        return jsonify({
+            "ok": False,
+            "error": "Tarea no encontrada",
+        }), 404
+
+    project_id = current_project_id()
+
+    if task.get("project_id") != project_id:
+        return jsonify({
+            "ok": False,
+            "error": "Tarea no encontrada en el proyecto activo",
+        }), 404
+
+    payload = task.get("payload") or {}
+
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (TypeError, json.JSONDecodeError):
+            payload = {}
+
+    review_id = payload.get("review_id")
+
+    if review_id and not _review_in_current_project(review_id):
+        return jsonify({
+            "ok": False,
+            "error": "La tarea no pertenece a la revisión activa",
+        }), 404
+
+    result = task.get("result")
+
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except (TypeError, json.JSONDecodeError):
+            pass
+
+    return jsonify({
+        "ok": True,
+        "task_id": task["id"],
+        "queue": task.get("queue"),
+        "status": task.get("status"),
+        "result": result,
+        "error": task.get("error"),
+    })
+
+
 @app.route(
     "/api/systematic-review/full-text-retrieval",
     methods=["POST"],

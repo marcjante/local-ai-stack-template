@@ -759,6 +759,20 @@
                     </div>
                 </div>
 
+                <div style="
+                    display:flex;
+                    gap:10px;
+                    flex-wrap:wrap;
+                    align-items:center;
+                ">
+                    <button
+                        type="button"
+                        class="btn-primary"
+                        onclick="toggleProtocolEditor()"
+                    >
+                        ✎ Editar protocolo
+                    </button>
+
                 <a
                     href="/api/systematic-review/{{ review.id }}/export.xlsx"
                     class="btn-primary"
@@ -772,6 +786,132 @@
                 >
                     📊 Exportar Excel
                 </a>
+                </div>
+            </div>
+        </section>
+
+        <section
+            id="protocol-editor"
+            class="card"
+            style="display:none;"
+        >
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                gap:16px;
+                align-items:center;
+                flex-wrap:wrap;
+                margin-bottom:18px;
+            ">
+                <div>
+                    <h2 style="margin-bottom:4px;">
+                        Editar protocolo
+                    </h2>
+                    <div style="color:var(--muted);">
+                        Pregunta de investigación, PICO/PECO y criterios de selección.
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    onclick="toggleProtocolEditor()"
+                >
+                    Cerrar
+                </button>
+            </div>
+
+            <div style="
+                display:grid;
+                grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+                gap:16px;
+            ">
+
+                <div style="grid-column:1/-1;">
+                    <label><strong>Pregunta de investigación</strong></label>
+                    <textarea
+                        id="protocol-research-question"
+                        rows="3"
+                        style="width:100%;margin-top:6px;"
+                    >{{ review.research_question or "" }}</textarea>
+                </div>
+
+                <div>
+                    <label><strong>Población</strong></label>
+                    <textarea
+                        id="protocol-population"
+                        rows="3"
+                        style="width:100%;margin-top:6px;"
+                    >{{ review.population or "" }}</textarea>
+                </div>
+
+                <div>
+                    <label><strong>Intervención / exposición</strong></label>
+                    <textarea
+                        id="protocol-intervention"
+                        rows="3"
+                        style="width:100%;margin-top:6px;"
+                    >{{ review.intervention or "" }}</textarea>
+                </div>
+
+                <div>
+                    <label><strong>Comparador</strong></label>
+                    <textarea
+                        id="protocol-comparator"
+                        rows="3"
+                        style="width:100%;margin-top:6px;"
+                    >{{ review.comparator or "" }}</textarea>
+                </div>
+
+                <div>
+                    <label><strong>Outcomes</strong></label>
+                    <textarea
+                        id="protocol-outcomes"
+                        rows="3"
+                        style="width:100%;margin-top:6px;"
+                    >{{ review.outcomes or "" }}</textarea>
+                </div>
+
+                <div>
+                    <label><strong>Criterios de inclusión</strong></label>
+                    <textarea
+                        id="protocol-inclusion"
+                        rows="6"
+                        style="width:100%;margin-top:6px;"
+                    >{{ review.inclusion_criteria or "" }}</textarea>
+                </div>
+
+                <div>
+                    <label><strong>Criterios de exclusión</strong></label>
+                    <textarea
+                        id="protocol-exclusion"
+                        rows="6"
+                        style="width:100%;margin-top:6px;"
+                    >{{ review.exclusion_criteria or "" }}</textarea>
+                </div>
+
+            </div>
+
+            <div style="
+                display:flex;
+                justify-content:flex-end;
+                gap:10px;
+                margin-top:18px;
+            ">
+                <button
+                    type="button"
+                    onclick="toggleProtocolEditor()"
+                >
+                    Cancelar
+                </button>
+
+                <button
+                    id="protocol-save-button"
+                    type="button"
+                    class="btn-primary"
+                    onclick="saveProtocol()"
+                >
+                    💾 Guardar cambios
+                </button>
             </div>
         </section>
 
@@ -1680,6 +1820,144 @@ function setStatus(message) {
 }
 
 
+
+function toggleProtocolEditor() {
+    const editor = document.getElementById("protocol-editor");
+
+    if (!editor) {
+        return;
+    }
+
+    const isHidden =
+        editor.style.display === "none" ||
+        !editor.style.display;
+
+    editor.style.display = isHidden ? "block" : "none";
+
+    if (isHidden) {
+        editor.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    }
+}
+
+
+async function saveProtocol() {
+
+    const button =
+        document.getElementById("protocol-save-button");
+
+    const payload = {
+        review_id: REVIEW_ID,
+
+        research_question:
+            document.getElementById(
+                "protocol-research-question"
+            ).value.trim(),
+
+        population:
+            document.getElementById(
+                "protocol-population"
+            ).value.trim(),
+
+        intervention:
+            document.getElementById(
+                "protocol-intervention"
+            ).value.trim(),
+
+        comparator:
+            document.getElementById(
+                "protocol-comparator"
+            ).value.trim(),
+
+        outcomes:
+            document.getElementById(
+                "protocol-outcomes"
+            ).value.trim(),
+
+        inclusion_criteria:
+            document.getElementById(
+                "protocol-inclusion"
+            ).value.trim(),
+
+        exclusion_criteria:
+            document.getElementById(
+                "protocol-exclusion"
+            ).value.trim(),
+    };
+
+    if (!payload.research_question) {
+        setStatus(
+            "❌ La pregunta de investigación es obligatoria."
+        );
+        return;
+    }
+
+    if (!payload.inclusion_criteria) {
+        setStatus(
+            "❌ Los criterios de inclusión son obligatorios."
+        );
+        return;
+    }
+
+    if (!payload.exclusion_criteria) {
+        setStatus(
+            "❌ Los criterios de exclusión son obligatorios."
+        );
+        return;
+    }
+
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Guardando...";
+    }
+
+    setStatus("💾 Guardando protocolo...");
+
+    try {
+
+        const response = await fetch(
+            "/api/systematic-review/update-protocol",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(
+                data.error ||
+                "No se pudo guardar el protocolo"
+            );
+        }
+
+        setStatus("✅ Protocolo actualizado correctamente.");
+
+        setTimeout(
+            () => window.location.reload(),
+            600
+        );
+
+    } catch (error) {
+
+        setStatus(
+            `❌ Error guardando protocolo: ${error.message}`
+        );
+
+        if (button) {
+            button.disabled = false;
+            button.textContent = "💾 Guardar cambios";
+        }
+    }
+}
+
+
 async function runPubMedSearch() {
 
     const queryInput = document.getElementById("pubmed-query");
@@ -1765,7 +2043,7 @@ async function runAIScreening() {
     button.disabled = true;
 
     setStatus(
-        "🤖 Analizando artículos pendientes con IA..."
+        "🤖 Preparando screening IA..."
     );
 
     try {
@@ -1791,28 +2069,32 @@ async function runAIScreening() {
             );
         }
 
-        const screened =
-            data.result?.screened ?? 0;
-
-        if (screened === 0) {
-
+        if (data.no_pending) {
             setStatus(
                 "ℹ️ No hay artículos nuevos pendientes de screening IA."
             );
-
             button.disabled = false;
-
             return;
         }
 
-        setStatus(
-            `✅ Screening IA completado: ${screened} artículos.`
-        );
+        if (!data.task_id) {
+            throw new Error(
+                "El servidor no devolvió un identificador de tarea."
+            );
+        }
 
-        setTimeout(
-            () => window.location.reload(),
-            900
-        );
+        if (data.already_running) {
+            setStatus(
+                "🤖 Ya existe un screening IA en ejecución. Esperando resultado..."
+            );
+        } else {
+            const pending = data.pending_articles ?? "?";
+            setStatus(
+                `🤖 Screening IA iniciado en segundo plano (${pending} artículos pendientes)...`
+            );
+        }
+
+        await waitForAIScreeningTask(data.task_id, button);
 
     } catch (error) {
 
@@ -1826,6 +2108,102 @@ async function runAIScreening() {
     }
 }
 
+
+async function waitForAIScreeningTask(taskId, button) {
+
+    const startedAt = Date.now();
+
+    // El worker puede tardar varios minutos con modelos locales.
+    const maxWaitMs = 30 * 60 * 1000;
+
+    while (Date.now() - startedAt < maxWaitMs) {
+
+        await new Promise(
+            resolve => setTimeout(resolve, 1500)
+        );
+
+        let response;
+
+        try {
+            response = await fetch(
+                `/api/systematic-review/tasks/${encodeURIComponent(taskId)}`
+            );
+        } catch (error) {
+            setStatus(
+                "⚠️ Screening IA en ejecución. Esperando conexión..."
+            );
+            continue;
+        }
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(
+                data.error || "No se pudo consultar el estado del screening."
+            );
+        }
+
+        if (data.status === "pending") {
+            setStatus(
+                "⏳ Screening IA en cola..."
+            );
+            continue;
+        }
+
+        if (data.status === "running") {
+            setStatus(
+                "🤖 Analizando artículos pendientes con IA..."
+            );
+            continue;
+        }
+
+        if (data.status === "failed") {
+            throw new Error(
+                data.error || "La tarea de screening IA ha fallado."
+            );
+        }
+
+        if (data.status === "completed") {
+
+            const screened =
+                data.result?.screened ?? 0;
+
+            const failed =
+                data.result?.failed ?? 0;
+
+            if (screened === 0 && failed === 0) {
+                setStatus(
+                    "ℹ️ No había artículos pendientes de screening IA."
+                );
+                button.disabled = false;
+                return;
+            }
+
+            if (failed > 0) {
+                setStatus(
+                    `⚠️ Screening terminado: ${screened} procesados, ${failed} con error.`
+                );
+            } else {
+                setStatus(
+                    `✅ Screening IA completado: ${screened} artículos.`
+                );
+            }
+
+            setTimeout(
+                () => window.location.reload(),
+                900
+            );
+
+            return;
+        }
+    }
+
+    setStatus(
+        "⚠️ El screening continúa en segundo plano. Puedes recargar la página más tarde."
+    );
+
+    button.disabled = false;
+}
 
 
 async function uploadFullText(articleId) {
