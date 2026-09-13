@@ -30,8 +30,11 @@ PUBMED_FETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
 def _save_review_search(review_id, query, total_found, articles, strategy_id=None):
     """
-    Guarda la búsqueda y los artículos en la revisión sistemática.
-    Evita duplicados por PMID y DOI dentro de la misma revisión.
+    Guarda de forma atómica la ejecución PubMed y sus artículos.
+
+    Si la búsqueda se ejecutó directamente sin una estrategia guardada,
+    crea un snapshot reproducible de la query exacta ejecutada y enlaza
+    review_searches.strategy_id con ese snapshot.
     """
     import json
     import uuid
@@ -39,6 +42,144 @@ def _save_review_search(review_id, query, total_found, articles, strategy_id=Non
     search_id = str(uuid.uuid4())
 
     with get_conn() as conn, conn.cursor() as cur:
+
+        if strategy_id:
+            # Defensa adicional para llamadas al worker que no pasen
+            # por el endpoint del dashboard.
+            cur.execute(
+                """
+                SELECT
+                    review_id,
+                    database_name,
+                    query,
+                    human_confirmed
+                FROM review_search_strategies
+                WHERE id = %s
+                FOR SHARE
+                """,
+                (strategy_id,),
+            )
+
+            strategy = cur.fetchone()
+
+            if not strategy:
+                raise ValueError(
+                    "La estrategia de búsqueda indicada no existe"
+                )
+
+            (
+                strategy_review_id,
+                database_name,
+                strategy_query,
+                human_confirmed,
+            ) = strategy
+
+            if strategy_review_id != review_id:
+                raise ValueError(
+                    "La estrategia no pertenece a esta revisión"
+                )
+
+            if database_name != "PubMed":
+                raise ValueError(
+                    "La estrategia no corresponde a PubMed"
+                )
+
+            if not human_confirmed:
+                raise ValueError(
+                    "La estrategia todavía no tiene confirmación humana"
+                )
+
+            if (strategy_query or "").strip() != query.strip():
+                raise ValueError(
+                    "La query ejecutada no coincide con la estrategia "
+                    "confirmada"
+                )
+
+        else:
+            # Bloqueamos la revisión durante el cálculo de la versión para
+            # evitar que dos ejecuciones directas generen la misma versión.
+            cur.execute(
+                """
+                SELECT id
+                FROM systematic_reviews
+                WHERE id = %s
+                FOR UPDATE
+                """,
+                (review_id,),
+            )
+
+            if not cur.fetchone():
+                raise ValueError(
+                    "La revisión sistemática indicada no existe"
+                )
+
+            cur.execute(
+                """
+                SELECT COALESCE(MAX(version), 0)
+                FROM review_search_strategies
+                WHERE review_id = %s
+                  AND database_name = 'PubMed'
+                """,
+                (review_id,),
+            )
+
+            next_version = (cur.fetchone()[0] or 0) + 1
+            strategy_id = str(uuid.uuid4())
+
+            cur.execute(
+                """
+                INSERT INTO review_search_strategies (
+                    id,
+                    review_id,
+                    database_name,
+                    version,
+                    query,
+                    is_valid,
+                    accepted_by_database,
+                    total_found,
+                    query_translation,
+                    warnings,
+                    errors,
+                    removed_terms,
+                    concepts,
+                    model,
+                    provider,
+                    human_confirmed,
+                    confirmed_at
+                )
+                VALUES (
+                    %s,
+                    %s,
+                    'PubMed',
+                    %s,
+                    %s,
+                    TRUE,
+                    TRUE,
+                    %s,
+                    NULL,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    NULL,
+                    'direct_pubmed_execution',
+                    TRUE,
+                    CURRENT_TIMESTAMP
+                )
+                """,
+                (
+                    strategy_id,
+                    review_id,
+                    next_version,
+                    query,
+                    total_found,
+                    json.dumps([]),
+                    json.dumps([]),
+                    json.dumps([]),
+                    json.dumps([]),
+                ),
+            )
+
         cur.execute(
             """
             INSERT INTO review_searches
@@ -147,9 +288,9 @@ def _save_review_search(review_id, query, total_found, articles, strategy_id=Non
 
     return {
         "search_id": search_id,
+        "strategy_id": strategy_id,
         "imported": imported,
     }
-
 
 
 def _text(element):
