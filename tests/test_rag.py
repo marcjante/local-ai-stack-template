@@ -224,3 +224,29 @@ def test_reindex_preserves_pdf_page_metadata(dashboard_client, project_id):
         chunk["section"] == "Resultados"
         for chunk in page_3_chunks
     )
+
+def test_chunk_offsets_survive_whitespace_normalization():
+    from rag.chunking import split_into_chunks
+
+    text = "TB preventive treatment\nis central\tto reducing TB incidence."
+
+    chunks = split_into_chunks(
+        "doc-test-offsets",
+        text,
+        chunk_size=5,
+        overlap=1,
+        page_number=1,
+        section="Abstract",
+    )
+
+    assert chunks
+    first = chunks[0]
+
+    assert first["char_start"] == 0
+    assert first["char_end"] is not None
+    assert first["char_end"] > first["char_start"]
+    assert first["page_number"] == 1
+    assert first["section"] == "Abstract"
+
+    original_slice = text[first["char_start"]:first["char_end"]]
+    assert " ".join(original_slice.split()) == first["text"]

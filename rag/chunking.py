@@ -2,16 +2,29 @@
 chunking.py
 
 Responsabilidad única: partir un documento largo en trozos manejables
-(chunks) para indexar y para poder citar con precisión.
+(chunks) para indexar y poder citar con precisión.
 
 Compatibilidad:
-- texto plano sigue funcionando como antes;
-- cada chunk incorpora offsets de caracteres aproximados;
-- page_number y section son metadatos opcionales preparados para
-  documentos estructurados/PDF.
+- texto plano sigue funcionando;
+- cada chunk incorpora offsets de caracteres reales respecto al bloque;
+- page_number y section son metadatos opcionales para documentos
+  estructurados/PDF.
 """
 
 import hashlib
+import re
+
+
+def _word_spans(text: str):
+    """
+    Devuelve las palabras junto con sus posiciones reales en el texto
+    original. Esto evita perder offsets cuando existen saltos de línea,
+    tabulaciones o múltiples espacios.
+    """
+    return [
+        (match.group(0), match.start(), match.end())
+        for match in re.finditer(r"\S+", text)
+    ]
 
 
 def split_into_chunks(
@@ -23,30 +36,35 @@ def split_into_chunks(
     section=None,
     position_offset: int = 0,
 ) -> list:
-    words = text.split()
-    if not words:
+    spans = _word_spans(text)
+
+    if not spans:
         return []
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size debe ser mayor que 0")
+
+    if overlap < 0:
+        raise ValueError("overlap no puede ser negativo")
+
+    if overlap >= chunk_size:
+        raise ValueError("overlap debe ser menor que chunk_size")
 
     chunks = []
     start = 0
     position = position_offset
-    search_from = 0
 
-    while start < len(words):
-        end = min(start + chunk_size, len(words))
-        chunk_text = " ".join(words[start:end])
+    while start < len(spans):
+        end = min(start + chunk_size, len(spans))
 
-        # Localiza el chunk dentro del texto original.
-        # Es aproximado porque split()/join() normaliza espacios,
-        # pero permite mantener trazabilidad útil sin romper compatibilidad.
-        char_start = text.find(chunk_text, search_from)
+        char_start = spans[start][1]
+        char_end = spans[end - 1][2]
 
-        if char_start < 0:
-            char_start = None
-            char_end = None
-        else:
-            char_end = char_start + len(chunk_text)
-            search_from = max(char_start, 0)
+        # Conservamos el rango real del texto original.
+        original_slice = text[char_start:char_end]
+
+        # Para embeddings/RAG normalizamos únicamente el whitespace.
+        chunk_text = " ".join(original_slice.split())
 
         chunk_id = (
             f"{doc_id}::{position}::"
@@ -66,7 +84,7 @@ def split_into_chunks(
 
         position += 1
 
-        if end == len(words):
+        if end == len(spans):
             break
 
         start = end - overlap
