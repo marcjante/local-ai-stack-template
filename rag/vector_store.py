@@ -154,7 +154,7 @@ def search(query_embedding: list, top_k: int = 5, doc_id: str = None, project_id
 # --- Backend pgvector (🟠5 del roadmap, implementado de verdad) ---
 #
 # Requiere: CREATE EXTENSION vector; y la tabla rag_chunks_pgvector (ver
-# db/schema.sql) con una columna `embedding vector(256)` en vez de JSONB.
+# db/schema_pgvector.sql) con una columna `embedding vector(256)` en vez de JSONB.
 # La búsqueda usa el operador `<=>` (distancia coseno) de pgvector — se
 # calcula dentro de Postgres, no trayendo todos los chunks a Python como
 # hace el backend por defecto. A partir de decenas de miles de chunks,
@@ -169,13 +169,41 @@ def _add_chunks_pgvector(chunks: list, embeddings: list, doc_version: str = "v1"
         for chunk, emb in zip(chunks, embeddings):
             cur.execute(
                 """
-                INSERT INTO rag_chunks_pgvector (chunk_id, doc_id, position, text, embedding, doc_version)
-                VALUES (%s, %s, %s, %s, %s::vector, %s)
+                INSERT INTO rag_chunks_pgvector (
+                    chunk_id,
+                    doc_id,
+                    position,
+                    text,
+                    embedding,
+                    doc_version,
+                    page_number,
+                    section,
+                    char_start,
+                    char_end
+                )
+                VALUES (%s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s)
                 ON CONFLICT (chunk_id) DO UPDATE
-                SET text = EXCLUDED.text, embedding = EXCLUDED.embedding, doc_version = EXCLUDED.doc_version
+                SET
+                    text = EXCLUDED.text,
+                    embedding = EXCLUDED.embedding,
+                    doc_version = EXCLUDED.doc_version,
+                    page_number = EXCLUDED.page_number,
+                    section = EXCLUDED.section,
+                    char_start = EXCLUDED.char_start,
+                    char_end = EXCLUDED.char_end
                 """,
-                (chunk["chunk_id"], chunk["doc_id"], chunk["position"], chunk["text"],
-                 _vector_literal(emb), doc_version),
+                (
+                    chunk["chunk_id"],
+                    chunk["doc_id"],
+                    chunk["position"],
+                    chunk["text"],
+                    _vector_literal(emb),
+                    doc_version,
+                    chunk.get("page_number"),
+                    chunk.get("section"),
+                    chunk.get("char_start"),
+                    chunk.get("char_end"),
+                ),
             )
 
 
@@ -193,8 +221,17 @@ def _search_pgvector(query_embedding: list, top_k: int = 5, doc_id: str = None, 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             f"""
-            SELECT rc.chunk_id, rc.doc_id, rc.position, rc.text, rc.doc_version,
-                   1 - (rc.embedding <=> %s::vector) AS score
+            SELECT
+                rc.chunk_id,
+                rc.doc_id,
+                rc.position,
+                rc.text,
+                rc.doc_version,
+                rc.page_number,
+                rc.section,
+                rc.char_start,
+                rc.char_end,
+                1 - (rc.embedding <=> %s::vector) AS score
             FROM rag_chunks_pgvector rc
             LEFT JOIN documents d ON d.doc_id = rc.doc_id
             {where}
@@ -206,7 +243,18 @@ def _search_pgvector(query_embedding: list, top_k: int = 5, doc_id: str = None, 
         rows = cur.fetchall()
 
     return [
-        {"chunk_id": r[0], "doc_id": r[1], "position": r[2], "text": r[3], "doc_version": r[4], "score": float(r[5])}
+        {
+            "chunk_id": r[0],
+            "doc_id": r[1],
+            "position": r[2],
+            "text": r[3],
+            "doc_version": r[4],
+            "page_number": r[5],
+            "section": r[6],
+            "char_start": r[7],
+            "char_end": r[8],
+            "score": float(r[9]),
+        }
         for r in rows
     ]
 

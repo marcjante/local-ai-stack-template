@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS rag_chunks_pgvector (
     text        TEXT NOT NULL,
     embedding   vector(256) NOT NULL,
     doc_version TEXT NOT NULL DEFAULT 'v1',
+    page_number INTEGER,
+    section     TEXT,
+    char_start  INTEGER,
+    char_end    INTEGER,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
