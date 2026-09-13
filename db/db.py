@@ -15,7 +15,7 @@ import json
 from contextlib import contextmanager
 
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, Json
 
 DB_DSN = os.environ.get(
     "DATABASE_URL",
@@ -475,22 +475,59 @@ def ensure_default_collection(project_id: str = "default"):
     create_collection("default", "Default", project_id=project_id, description="Colección por defecto")
 
 
-def register_document(doc_id: str, collection_id: str, filename: str, content_type: str,
-                       doc_version: str, embedding_model: str, raw_text: str, n_chunks: int,
-                       project_id: str = "default"):
+def register_document(
+    doc_id: str,
+    collection_id: str,
+    filename: str,
+    content_type: str,
+    doc_version: str,
+    embedding_model: str,
+    raw_text: str,
+    n_chunks: int,
+    project_id: str = "default",
+    source_metadata=None,
+):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO documents (doc_id, collection_id, project_id, filename, content_type, doc_version,
-                                    embedding_model, raw_text, n_chunks, indexed_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+            INSERT INTO documents (
+                doc_id,
+                collection_id,
+                project_id,
+                filename,
+                content_type,
+                doc_version,
+                embedding_model,
+                raw_text,
+                n_chunks,
+                source_metadata,
+                indexed_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
             ON CONFLICT (doc_id) DO UPDATE SET
-                collection_id = EXCLUDED.collection_id, project_id = EXCLUDED.project_id,
-                filename = EXCLUDED.filename, content_type = EXCLUDED.content_type,
-                doc_version = EXCLUDED.doc_version, embedding_model = EXCLUDED.embedding_model,
-                raw_text = EXCLUDED.raw_text, n_chunks = EXCLUDED.n_chunks, indexed_at = now()
+                collection_id = EXCLUDED.collection_id,
+                project_id = EXCLUDED.project_id,
+                filename = EXCLUDED.filename,
+                content_type = EXCLUDED.content_type,
+                doc_version = EXCLUDED.doc_version,
+                embedding_model = EXCLUDED.embedding_model,
+                raw_text = EXCLUDED.raw_text,
+                n_chunks = EXCLUDED.n_chunks,
+                source_metadata = EXCLUDED.source_metadata,
+                indexed_at = now()
             """,
-            (doc_id, collection_id, project_id, filename, content_type, doc_version, embedding_model, raw_text, n_chunks),
+            (
+                doc_id,
+                collection_id,
+                project_id,
+                filename,
+                content_type,
+                doc_version,
+                embedding_model,
+                raw_text,
+                n_chunks,
+                Json(source_metadata) if source_metadata is not None else None,
+            ),
         )
 
 
@@ -523,5 +560,20 @@ def delete_document(doc_id: str):
 
 def get_document_chunks(doc_id: str):
     with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("SELECT chunk_id, position, text FROM rag_chunks WHERE doc_id = %s ORDER BY position", (doc_id,))
+        cur.execute(
+            """
+            SELECT
+                chunk_id,
+                position,
+                text,
+                page_number,
+                section,
+                char_start,
+                char_end
+            FROM rag_chunks
+            WHERE doc_id = %s
+            ORDER BY position
+            """,
+            (doc_id,),
+        )
         return cur.fetchall()

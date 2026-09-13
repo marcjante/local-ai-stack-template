@@ -607,6 +607,21 @@ def _index_and_register(
             doc_version=doc_version,
         )
 
+    source_metadata = None
+
+    if structured_blocks:
+        source_metadata = {
+            "blocks": [
+                {
+                    "text": block.get("text"),
+                    "page_number": block.get("page_number"),
+                    "section": block.get("section"),
+                }
+                for block in structured_blocks
+                if (block.get("text") or "").strip()
+            ]
+        }
+
     register_document(
         doc_id,
         collection_id,
@@ -617,6 +632,7 @@ def _index_and_register(
         text,
         len(chunks),
         project_id=project_id,
+        source_metadata=source_metadata,
     )
 
     return len(chunks)
@@ -719,9 +735,22 @@ def knowledge_reindex(doc_id):
         return jsonify({"error": "documento no encontrado"}), 404
     if not doc.get("raw_text"):
         return jsonify({"error": "este documento no tiene texto guardado para reindexar (indexado antes de esta función)"}), 400
-    n_chunks = _index_and_register(doc_id, doc["raw_text"], doc["collection_id"],
-                                    filename=doc["filename"], content_type=doc["content_type"],
-                                    doc_version=doc["doc_version"], project_id=doc["project_id"])
+    structured_blocks = None
+
+    source_metadata = doc.get("source_metadata") or {}
+    if source_metadata.get("blocks"):
+        structured_blocks = source_metadata["blocks"]
+
+    n_chunks = _index_and_register(
+        doc_id,
+        doc["raw_text"],
+        doc["collection_id"],
+        filename=doc["filename"],
+        content_type=doc["content_type"],
+        doc_version=doc["doc_version"],
+        project_id=doc["project_id"],
+        structured_blocks=structured_blocks,
+    )
     return jsonify({"doc_id": doc_id, "n_chunks": n_chunks})
 
 

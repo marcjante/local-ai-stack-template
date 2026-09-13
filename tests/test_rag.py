@@ -148,3 +148,79 @@ def test_chunk_metadata_is_persisted_and_retrieved(project_id):
         ]
 
         assert quoted == result["text"]
+
+
+def test_reindex_preserves_pdf_page_metadata(dashboard_client, project_id):
+    from db.db import create_collection, get_document, get_document_chunks
+    from dashboard.dashboard_service import _index_and_register
+
+    doc_id = "doc-reindex-page-metadata"
+
+    structured_blocks = [
+        {
+            "text": "Contenido clínico de la primera página.",
+            "page_number": 1,
+            "section": None,
+        },
+        {
+            "text": "Resultados del estudio en la tercera página.",
+            "page_number": 3,
+            "section": "Resultados",
+        },
+    ]
+
+    raw_text = "\n".join(
+        block["text"]
+        for block in structured_blocks
+    )
+
+    create_collection(
+        "default",
+        "Default",
+        project_id=project_id,
+    )
+
+    _index_and_register(
+        doc_id,
+        raw_text,
+        "default",
+        filename="article.pdf",
+        content_type="application/pdf",
+        doc_version="v1",
+        project_id=project_id,
+        structured_blocks=structured_blocks,
+    )
+
+    before = get_document_chunks(doc_id)
+
+    assert before
+    assert {chunk["page_number"] for chunk in before} == {1, 3}
+
+    stored = get_document(doc_id)
+
+    assert stored["source_metadata"]
+    assert stored["source_metadata"]["blocks"][0]["page_number"] == 1
+    assert stored["source_metadata"]["blocks"][1]["page_number"] == 3
+
+    response = dashboard_client.post(
+        f"/api/knowledge/documents/{doc_id}/reindex",
+    )
+
+    assert response.status_code == 200
+
+    after = get_document_chunks(doc_id)
+
+    assert after
+    assert {chunk["page_number"] for chunk in after} == {1, 3}
+
+    page_3_chunks = [
+        chunk
+        for chunk in after
+        if chunk["page_number"] == 3
+    ]
+
+    assert page_3_chunks
+    assert all(
+        chunk["section"] == "Resultados"
+        for chunk in page_3_chunks
+    )
