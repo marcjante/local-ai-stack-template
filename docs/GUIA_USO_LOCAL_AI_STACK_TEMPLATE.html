@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guía funcional — Local AI Stack Template</title>
+<meta name="description" content="Manual de instalación, arquitectura, uso, desarrollo, pruebas y mantenimiento de Local AI Stack Template.">
+<style>
+:root{
+  --bg:#f6f8fb;
+  --panel:#ffffff;
+  --text:#172033;
+  --muted:#667085;
+  --border:#dbe2ea;
+  --accent:#2563eb;
+  --accent2:#0f766e;
+  --good:#15803d;
+  --warn:#b45309;
+  --bad:#b91c1c;
+  --code:#0b1220;
+  --codeText:#e5eefc;
+  --shadow:0 10px 30px rgba(15,23,42,.08);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.58;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.header{
+  background:linear-gradient(135deg,#0f172a,#1e3a8a 55%,#0f766e);
+  color:white;
+  padding:56px 24px 42px;
+}
+.header-inner{max-width:1180px;margin:auto}
+.kicker{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;opacity:.78;font-weight:700}
+h1{font-size:clamp(2rem,5vw,4rem);line-height:1.05;margin:.35rem 0 1rem}
+.subtitle{max-width:900px;font-size:1.05rem;opacity:.9}
+.badges{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.badge{padding:7px 11px;border:1px solid rgba(255,255,255,.3);border-radius:999px;background:rgba(255,255,255,.08);font-size:.85rem}
+.layout{max-width:1400px;margin:auto;display:grid;grid-template-columns:280px minmax(0,1fr);gap:26px;padding:28px 24px 60px}
+aside{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+aside strong{display:block;margin-bottom:10px}
+aside a{display:block;padding:7px 9px;border-radius:9px;color:#334155;font-size:.92rem}
+aside a:hover{background:#eef4ff;text-decoration:none}
+main{min-width:0}
+section{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:30px;
+  margin-bottom:24px;
+  box-shadow:var(--shadow);
+}
+h2{font-size:1.65rem;margin:0 0 16px}
+h3{margin-top:26px;margin-bottom:10px}
+h4{margin-top:20px;margin-bottom:8px}
+p{margin:.7rem 0}
+ul,ol{padding-left:1.35rem}
+li{margin:.35rem 0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.card{border:1px solid var(--border);border-radius:15px;padding:16px;background:#fbfcfe}
+.card h3,.card h4{margin-top:0}
+.callout{padding:14px 16px;border-left:4px solid var(--accent);background:#eff6ff;border-radius:10px;margin:14px 0}
+.callout.good{border-left-color:var(--good);background:#f0fdf4}
+.callout.warn{border-left-color:var(--warn);background:#fff7ed}
+.callout.bad{border-left-color:var(--bad);background:#fef2f2}
+.code-wrap{position:relative;margin:13px 0}
+pre{
+  background:var(--code);
+  color:var(--codeText);
+  padding:18px;
+  border-radius:13px;
+  overflow:auto;
+  font-size:.88rem;
+  line-height:1.45;
+  border:1px solid #1f2937;
+}
+code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+.copy{
+  position:absolute;top:9px;right:9px;border:1px solid #475569;background:#111827;color:#fff;
+  border-radius:8px;padding:5px 9px;font-size:.75rem;cursor:pointer
+}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:.93rem}
+th,td{border-bottom:1px solid var(--border);padding:10px 9px;text-align:left;vertical-align:top}
+th{background:#f8fafc}
+.tree{white-space:pre;overflow:auto;background:#0f172a;color:#dbeafe;border-radius:13px;padding:18px;font-family:monospace;font-size:.88rem}
+.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:stretch;margin:18px 0}
+.flow .step{border:1px solid var(--border);border-radius:14px;padding:14px;background:#fafcff;text-align:center;position:relative;font-size:.9rem}
+.flow .step:not(:last-child)::after{content:"→";position:absolute;right:-12px;top:44%;font-weight:700;color:#64748b}
+.mono{font-family:monospace}
+.small{font-size:.88rem;color:var(--muted)}
+.check{color:var(--good);font-weight:700}
+.warn-txt{color:var(--warn);font-weight:700}
+hr{border:0;border-top:1px solid var(--border);margin:28px 0}
+footer{max-width:1180px;margin:0 auto 50px;padding:0 24px;color:var(--muted);font-size:.9rem}
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr}
+  aside{position:relative;top:auto;max-height:none}
+  .grid,.grid3{grid-template-columns:1fr}
+  .flow{grid-template-columns:1fr}
+  .flow .step:not(:last-child)::after{content:"↓";right:auto;left:49%;top:auto;bottom:-18px}
+}
+@media print{
+  aside,.copy{display:none}
+  .layout{display:block;padding:0}
+  section{box-shadow:none;page-break-inside:avoid}
+  .header{background:#fff;color:#000;padding:20px 0;border-bottom:2px solid #000}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="kicker">Manual funcional · GitHub · v1.x</div>
+    <h1>Local AI Stack Template</h1>
+    <div class="subtitle">
+      Guía completa de instalación, arquitectura, uso, desarrollo, revisión sistemática, plugins, workers,
+      base de datos, pruebas, CI/CD, copias de seguridad y mantenimiento del proyecto.
+    </div>
+    <div class="badges">
+      <span class="badge">Flask</span>
+      <span class="badge">PostgreSQL</span>
+      <span class="badge">Redis / RQ</span>
+      <span class="badge">Alembic</span>
+      <span class="badge">Pytest</span>
+      <span class="badge">GitHub Actions</span>
+      <span class="badge">Arquitectura multiproyecto</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<aside>
+  <strong>Índice</strong>
+  <a href="#objetivo">1. Objetivo</a>
+  <a href="#arquitectura">2. Arquitectura</a>
+  <a href="#estructura">3. Estructura del repositorio</a>
+  <a href="#requisitos">4. Requisitos</a>
+  <a href="#instalacion">5. Instalación desde cero</a>
+  <a href="#configuracion">6. Configuración</a>
+  <a href="#arranque">7. Arranque del sistema</a>
+  <a href="#proyectos">8. Gestión de proyectos</a>
+  <a href="#revision">9. Revisiones sistemáticas</a>
+  <a href="#workers">10. Workers y plugins</a>
+  <a href="#rag">11. RAG y documentos</a>
+  <a href="#bbdd">12. Base de datos y Alembic</a>
+  <a href="#backup">13. Backup y restore</a>
+  <a href="#tests">14. Tests</a>
+  <a href="#ci">15. GitHub Actions</a>
+  <a href="#nuevo-plugin">16. Crear un nuevo plugin</a>
+  <a href="#nuevo-proyecto">17. Añadir otro tipo de proyecto</a>
+  <a href="#seguridad">18. Seguridad</a>
+  <a href="#mantenimiento">19. Mantenimiento</a>
+  <a href="#troubleshooting">20. Problemas frecuentes</a>
+  <a href="#release">21. Publicar una release</a>
+  <a href="#quickstart">22. Quick Start</a>
+</aside>
+
+<main>
+
+<section id="objetivo">
+  <h2>1. ¿Qué es Local AI Stack Template?</h2>
+  <p>
+    <strong>Local AI Stack Template</strong> es una plantilla genérica para construir aplicaciones de IA locales,
+    reproducibles y organizadas por proyectos. La intención es poder reutilizar la misma infraestructura para
+    distintos casos de uso sin tener que volver a crear desde cero el backend, la base de datos, los workers,
+    la gestión de tareas, los plugins o el sistema de auditoría.
+  </p>
+  <div class="grid">
+    <div class="card">
+      <h3>Qué resuelve</h3>
+      <ul>
+        <li>Separación de datos por proyecto.</li>
+        <li>Ejecución asíncrona mediante colas.</li>
+        <li>Plugins reutilizables.</li>
+        <li>Persistencia en PostgreSQL.</li>
+        <li>Integración con RAG y documentos.</li>
+        <li>Auditoría y trazabilidad.</li>
+        <li>Migraciones reproducibles.</li>
+        <li>Pruebas automatizadas y CI.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Ejemplo incluido</h3>
+      <p>
+        El proyecto incluye como caso funcional completo un módulo de <strong>revisión sistemática</strong> con:
+        protocolo, estrategias de búsqueda, PubMed, cribado por IA, decisiones humanas, conflictos,
+        texto completo, extracción de datos y trazabilidad.
+      </p>
+    </div>
+  </div>
+  <div class="callout good">
+    <strong>Estado actual:</strong> instalación limpia validada sobre PostgreSQL vacío, migraciones Alembic completas
+    y suite de pruebas con <strong>89 tests superados</strong>.
+  </div>
+</section>
+
+<section id="arquitectura">
+  <h2>2. Arquitectura general</h2>
+  <div class="flow">
+    <div class="step"><strong>Dashboard / API</strong><br>Flask</div>
+    <div class="step"><strong>Tasks</strong><br>PostgreSQL</div>
+    <div class="step"><strong>Queue</strong><br>Redis / RQ</div>
+    <div class="step"><strong>Workers</strong><br>Plugins</div>
+    <div class="step"><strong>Resultados</strong><br>DB / RAG / UI</div>
+  </div>
+
+  <table>
+    <thead><tr><th>Capa</th><th>Función</th><th>Componentes principales</th></tr></thead>
+    <tbody>
+      <tr><td>Interfaz</td><td>Panel local y endpoints</td><td><span class="mono">dashboard/dashboard_service.py</span></td></tr>
+      <tr><td>Backend</td><td>API, creación de tareas y servicios</td><td><span class="mono">backend/main.py</span></td></tr>
+      <tr><td>Persistencia</td><td>Datos, proyectos, tareas y auditoría</td><td>PostgreSQL + <span class="mono">db/db.py</span></td></tr>
+      <tr><td>Colas</td><td>Trabajo asíncrono</td><td>Redis + RQ</td></tr>
+      <tr><td>Workers</td><td>Ejecución de tareas</td><td><span class="mono">workers/plugins/</span></td></tr>
+      <tr><td>Migraciones</td><td>Evolución reproducible del esquema</td><td>Alembic</td></tr>
+      <tr><td>RAG</td><td>Documentos y fragmentos recuperables</td><td>documents, collections, rag_chunks</td></tr>
+      <tr><td>Pruebas</td><td>Regresión y aislamiento</td><td>Pytest + GitHub Actions</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="estructura">
+  <h2>3. Estructura del repositorio</h2>
+  <div class="tree">local-ai-stack-template/
+├── backend/
+│   └── main.py
+├── dashboard/
+│   ├── dashboard_service.py
+│   └── templates/
+├── workers/
+│   ├── plugin_loader.py
+│   ├── queue_conn.py
+│   └── plugins/
+│       ├── pubmed_search.py
+│       ├── screening.py
+│       ├── resolve_screening_conflict.py
+│       ├── data_extraction.py
+│       ├── human_data_extraction.py
+│       └── ...
+├── tools/
+│   └── registry.py
+├── config/
+│   ├── tools.yaml
+│   └── services.yaml
+├── db/
+│   ├── db.py
+│   ├── schema.sql
+│   └── migrations/
+│       ├── env.py
+│       ├── baseline_schema.sql
+│       └── versions/
+├── common/
+│   └── backup.py
+├── tests/
+├── .github/
+│   └── workflows/
+│       └── tests.yml
+├── alembic.ini
+├── requirements-dev.txt
+├── .env.example
+└── README.md</div>
+
+  <div class="callout">
+    <strong>Importante:</strong> <span class="mono">db/migrations/baseline_schema.sql</span> es un snapshot histórico
+    congelado para instalaciones nuevas. No debe convertirse en una copia dinámica del esquema actual.
+  </div>
+</section>
+
+<section id="requisitos">
+  <h2>4. Requisitos</h2>
+  <div class="grid3">
+    <div class="card"><h3>Python</h3><p>Python 3.9+ local. CI validado con Python 3.11.</p></div>
+    <div class="card"><h3>PostgreSQL</h3><p>Base de datos principal. CI validado con PostgreSQL 16.</p></div>
+    <div class="card"><h3>Redis</h3><p>Broker para RQ y workers asíncronos.</p></div>
+  </div>
+  <p>También se recomienda tener instalados <strong>Git</strong>, <strong>GitHub CLI</strong> y un entorno virtual de Python.</p>
+</section>
+
+<section id="instalacion">
+  <h2>5. Instalación desde cero</h2>
+
+  <h3>5.1 Clonar el repositorio</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>git clone https://github.com/marcjante/local-ai-stack-template.git
+cd local-ai-stack-template</code></pre></div>
+
+  <h3>5.2 Crear el entorno virtual</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt</code></pre></div>
+
+  <h3>5.3 Preparar variables de entorno</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>cp .env.example .env</code></pre></div>
+
+  <p>Edita <span class="mono">.env</span> y adapta la conexión PostgreSQL a tu sistema.</p>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>DATABASE_URL="dbname=stack_template user=TU_USUARIO host=127.0.0.1 port=5432"</code></pre></div>
+
+  <div class="callout warn">
+    No uses literalmente <span class="mono">TU_USUARIO</span>. Debe ser sustituido por el usuario PostgreSQL real de la máquina.
+  </div>
+
+  <h3>5.4 Crear la base de datos</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>createdb stack_template</code></pre></div>
+
+  <h3>5.5 Ejecutar todas las migraciones</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>alembic -c alembic.ini upgrade head</code></pre></div>
+
+  <p>La instalación debe recorrer toda la cadena de migraciones hasta el <em>head</em> actual sin errores.</p>
+</section>
+
+<section id="configuracion">
+  <h2>6. Configuración principal</h2>
+  <table>
+    <thead><tr><th>Archivo</th><th>Uso</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">.env</span></td><td>Conexiones y secretos locales. No debe subirse a Git.</td></tr>
+      <tr><td><span class="mono">config/tools.yaml</span></td><td>Registro y autorización de herramientas.</td></tr>
+      <tr><td><span class="mono">config/services.yaml</span></td><td>Servicios disponibles y comandos de arranque.</td></tr>
+      <tr><td><span class="mono">alembic.ini</span></td><td>Configuración de Alembic.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    El archivo <span class="mono">db/migrations/env.py</span> carga primero el entorno del proyecto. Una variable
+    <span class="mono">DATABASE_URL</span> definida explícitamente en el entorno tiene prioridad sobre el valor del
+    archivo <span class="mono">.env</span>.
+  </p>
+</section>
+
+<section id="arranque">
+  <h2>7. Arranque del sistema</h2>
+  <p>El stack requiere normalmente tres elementos en ejecución:</p>
+  <ol>
+    <li>PostgreSQL.</li>
+    <li>Redis.</li>
+    <li>Backend/dashboard y los workers necesarios.</li>
+  </ol>
+
+  <h3>Comprobaciones básicas</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>psql -d stack_template -c "SELECT current_database();"
+redis-cli ping</code></pre></div>
+
+  <p>Redis debe responder:</p>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>PONG</code></pre></div>
+
+  <div class="callout">
+    Los comandos concretos de arranque del dashboard, backend y workers dependen de la configuración declarada en
+    <span class="mono">config/services.yaml</span>. El panel también dispone de controles y diagnóstico de servicios.
+  </div>
+</section>
+
+<section id="proyectos">
+  <h2>8. Gestión multiproyecto</h2>
+  <p>
+    La arquitectura está diseñada para que distintos proyectos compartan infraestructura pero no mezclen sus datos.
+    Las operaciones sensibles se filtran mediante <span class="mono">project_id</span>.
+  </p>
+  <table>
+    <thead><tr><th>Concepto</th><th>Regla</th></tr></thead>
+    <tbody>
+      <tr><td>Proyecto activo</td><td>Determina el ámbito del dashboard.</td></tr>
+      <tr><td>Tareas</td><td>Se almacenan con <span class="mono">project_id</span>.</td></tr>
+      <tr><td>Revisiones sistemáticas</td><td>Siempre asociadas a un proyecto.</td></tr>
+      <tr><td>Cribado</td><td>El artículo y la revisión deben pertenecer al proyecto activo.</td></tr>
+      <tr><td>Extracción</td><td>La validación humana y la IA quedan restringidas por proyecto.</td></tr>
+      <tr><td>Auditoría</td><td>Los eventos incluyen <span class="mono">project_id</span> y <span class="mono">review_id</span>.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout bad">
+    Nunca elimines los filtros por <span class="mono">project_id</span> en consultas sensibles: son una barrera esencial
+    contra contaminación de datos entre proyectos.
+  </div>
+</section>
+
+<section id="revision">
+  <h2>9. Flujo funcional de revisión sistemática</h2>
+  <div class="flow">
+    <div class="step"><strong>1</strong><br>Protocolo</div>
+    <div class="step"><strong>2</strong><br>Estrategia de búsqueda</div>
+    <div class="step"><strong>3</strong><br>Importación / PubMed</div>
+    <div class="step"><strong>4</strong><br>Screening</div>
+    <div class="step"><strong>5</strong><br>Texto completo / Extracción</div>
+  </div>
+
+  <h3>9.1 Protocolo</h3>
+  <p>
+    Define el objetivo, criterios de inclusión/exclusión y estructura metodológica. Los cambios relevantes pueden
+    quedar registrados en <span class="mono">review_audit_log</span>.
+  </p>
+
+  <h3>9.2 Estrategias de búsqueda</h3>
+  <p>
+    Las estrategias están versionadas por revisión y base de datos. Existe protección tanto en la aplicación como
+    en la base de datos frente a versiones duplicadas.
+  </p>
+
+  <h3>9.3 PubMed</h3>
+  <p>
+    El plugin de PubMed puede ejecutar búsquedas y guardar resultados dentro de la revisión correspondiente.
+    Las operaciones de persistencia validan el proyecto antes de insertar resultados.
+  </p>
+
+  <h3>9.4 Cribado por IA y humano</h3>
+  <p>
+    El cribado automatizado propone decisiones. Los revisores humanos pueden registrar decisiones independientes.
+    El consenso automático solo se produce cuando todas las decisiones registradas coinciden.
+  </p>
+  <div class="callout">
+    Si existe desacuerdo entre revisores, se abre o reabre un conflicto. No se aplica una mayoría simple de forma silenciosa.
+  </div>
+
+  <h3>9.5 Texto completo</h3>
+  <p>
+    Los documentos a texto completo pueden recuperarse o cargarse manualmente. La carga valida revisión, artículo,
+    fase, duplicados y proyecto, y puede indexar el contenido en el sistema RAG.
+  </p>
+
+  <h3>9.6 Extracción de datos</h3>
+  <p>
+    Los campos de extracción se definen por revisión. La IA puede proponer valores y un revisor humano puede
+    validarlos posteriormente. Ambos caminos se auditan.
+  </p>
+</section>
+
+<section id="workers">
+  <h2>10. Workers, colas y plugins</h2>
+  <p>
+    Las tareas pesadas no tienen que ejecutarse dentro de la petición HTTP. El backend crea una tarea,
+    la persiste y la coloca en una cola RQ. Un worker recoge esa tarea y llama al plugin correspondiente.
+  </p>
+
+  <h3>Flujo</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>HTTP/API
+  ↓
+create_task(...)
+  ↓
+PostgreSQL: tasks
+  ↓
+Redis / RQ
+  ↓
+worker
+  ↓
+plugin.handle(task_id, payload)
+  ↓
+resultado + auditoría</code></pre></div>
+
+  <p>
+    El cargador de plugins descubre módulos que exponen, como mínimo, un nombre de cola y una función
+    <span class="mono">handle(task_id, payload)</span>.
+  </p>
+</section>
+
+<section id="rag">
+  <h2>11. Documentos y RAG</h2>
+  <p>El modelo de datos incluye:</p>
+  <ul>
+    <li><strong>collections</strong>: agrupaciones lógicas por proyecto.</li>
+    <li><strong>documents</strong>: documentos registrados.</li>
+    <li><strong>rag_chunks</strong>: fragmentos indexables.</li>
+  </ul>
+  <p>
+    Los fragmentos pueden almacenar metadatos como número de página, sección, offsets y metadatos adicionales
+    según las migraciones activas.
+  </p>
+  <div class="callout">
+    <strong>Regla de diseño:</strong> cuando un esquema evoluciona, los cambios nuevos deben introducirse mediante
+    una migración Alembic, no incorporándose retroactivamente a la baseline.
+  </div>
+</section>
+
+<section id="bbdd">
+  <h2>12. PostgreSQL y Alembic</h2>
+
+  <h3>12.1 Regla principal</h3>
+  <p>
+    Una vez publicada una migración, debe considerarse histórica. La baseline utiliza ahora
+    <span class="mono">db/migrations/baseline_schema.sql</span>, un snapshot congelado del esquema núcleo original.
+  </p>
+
+  <h3>12.2 Crear un cambio de esquema nuevo</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>alembic revision -m "describe el cambio"</code></pre></div>
+  <p>Edita el nuevo archivo de migración y después:</p>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>alembic -c alembic.ini upgrade head</code></pre></div>
+
+  <h3>12.3 Ver la versión actual</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>alembic -c alembic.ini current</code></pre></div>
+
+  <h3>12.4 Probar una instalación limpia</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>dropdb --if-exists stack_template_ci_test
+createdb stack_template_ci_test
+
+DATABASE_URL="dbname=stack_template_ci_test user=TU_USUARIO host=127.0.0.1 port=5432" \
+alembic -c alembic.ini upgrade head
+
+dropdb stack_template_ci_test</code></pre></div>
+</section>
+
+<section id="backup">
+  <h2>13. Backup y restauración</h2>
+  <p>
+    El sistema de backup incluye información de la base de datos y recursos asociados. La restauración de PostgreSQL
+    está configurada para detenerse ante errores y ejecutarse dentro de una transacción.
+  </p>
+  <p>
+    La extracción de archivos ZIP está protegida frente a rutas de tipo <em>path traversal</em>.
+  </p>
+  <div class="callout warn">
+    Una restauración es una operación de alto impacto. Debe probarse primero sobre una base temporal antes de
+    utilizarla sobre datos importantes.
+  </div>
+</section>
+
+<section id="tests">
+  <h2>14. Tests</h2>
+  <p>La suite comprueba, entre otros:</p>
+  <ul>
+    <li>Aislamiento entre proyectos.</li>
+    <li>Screening humano y por IA.</li>
+    <li>Conflictos entre revisores.</li>
+    <li>Extracción de datos.</li>
+    <li>PubMed y reproducibilidad.</li>
+    <li>Carga de texto completo.</li>
+    <li>Migraciones y comportamiento del workflow.</li>
+  </ul>
+
+  <h3>Ejecutar todos los tests</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>pytest tests/ -v</code></pre></div>
+
+  <p>Validación actual de referencia:</p>
+  <div class="callout good"><strong>89 passed, 1 warning</strong></div>
+
+  <p class="small">
+    El warning conocido de LibreSSL/urllib3 no afecta actualmente al resultado de la suite.
+  </p>
+</section>
+
+<section id="ci">
+  <h2>15. GitHub Actions / CI</h2>
+  <p>
+    El workflow <span class="mono">.github/workflows/tests.yml</span> levanta PostgreSQL y Redis desde cero,
+    instala dependencias, ejecuta las migraciones y después lanza la suite de tests.
+  </p>
+
+  <h3>Qué valida CI</h3>
+  <ol>
+    <li>Checkout del repositorio.</li>
+    <li>Python 3.11.</li>
+    <li>Instalación de dependencias.</li>
+    <li>PostgreSQL 16 limpio.</li>
+    <li>Redis 7.</li>
+    <li><span class="mono">alembic upgrade head</span>.</li>
+    <li><span class="mono">pytest tests/ -v</span>.</li>
+  </ol>
+
+  <div class="callout good">
+    La instalación limpia ha sido validada también en GitHub Actions con resultado <strong>success</strong>.
+  </div>
+</section>
+
+<section id="nuevo-plugin">
+  <h2>16. Cómo crear un nuevo plugin</h2>
+  <p>Un nuevo plugin debe vivir dentro de <span class="mono">workers/plugins/</span>.</p>
+
+  <h3>Plantilla conceptual</h3>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>QUEUE_NAME = "mi_cola"
+
+def handle(task_id, payload):
+    project_id = payload.get("project_id")
+    if not project_id:
+        raise ValueError("project_id es obligatorio")
+
+    # 1. Validar payload
+    # 2. Validar ámbito del proyecto
+    # 3. Ejecutar trabajo
+    # 4. Guardar resultado
+    # 5. Registrar auditoría si corresponde
+
+    return {"status": "ok"}</code></pre></div>
+
+  <div class="callout warn">
+    Para plugins que acceden a información de proyecto, no aceptes implícitamente datos de otro proyecto.
+    Valida siempre <span class="mono">project_id</span> antes de leer o modificar datos.
+  </div>
+</section>
+
+<section id="nuevo-proyecto">
+  <h2>17. Cómo reutilizar la plantilla para otro proyecto</h2>
+  <p>
+    La intención no es convertir todo en una revisión sistemática. Ese módulo es un caso de uso construido encima
+    de una infraestructura genérica.
+  </p>
+
+  <h3>Proceso recomendado</h3>
+  <ol>
+    <li>Crear el proyecto desde el panel.</li>
+    <li>Definir qué datos son propios del nuevo dominio.</li>
+    <li>Crear nuevas tablas mediante Alembic si hace falta.</li>
+    <li>Crear plugins para las tareas de procesamiento.</li>
+    <li>Registrar nuevas colas y herramientas.</li>
+    <li>Añadir vistas o endpoints específicos.</li>
+    <li>Asegurar que todas las consultas se filtran por <span class="mono">project_id</span>.</li>
+    <li>Añadir tests antes de integrar en <span class="mono">main</span>.</li>
+  </ol>
+
+  <p>Ejemplos de reutilización:</p>
+  <div class="grid3">
+    <div class="card"><strong>Revisión científica</strong><br>Búsqueda, cribado, extracción.</div>
+    <div class="card"><strong>Chatbot clínico</strong><br>RAG, documentos, evaluación y seguridad.</div>
+    <div class="card"><strong>Procesamiento documental</strong><br>Ingesta, análisis y generación de resultados.</div>
+  </div>
+</section>
+
+<section id="seguridad">
+  <h2>18. Seguridad y aislamiento</h2>
+  <ul>
+    <li>El dashboard está pensado para uso local y debe mantenerse ligado a <span class="mono">127.0.0.1</span>.</li>
+    <li>Los secretos deben permanecer en <span class="mono">.env</span>, nunca en Git.</li>
+    <li>Los datos deben filtrarse por proyecto.</li>
+    <li>Los archivos comprimidos se validan antes de extraerse.</li>
+    <li>Las restauraciones de PostgreSQL deben fallar de forma explícita ante errores.</li>
+    <li>Los cambios de esquema deben pasar por Alembic.</li>
+  </ul>
+  <div class="callout bad">
+    No expongas directamente el dashboard de administración a Internet sin añadir una capa de autenticación,
+    autorización, HTTPS y endurecimiento específico.
+  </div>
+</section>
+
+<section id="mantenimiento">
+  <h2>19. Mantenimiento recomendado</h2>
+  <table>
+    <thead><tr><th>Frecuencia</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr><td>Cada cambio</td><td>Ejecutar tests locales.</td></tr>
+      <tr><td>Cada cambio de DB</td><td>Crear migración Alembic y probar instalación limpia.</td></tr>
+      <tr><td>Antes de push</td><td>Revisar <span class="mono">git status</span> y <span class="mono">git diff</span>.</td></tr>
+      <tr><td>Después de push</td><td>Verificar GitHub Actions.</td></tr>
+      <tr><td>Antes de release</td><td>Backup + migración limpia + suite completa.</td></tr>
+      <tr><td>Periódicamente</td><td>Actualizar dependencias y revisar avisos de seguridad.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="troubleshooting">
+  <h2>20. Problemas frecuentes</h2>
+
+  <h3><span class="mono">zsh: command not found: alembic</span></h3>
+  <p>Normalmente significa que el entorno virtual no está activo.</p>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>source .venv/bin/activate
+which alembic</code></pre></div>
+
+  <h3><span class="mono">role "postgres" does not exist</span></h3>
+  <p>La URL de conexión usa un usuario PostgreSQL que no existe en la máquina.</p>
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>psql -c "\du"</code></pre></div>
+
+  <h3><span class="mono">DuplicateColumn</span> durante una instalación limpia</h3>
+  <p>
+    Suele indicar que una columna nueva se incluyó por error en la baseline y también en una migración posterior.
+    La baseline debe representar solamente el esquema histórico original.
+  </p>
+
+  <h3><span class="mono">UndefinedTable</span> durante baseline</h3>
+  <p>
+    Significa que la baseline está intentando crear una tabla con una FK hacia otra tabla que todavía no existe.
+    No debe solucionarse ocultando el error: hay que revisar el orden histórico de las migraciones.
+  </p>
+
+  <h3>GitHub Actions falla pero local funciona</h3>
+  <p>
+    Reproduce una base completamente vacía. Una base local antigua puede contener tablas o columnas que oculten
+    errores de migración.
+  </p>
+</section>
+
+<section id="release">
+  <h2>21. Flujo recomendado para publicar una release</h2>
+  <ol>
+    <li>Comprobar estado Git.</li>
+    <li>Ejecutar migraciones sobre una DB limpia.</li>
+    <li>Ejecutar la suite completa.</li>
+    <li>Commit.</li>
+    <li>Push a <span class="mono">main</span>.</li>
+    <li>Esperar CI verde.</li>
+    <li>Crear tag.</li>
+    <li>Publicar release en GitHub.</li>
+  </ol>
+
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>git status
+pytest tests/ -v
+git add .
+git commit -m "Descripción del cambio"
+git push origin main
+
+gh run list --workflow=tests.yml --limit 3</code></pre></div>
+
+  <p>
+    Para correcciones posteriores a una versión publicada, es preferible crear una versión de parche
+    como <strong>v1.0.1</strong> en lugar de reescribir silenciosamente el tag anterior.
+  </p>
+</section>
+
+<section id="quickstart">
+  <h2>22. Quick Start</h2>
+  <p>Resumen para una máquina nueva:</p>
+
+  <div class="code-wrap"><button class="copy">Copiar</button><pre><code>git clone https://github.com/marcjante/local-ai-stack-template.git
+cd local-ai-stack-template
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
+
+cp .env.example .env
+# Editar .env con el usuario/credenciales PostgreSQL reales
+
+createdb stack_template
+
+alembic -c alembic.ini upgrade head
+
+pytest tests/ -v</code></pre></div>
+
+  <div class="callout good">
+    Si las migraciones terminan correctamente y los tests están verdes, la infraestructura base está preparada.
+  </div>
+
+  <hr>
+  <p class="small">
+    Esta guía describe la estructura funcional del proyecto en su estado v1.x. Debe actualizarse cuando se añadan
+    nuevos servicios, tablas, plugins, endpoints o cambios relevantes de arquitectura.
+  </p>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <strong>Local AI Stack Template — Guía funcional</strong><br>
+  Documento preparado para incorporarse al repositorio como manual de uso y arquitectura.
+</footer>
+
+<script>
+document.querySelectorAll('.copy').forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    const code = btn.parentElement.querySelector('code').innerText;
+    try{
+      await navigator.clipboard.writeText(code);
+      const old = btn.textContent;
+      btn.textContent='Copiado ✓';
+      setTimeout(()=>btn.textContent=old,1200);
+    }catch(e){
+      btn.textContent='Selecciona y copia';
+    }
+  });
+});
+</script>
+</body>
+</html>
