@@ -28,13 +28,17 @@ down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_SCHEMA_SQL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "schema.sql")
+_SCHEMA_SQL_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "baseline_schema.sql",
+)
 
 
 def upgrade() -> None:
     """Crea el esquema núcleo completo (tasks, audit_log, rag_chunks, documents,
     collections, projects, project_settings, project_members, evaluations,
-    n8n_integrations), leyendo directamente db/schema.sql."""
+    n8n_integrations), leyendo un snapshot histórico congelado en db/migrations/baseline_schema.sql."""
     with open(_SCHEMA_SQL_PATH, encoding="utf-8") as f:
         op.execute(f.read())
 
