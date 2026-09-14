@@ -6,6 +6,28 @@ from db.db import get_conn
 from workers.plugins.pubmed_search import _save_review_search
 
 
+def _project_id_for_review(review_id):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT project_id
+            FROM systematic_reviews
+            WHERE id = %s
+            """,
+            (review_id,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        raise AssertionError(
+            f"No existe la revisión de test: {review_id}"
+        )
+
+    return row[0]
+
+
+
+
 def _insert_review(project_id):
     review_id = f"review-{uuid.uuid4().hex}"
 
@@ -91,6 +113,7 @@ def test_direct_pubmed_search_creates_reproducible_strategy(
 
     result = _save_review_search(
         review_id=review_id,
+        project_id=project_id,
         query=query,
         total_found=249,
         articles=[],
@@ -140,6 +163,7 @@ def test_direct_pubmed_search_links_execution_to_strategy(
 
     result = _save_review_search(
         review_id=review_id,
+        project_id=project_id,
         query="tuberculosis adherence",
         total_found=100,
         articles=[],
@@ -189,6 +213,7 @@ def test_direct_pubmed_search_increments_strategy_version(
 
     result = _save_review_search(
         review_id=review_id,
+        project_id=project_id,
         query="third query",
         total_found=42,
         articles=[],
@@ -224,6 +249,7 @@ def test_confirmed_strategy_is_reused_without_duplicate(
 
     result = _save_review_search(
         review_id=review_id,
+        project_id=project_id,
         query=query,
         total_found=75,
         articles=[],
@@ -275,6 +301,7 @@ def test_unconfirmed_strategy_cannot_be_executed(
     ):
         _save_review_search(
             review_id=review_id,
+            project_id=project_id,
             query=query,
             total_found=10,
             articles=[],

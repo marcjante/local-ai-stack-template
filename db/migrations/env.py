@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+from pathlib import Path
 from logging.config import fileConfig
 import os
 import sys
@@ -8,6 +10,10 @@ from sqlalchemy import pool
 from alembic import context
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(PROJECT_ROOT / ".env")
+
 from db.db import DB_DSN  # noqa: E402
 
 

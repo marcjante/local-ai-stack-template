@@ -246,7 +246,11 @@ def _prepare_source(article, field, top_k=12, top_n=5):
     return None
 
 
-def _load_extraction_context(review_id, article_ids=None):
+def _load_extraction_context(
+    review_id,
+    project_id,
+    article_ids=None,
+):
     """
     Recupera:
     - revisión,
@@ -264,8 +268,9 @@ def _load_extraction_context(review_id, article_ids=None):
                 SELECT id, title, project_id
                 FROM systematic_reviews
                 WHERE id = %s
+                  AND project_id = %s
                 """,
-                (review_id,),
+                (review_id, project_id),
             )
 
             review = cur.fetchone()
@@ -605,10 +610,12 @@ def _save_extraction(
                     validation_status,
                     human_value
                 FROM review_extractions
-                WHERE article_id = %s
+                WHERE review_id = %s
+                  AND article_id = %s
                   AND field_id = %s
                 """,
                 (
+                    review_id,
                     article["id"],
                     field["id"],
                 ),
@@ -646,6 +653,7 @@ def _save_extraction(
                         skills_used = %s,
                         updated_at = NOW()
                     WHERE id = %s
+                      AND review_id = %s
                     """,
                     (
                         Json(proposal["value"]),
@@ -658,6 +666,7 @@ def _save_extraction(
                         proposal["provider"],
                         Json(proposal["skills_used"]),
                         existing_id,
+                        review_id,
                     ),
                 )
 
@@ -746,10 +755,16 @@ def handle(task_id, payload):
 
     try:
         review_id = payload.get("review_id")
+        project_id = payload.get("project_id")
 
         if not review_id:
             raise ValueError(
                 "review_id es obligatorio"
+            )
+
+        if not project_id:
+            raise ValueError(
+                "project_id es obligatorio"
             )
 
         article_ids = payload.get("article_ids")
@@ -768,6 +783,7 @@ def handle(task_id, payload):
 
         context = _load_extraction_context(
             review_id=review_id,
+            project_id=project_id,
             article_ids=article_ids,
         )
 

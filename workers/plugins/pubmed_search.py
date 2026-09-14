@@ -28,7 +28,14 @@ PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 PUBMED_FETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
 
-def _save_review_search(review_id, query, total_found, articles, strategy_id=None):
+def _save_review_search(
+    review_id,
+    project_id,
+    query,
+    total_found,
+    articles,
+    strategy_id=None,
+):
     """
     Guarda de forma atómica la ejecución PubMed y sus artículos.
 
@@ -43,6 +50,24 @@ def _save_review_search(review_id, query, total_found, articles, strategy_id=Non
 
     with get_conn() as conn, conn.cursor() as cur:
 
+        # Defensa en profundidad: la revisión debe pertenecer
+        # explícitamente al proyecto de la tarea.
+        cur.execute(
+            """
+            SELECT id
+            FROM systematic_reviews
+            WHERE id = %s
+              AND project_id = %s
+            FOR SHARE
+            """,
+            (review_id, project_id),
+        )
+
+        if not cur.fetchone():
+            raise ValueError(
+                "La revisión no pertenece al proyecto indicado"
+            )
+
         if strategy_id:
             # Defensa adicional para llamadas al worker que no pasen
             # por el endpoint del dashboard.
@@ -53,11 +78,19 @@ def _save_review_search(review_id, query, total_found, articles, strategy_id=Non
                     database_name,
                     query,
                     human_confirmed
-                FROM review_search_strategies
-                WHERE id = %s
+                FROM review_search_strategies rss
+                JOIN systematic_reviews sr
+                  ON sr.id = rss.review_id
+                WHERE rss.id = %s
+                  AND rss.review_id = %s
+                  AND sr.project_id = %s
                 FOR SHARE
                 """,
-                (strategy_id,),
+                (
+                    strategy_id,
+                    review_id,
+                    project_id,
+                ),
             )
 
             strategy = cur.fetchone()
@@ -103,14 +136,15 @@ def _save_review_search(review_id, query, total_found, articles, strategy_id=Non
                 SELECT id
                 FROM systematic_reviews
                 WHERE id = %s
+                  AND project_id = %s
                 FOR UPDATE
                 """,
-                (review_id,),
+                (review_id, project_id),
             )
 
             if not cur.fetchone():
                 raise ValueError(
-                    "La revisión sistemática indicada no existe"
+                    "La revisión no pertenece al proyecto indicado"
                 )
 
             cur.execute(
@@ -380,10 +414,16 @@ def handle(task_id: str, payload: dict) -> dict:
     query = payload.get("query", "").strip()
     max_results = int(payload.get("max_results", 20))
     review_id = payload.get("review_id")
+    project_id = payload.get("project_id")
     strategy_id = payload.get("strategy_id")
 
     if not query:
         raise ValueError("Falta el campo 'query'")
+
+    if review_id and not project_id:
+        raise ValueError(
+            "project_id es obligatorio cuando se guarda en una revisión"
+        )
 
     max_results = max(1, min(max_results, 5000))
     batch_size = min(100, max_results)
@@ -487,6 +527,7 @@ def handle(task_id: str, payload: dict) -> dict:
         if review_id:
             saved = _save_review_search(
                 review_id,
+                project_id,
                 query,
                 total_found,
                 articles,

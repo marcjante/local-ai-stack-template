@@ -205,9 +205,13 @@ uncertain
 
 def handle(task_id: str, payload: dict) -> dict:
     review_id = payload.get("review_id")
+    project_id = payload.get("project_id")
 
     if not review_id:
         raise ValueError("Falta el campo 'review_id'")
+
+    if not project_id:
+        raise ValueError("Falta el campo 'project_id'")
 
     set_status(task_id, "running", increment_attempts=True)
 
@@ -225,8 +229,9 @@ def handle(task_id: str, payload: dict) -> dict:
                     exclusion_criteria
                 FROM systematic_reviews
                 WHERE id = %s
+                  AND project_id = %s
                 """,
-                (review_id,),
+                (review_id, project_id),
             )
 
             row = cur.fetchone()
@@ -247,17 +252,20 @@ def handle(task_id: str, payload: dict) -> dict:
             cur.execute(
                 """
                 SELECT
-                    id,
-                    title,
-                    abstract
-                FROM review_articles
-                WHERE review_id = %s
-                  AND is_duplicate = false
-                  AND title_abstract_status = 'pending'
-                  AND ai_decision IS NULL
-                ORDER BY created_at
+                    ra.id,
+                    ra.title,
+                    ra.abstract
+                FROM review_articles ra
+                JOIN systematic_reviews sr
+                  ON sr.id = ra.review_id
+                WHERE ra.review_id = %s
+                  AND sr.project_id = %s
+                  AND ra.is_duplicate = false
+                  AND ra.title_abstract_status = 'pending'
+                  AND ra.ai_decision IS NULL
+                ORDER BY ra.created_at
                 """,
-                (review_id,),
+                (review_id, project_id),
             )
 
             articles = cur.fetchall()
@@ -301,12 +309,14 @@ def handle(task_id: str, payload: dict) -> dict:
                         screening_stage = 'title_abstract',
                         updated_at = now()
                     WHERE id = %s
+                      AND review_id = %s
                     """,
                     (
                         screening_result["decision"],
                         screening_result["reason"],
                         screening_result["confidence"],
                         article_id,
+                        review_id,
                     ),
                 )
 

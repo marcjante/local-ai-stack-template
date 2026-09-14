@@ -445,7 +445,10 @@ def index():
     return render_template(
         "dashboard.html", page="dashboard", services=statuses, metrics=system_metrics(),
         queues=queue_depths(), docker_ok=docker_available(),
-        llm_metrics=llm_gateway_metrics(), task_summary=task_counts_by_status(),
+        llm_metrics=llm_gateway_metrics(),
+        task_summary=task_counts_by_status(
+            project_id=current_project_id()
+        ),
     )
 
 
@@ -873,6 +876,18 @@ def tasks_view_page():
 
 @app.route("/api/tasks/<task_id>/audit")
 def task_audit_proxy(task_id):
+    task = get_task(task_id)
+
+    if not task:
+        return jsonify({
+            "error": "Tarea no encontrada",
+        }), 404
+
+    if task.get("project_id") != current_project_id():
+        return jsonify({
+            "error": "Tarea no encontrada en el proyecto activo",
+        }), 404
+
     return jsonify(get_audit_trail(task_id))
 
 
@@ -1373,6 +1388,29 @@ def systematic_reviews_save_search_strategy():
         with get_conn() as conn:
             with conn.cursor() as cur:
 
+                # Serializa la creación de versiones para esta revisión.
+                # Así dos peticiones simultáneas no pueden calcular
+                # el mismo next_version.
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM systematic_reviews
+                    WHERE id = %s
+                      AND project_id = %s
+                    FOR UPDATE
+                    """,
+                    (
+                        review_id,
+                        current_project_id(),
+                    ),
+                )
+
+                if not cur.fetchone():
+                    return jsonify({
+                        "ok": False,
+                        "error": "Revisión no encontrada en el proyecto activo"
+                    }), 404
+
                 cur.execute(
                     """
                     SELECT COALESCE(
@@ -1639,9 +1677,11 @@ def systematic_review():
                     """
                     SELECT *
                     FROM systematic_reviews
+                    WHERE project_id = %s
                     ORDER BY created_at DESC
                     LIMIT 1
-                    """
+                    """,
+                    (current_project_id(),),
                 )
 
             review = cur.fetchone()
@@ -1968,6 +2008,14 @@ def systematic_review_pubmed_search():
             "error": "review_id es obligatorio"
         }), 400
 
+    if not _review_in_current_project(review_id):
+        return jsonify({
+            "ok": False,
+            "error": "Revisión no encontrada en el proyecto activo"
+        }), 404
+
+    project_id = current_project_id()
+
     if not query:
         return jsonify({
             "ok": False,
@@ -1999,10 +2047,18 @@ def systematic_review_pubmed_search():
                         database_name,
                         query,
                         human_confirmed
-                    FROM review_search_strategies
-                    WHERE id = %s
+                    FROM review_search_strategies rss
+                    JOIN systematic_reviews sr
+                      ON sr.id = rss.review_id
+                    WHERE rss.id = %s
+                      AND rss.review_id = %s
+                      AND sr.project_id = %s
                     """,
-                    (strategy_id,),
+                    (
+                        strategy_id,
+                        review_id,
+                        project_id,
+                    ),
                 )
 
                 strategy = cur.fetchone()
@@ -2050,6 +2106,7 @@ def systematic_review_pubmed_search():
         result = pubmed_search_handle(
             f"pubmed-ui-{review_id}",
             {
+                "project_id": project_id,
                 "review_id": review_id,
                 "strategy_id": strategy_id,
                 "query": query,
@@ -2278,7 +2335,7 @@ def systematic_review_task_status(task_id):
     if review_id and not _review_in_current_project(review_id):
         return jsonify({
             "ok": False,
-            "error": "La tarea no pertenece a la revisión activa",
+            "error": "La tarea no pertenece al proyecto activo",
         }), 404
 
     result = task.get("result")
@@ -2393,10 +2450,11 @@ def systematic_review_full_text_retrieval():
                 """
                 SELECT COUNT(*)
                 FROM review_screening_decisions
-                WHERE article_id = %s
+                WHERE review_id = %s
+                  AND article_id = %s
                   AND stage = 'full_text'
                 """,
-                (article_id,),
+                (review_id, article_id),
             )
 
             full_text_decisions = cur.fetchone()[0]
@@ -2540,10 +2598,12 @@ def systematic_review_full_text_upload():
               ON sr.id = ra.review_id
             WHERE ra.id = %s
               AND ra.review_id = %s
+              AND sr.project_id = %s
             """,
             (
                 article_id,
                 review_id,
+                current_project_id(),
             ),
         )
 
@@ -2787,6 +2847,31 @@ def systematic_review_human_decision():
             "error": "Revisión no encontrada en el proyecto activo"
         }), 404
 
+    # Normalizar siempre el artículo a su ID interno.
+    # El frontend/API puede enviar PMID, pero el resto del flujo
+    # trabaja de forma segura con article_id.
+    if not article_id and pmid:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM review_articles
+                WHERE review_id = %s
+                  AND pmid = %s
+                LIMIT 1
+                """,
+                (review_id, str(pmid)),
+            )
+            row = cur.fetchone()
+
+        if not row:
+            return jsonify({
+                "ok": False,
+                "error": "No se encontró el PMID en esta revisión"
+            }), 404
+
+        article_id = row[0]
+
     if article_id and not _article_in_current_project(
         article_id,
         review_id,
@@ -2855,6 +2940,7 @@ def systematic_review_human_decision():
         result = human_screening_handle(
             f"human-ui-{article_id or pmid}-{stage}-{reviewer_id}",
             {
+                "project_id": current_project_id(),
                 "review_id": review_id,
                 "article_id": article_id,
                 "pmid": pmid,
@@ -2934,6 +3020,7 @@ def systematic_review_resolve_conflict():
         result = resolve_conflict_handle(
             f"resolve-ui-{article_id}-{stage}",
             {
+                "project_id": current_project_id(),
                 "review_id": review_id,
                 "article_id": article_id,
                 "stage": stage,
@@ -2995,6 +3082,7 @@ def systematic_review_human_data_extraction():
         }), 404
 
     payload = {
+        "project_id": current_project_id(),
         "extraction_id": extraction_id,
         "validation_status": validation_status,
         "reviewer_id": reviewer_id,
@@ -3063,7 +3151,23 @@ def settings_save_yaml():
 # --- Backup / Restore ---
 
 def _db_table_counts():
-    tables = ["tasks", "audit_log", "rag_chunks", "documents", "collections", "n8n_integrations"]
+    tables = [
+        "tasks",
+        "audit_log",
+        "rag_chunks",
+        "documents",
+        "collections",
+        "n8n_integrations",
+        "systematic_reviews",
+        "review_articles",
+        "review_audit_log",
+        "review_search_strategies",
+        "review_searches",
+        "review_screening_decisions",
+        "review_screening_conflicts",
+        "review_extraction_fields",
+        "review_extractions",
+    ]
     counts = {}
     with get_conn() as conn, conn.cursor() as cur:
         for t in tables:
@@ -3162,7 +3266,8 @@ def service_metrics(service_id):
 
 @app.route("/api/tasks-summary")
 def tasks_summary():
-    counts = task_counts_by_status()
+    project_id = current_project_id()
+    counts = task_counts_by_status(project_id=project_id)
     return jsonify({
         "running": counts.get("running", 0),
         "pending": counts.get("pending", 0),
@@ -3173,10 +3278,26 @@ def tasks_summary():
 
 @app.route("/api/tasks")
 def tasks_proxy():
-    """El panel lee Postgres directamente (igual que ya hace con Redis para las colas)."""
+    """Devuelve únicamente las tareas del proyecto activo."""
     status = request.args.get("status")
-    limit = int(request.args.get("limit", 20))
-    return jsonify(list_tasks(status=status, limit=limit))
+
+    try:
+        limit = int(request.args.get("limit", 20))
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "limit debe ser un número entero",
+        }), 400
+
+    limit = max(1, min(limit, 500))
+    project_id = current_project_id()
+
+    return jsonify(
+        list_tasks(
+            status=status,
+            limit=limit,
+            project_id=project_id,
+        )
+    )
 
 
 @app.route("/api/start-all", methods=["POST"])
@@ -3308,13 +3429,16 @@ if __name__ == "__main__":
     ensure_default_collection()
 
     preferred_port = int(os.environ.get("LOCAL_AI_DASHBOARD_PORT", "8765"))
-    dashboard_port = find_free_port(
-        start_port=preferred_port,
-        end_port=preferred_port + 30,
-    )
 
-    # Compartimos el puerto real con load_services() para que la tarjeta
-    # "Panel de control" y sus health-checks usen el puerto correcto.
+    # El dashboard usa un puerto estable porque services.yaml y el proxy
+    # dependen de este puerto concreto.
+    if port_is_open("127.0.0.1", preferred_port):
+        raise RuntimeError(
+            f"El puerto del dashboard {preferred_port} ya está ocupado. "
+            "Detén el proceso anterior antes de iniciar el stack."
+        )
+
+    dashboard_port = preferred_port
     DASHBOARD_RUNTIME_PORT = dashboard_port
 
     print("")
@@ -3331,7 +3455,7 @@ if __name__ == "__main__":
     print("")
 
     app.run(
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=dashboard_port,
         debug=False,
     )

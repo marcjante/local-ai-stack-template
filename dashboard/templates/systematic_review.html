@@ -701,7 +701,22 @@
 .screening-state-duplicate { background: #eceff1; color: #455a64; }
 .screening-actions { display: flex; flex-direction: column; gap: 8px; min-width: 205px; }
 .screening-actions-row { display: flex; gap: 5px; flex-wrap: wrap; }
+
 .screening-actions-row button { padding: 6px 9px; font-size: 0.78rem; }
+
+.screening-decision-btn {
+    opacity: .58;
+    transition: opacity .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+
+.screening-decision-btn.is-selected {
+    opacity: 1;
+    transform: scale(1.08);
+    box-shadow:
+        0 0 0 3px rgba(15, 23, 42, .22),
+        0 3px 8px rgba(15, 23, 42, .18);
+}
+
 .conflict-box {
     margin-top: 7px; padding: 8px; border: 1px solid #e0b100;
     border-radius: 9px; background: #fff8d8;
@@ -1344,7 +1359,13 @@
                                         </div>
                                         <div class="reviewer-decision-list">
                                             {% for decision in ta_decisions %}
-                                                <div class="reviewer-decision">
+                                                <div
+                                                    class="reviewer-decision"
+                                                    data-article-id="{{ article.id }}"
+                                                    data-stage="title_abstract"
+                                                    data-reviewer="{{ decision.reviewer_id }}"
+                                                    data-decision="{{ decision.decision }}"
+                                                >
                                                     <span class="reviewer-name">{{ decision.reviewer_id }}</span>
                                                     {% if decision.decision == "include" %}
                                                         <span class="badge badge-include">Incluir</span>
@@ -1384,7 +1405,7 @@
 
                                         <div class="article-meta" style="margin-bottom:7px;">
                                             Recuperación:
-                                            {% if article.full_text_retrieval_status == "retrieved" %}
+                                            {% if article.full_text_status != "not_started" and article.full_text_retrieval_status == "retrieved" %}
                                                 <span class="badge badge-include">Recuperado</span>
                                             {% elif article.full_text_retrieval_status == "not_retrieved" %}
                                                 <span class="badge badge-exclude">No recuperado</span>
@@ -1397,7 +1418,13 @@
 
                                         <div class="reviewer-decision-list">
                                             {% for decision in ft_decisions %}
-                                                <div class="reviewer-decision">
+                                                <div
+                                                    class="reviewer-decision"
+                                                    data-article-id="{{ article.id }}"
+                                                    data-stage="full_text"
+                                                    data-reviewer="{{ decision.reviewer_id }}"
+                                                    data-decision="{{ decision.decision }}"
+                                                >
                                                     <span class="reviewer-name">{{ decision.reviewer_id }}</span>
                                                     {% if decision.decision == "include" %}
                                                         <span class="badge badge-include">Incluir</span>
@@ -1454,13 +1481,25 @@
                                             <div>
                                                 <div class="screening-stage-title">Título / resumen</div>
                                                 <div class="screening-actions-row">
-                                                    <button class="btn-success" onclick="setHumanDecision('{{ article.id }}','title_abstract','include')">✓</button>
-                                                    <button class="btn-danger" onclick="setHumanDecision('{{ article.id }}','title_abstract','exclude')">✕</button>
-                                                    <button class="btn-warning" onclick="setHumanDecision('{{ article.id }}','title_abstract','uncertain')">?</button>
+                                                    <button class="btn-success screening-decision-btn"
+                                                        data-article-id="{{ article.id }}"
+                                                        data-stage="title_abstract"
+                                                        data-decision="include"
+                                                        onclick="setHumanDecision('{{ article.id }}','title_abstract','include')">✓</button>
+                                                    <button class="btn-danger screening-decision-btn"
+                                                        data-article-id="{{ article.id }}"
+                                                        data-stage="title_abstract"
+                                                        data-decision="exclude"
+                                                        onclick="setHumanDecision('{{ article.id }}','title_abstract','exclude')">✕</button>
+                                                    <button class="btn-warning screening-decision-btn"
+                                                        data-article-id="{{ article.id }}"
+                                                        data-stage="title_abstract"
+                                                        data-decision="uncertain"
+                                                        onclick="setHumanDecision('{{ article.id }}','title_abstract','uncertain')">?</button>
                                                 </div>
                                             </div>
 
-                                            {% if article.full_text_status != "not_started" %}
+                                            {% if true %}
                                                 <div>
                                                     <div class="screening-stage-title">
                                                         Recuperación del texto
@@ -1548,17 +1587,26 @@
                                                     {% if article.full_text_retrieval_status == "retrieved" %}
                                                         <div class="screening-actions-row">
                                                             <button
-                                                                class="btn-success"
+                                                                class="btn-success screening-decision-btn"
+                                                                data-article-id="{{ article.id }}"
+                                                                data-stage="full_text"
+                                                                data-decision="include"
                                                                 onclick="setHumanDecision('{{ article.id }}','full_text','include')"
                                                             >✓</button>
 
                                                             <button
-                                                                class="btn-danger"
+                                                                class="btn-danger screening-decision-btn"
+                                                                data-article-id="{{ article.id }}"
+                                                                data-stage="full_text"
+                                                                data-decision="exclude"
                                                                 onclick="setHumanDecision('{{ article.id }}','full_text','exclude')"
                                                             >✕</button>
 
                                                             <button
-                                                                class="btn-warning"
+                                                                class="btn-warning screening-decision-btn"
+                                                                data-article-id="{{ article.id }}"
+                                                                data-stage="full_text"
+                                                                data-decision="uncertain"
                                                                 onclick="setHumanDecision('{{ article.id }}','full_text','uncertain')"
                                                             >?</button>
                                                         </div>
@@ -2455,6 +2503,54 @@ function askExclusionReason(finalDecision = false) {
                 : label
     };
 }
+
+
+
+function normalizeReviewerId(value) {
+    // Compatibilidad temporal con decisiones antiguas creadas durante el E2E.
+    if (value === "revisor_1") return "reviewer_1";
+    if (value === "revisor_2") return "reviewer_2";
+    return value;
+}
+
+function refreshScreeningDecisionButtons() {
+    const reviewerSelect = document.getElementById("screening-reviewer");
+    const activeReviewer = normalizeReviewerId(
+        reviewerSelect?.value?.trim() || ""
+    );
+
+    document.querySelectorAll(".screening-decision-btn").forEach(button => {
+        button.classList.remove("is-selected");
+
+        const articleId = button.dataset.articleId;
+        const stage = button.dataset.stage;
+        const decision = button.dataset.decision;
+
+        const matchingDecision = [...document.querySelectorAll(".reviewer-decision")]
+            .find(row =>
+                row.dataset.articleId === articleId &&
+                row.dataset.stage === stage &&
+                normalizeReviewerId(row.dataset.reviewer) === activeReviewer &&
+                row.dataset.decision === decision
+            );
+
+        if (matchingDecision) {
+            button.classList.add("is-selected");
+        }
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    refreshScreeningDecisionButtons();
+
+    const reviewerSelect = document.getElementById("screening-reviewer");
+    if (reviewerSelect) {
+        reviewerSelect.addEventListener(
+            "change",
+            refreshScreeningDecisionButtons
+        );
+    }
+});
 
 
 async function setHumanDecision(

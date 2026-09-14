@@ -310,6 +310,7 @@ def test_human_screening_rejects_article_review_mismatch():
                     cur,
                     article_id=article_a,
                     review_id=review_b,
+                    project_id=project_id,
                 )
             except ValueError as exc:
                 assert "Artículo no encontrado" in str(exc)

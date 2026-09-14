@@ -336,8 +336,22 @@ def _do_enqueue(queue_name: str, payload: dict):
     if queue_name not in QUEUES_BY_NAME:
         return {"error": f"cola desconocida '{queue_name}'", "colas_validas": list(QUEUES_BY_NAME)}, 400
 
+    if not isinstance(payload, dict):
+        return {"error": "payload debe ser un objeto JSON"}, 400
+
+    payload = dict(payload)
+
+    project_id = payload.get("project_id") or "default"
+    payload["project_id"] = project_id
+
     task_id = str(uuid.uuid4())
-    create_task(task_id, queue_name, payload, project_id=payload.get("project_id", "default"))
+
+    create_task(
+        task_id,
+        queue_name,
+        payload,
+        project_id=project_id,
+    )
 
     queue = QUEUES_BY_NAME[queue_name]
     job_fn = JOB_FUNCS[queue_name]

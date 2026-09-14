@@ -29,6 +29,8 @@ def handle(task_id, payload):
 
     try:
         extraction_id = payload.get("extraction_id")
+        project_id = payload.get("project_id")
+
         reviewer_id = (
             payload.get("reviewer_id")
             or ""
@@ -50,6 +52,11 @@ def handle(task_id, payload):
         if not extraction_id:
             raise ValueError(
                 "extraction_id es obligatorio"
+            )
+
+        if not project_id:
+            raise ValueError(
+                "project_id es obligatorio"
             )
 
         if validation_status not in VALID_STATUSES:
@@ -91,14 +98,17 @@ def handle(task_id, payload):
                     FROM review_extractions re
                     JOIN review_articles ra
                       ON ra.id = re.article_id
+                     AND ra.review_id = re.review_id
                     JOIN review_extraction_fields ref
                       ON ref.id = re.field_id
+                     AND ref.review_id = re.review_id
                     JOIN systematic_reviews sr
                       ON sr.id = re.review_id
                     WHERE re.id = %s
+                      AND sr.project_id = %s
                     FOR UPDATE
                     """,
-                    (extraction_id,),
+                    (extraction_id, project_id),
                 )
 
                 row = cur.fetchone()
@@ -147,6 +157,7 @@ def handle(task_id, payload):
                         reviewer_notes = %s,
                         updated_at = NOW()
                     WHERE id = %s
+                      AND review_id = %s
                     """,
                     (
                         Json(final_human_value),
@@ -154,6 +165,7 @@ def handle(task_id, payload):
                         reviewer_id,
                         reviewer_notes,
                         db_extraction_id,
+                        review_id,
                     ),
                 )
 

@@ -10,8 +10,13 @@ por defecto de db.db, y Redis en 127.0.0.1:6379).
 import os
 import sys
 import uuid
+from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(PROJECT_ROOT / ".env")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

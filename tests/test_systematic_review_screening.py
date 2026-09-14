@@ -264,7 +264,10 @@ def test_ai_screening_continues_after_malformed_model_response(
     create_task(
         task_id,
         "screening",
-        {"review_id": review_id},
+        {
+            "review_id": review_id,
+            "project_id": project_id,
+        },
         project_id=project_id,
     )
 
@@ -306,7 +309,10 @@ def test_ai_screening_continues_after_malformed_model_response(
 
     result = screening.handle(
         task_id,
-        {"review_id": review_id},
+        {
+            "review_id": review_id,
+            "project_id": project_id,
+        },
     )
 
     # El lote no debe abortar por el primer artículo.
@@ -816,3 +822,131 @@ def test_full_text_screening_requires_retrieved_report(
     )
 
     assert response.status_code == 200
+
+
+def test_three_reviewers_disagreement_reopens_conflict(
+    dashboard_client,
+    project_id,
+):
+    """
+    Regresión:
+    dos decisiones iguales no deben ocultar una tercera discrepante.
+
+    reviewer_1 = include
+    reviewer_2 = include
+    reviewer_3 = exclude
+
+    Resultado esperado: conflicto abierto.
+    """
+    review_id, article_id = _insert_review_and_article(project_id)
+
+    # Primer revisor: todavía no hay consenso.
+    response = dashboard_client.post(
+        "/api/systematic-review/human-decision",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "reviewer_id": "reviewer_1",
+            "stage": "title_abstract",
+            "decision": "include",
+        },
+    )
+    assert response.status_code == 200, response.get_data(as_text=True)
+
+    # Segundo revisor: consenso provisional de inclusión.
+    response = dashboard_client.post(
+        "/api/systematic-review/human-decision",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "reviewer_id": "reviewer_2",
+            "stage": "title_abstract",
+            "decision": "include",
+        },
+    )
+    assert response.status_code == 200, response.get_data(as_text=True)
+
+    payload = response.get_json()["result"]
+
+    assert payload["consensus"] is True
+    assert payload["conflict"] is False
+    assert payload["final_decision"] == "include"
+
+    # Tercer revisor discrepa.
+    response = dashboard_client.post(
+        "/api/systematic-review/human-decision",
+        json={
+            "review_id": review_id,
+            "article_id": article_id,
+            "reviewer_id": "reviewer_3",
+            "stage": "title_abstract",
+            "decision": "exclude",
+            "exclusion_reason_code": "NOT_RELEVANT",
+            "exclusion_reason": "No cumple los criterios de inclusión.",
+        },
+    )
+
+    assert response.status_code == 200, response.get_data(as_text=True)
+
+    payload = response.get_json()["result"]
+
+    # Las tres decisiones deben participar en el consenso.
+    assert payload["decision_count"] == 3
+    assert payload["consensus"] is False
+    assert payload["conflict"] is True
+    assert payload["final_decision"] is None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT reviewer_id, decision
+            FROM review_screening_decisions
+            WHERE review_id = %s
+              AND article_id = %s
+              AND stage = 'title_abstract'
+            ORDER BY reviewer_id
+            """,
+            (review_id, article_id),
+        )
+
+        assert cur.fetchall() == [
+            ("reviewer_1", "include"),
+            ("reviewer_2", "include"),
+            ("reviewer_3", "exclude"),
+        ]
+
+        cur.execute(
+            """
+            SELECT status, resolution, resolved_by
+            FROM review_screening_conflicts
+            WHERE review_id = %s
+              AND article_id = %s
+              AND stage = 'title_abstract'
+            """,
+            (review_id, article_id),
+        )
+
+        assert cur.fetchone() == (
+            "open",
+            None,
+            None,
+        )
+
+        cur.execute(
+            """
+            SELECT
+                title_abstract_status,
+                screening_status,
+                screening_stage
+            FROM review_articles
+            WHERE id = %s
+              AND review_id = %s
+            """,
+            (article_id, review_id),
+        )
+
+        assert cur.fetchone() == (
+            "conflict",
+            "conflict",
+            "title_abstract",
+        )

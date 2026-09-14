@@ -16,43 +16,67 @@ VALID_DECISIONS = {"include", "exclude", "uncertain"}
 VALID_STAGES = {"title_abstract", "full_text"}
 
 
-def _resolve_article(cur, article_id=None, review_id=None, pmid=None):
-    if article_id and review_id:
+def _resolve_article(
+    cur,
+    *,
+    project_id,
+    review_id,
+    article_id=None,
+    pmid=None,
+):
+    if not project_id:
+        raise ValueError("project_id es obligatorio")
+
+    if not review_id:
+        raise ValueError("review_id es obligatorio")
+
+    if article_id:
         cur.execute(
             """
-            SELECT id, review_id, pmid, title, ai_decision
-            FROM review_articles
-            WHERE id = %s
-              AND review_id = %s
+            SELECT
+                ra.id,
+                ra.review_id,
+                ra.pmid,
+                ra.title,
+                ra.ai_decision
+            FROM review_articles ra
+            JOIN systematic_reviews sr
+              ON sr.id = ra.review_id
+            WHERE ra.id = %s
+              AND ra.review_id = %s
+              AND sr.project_id = %s
             """,
-            (article_id, review_id),
+            (article_id, review_id, project_id),
         )
-    elif article_id:
+
+    elif pmid:
         cur.execute(
             """
-            SELECT id, review_id, pmid, title, ai_decision
-            FROM review_articles
-            WHERE id = %s
+            SELECT
+                ra.id,
+                ra.review_id,
+                ra.pmid,
+                ra.title,
+                ra.ai_decision
+            FROM review_articles ra
+            JOIN systematic_reviews sr
+              ON sr.id = ra.review_id
+            WHERE ra.review_id = %s
+              AND ra.pmid = %s
+              AND sr.project_id = %s
             """,
-            (article_id,),
+            (review_id, pmid, project_id),
         )
-    elif review_id and pmid:
-        cur.execute(
-            """
-            SELECT id, review_id, pmid, title, ai_decision
-            FROM review_articles
-            WHERE review_id = %s
-              AND pmid = %s
-            """,
-            (review_id, pmid),
-        )
+
     else:
-        raise ValueError("Debes indicar article_id o review_id + pmid")
+        raise ValueError("Debes indicar article_id o pmid")
 
     article = cur.fetchone()
 
     if not article:
-        raise ValueError("Artículo no encontrado")
+        raise ValueError(
+            "Artículo no encontrado en la revisión y proyecto indicados"
+        )
 
     return article
 
@@ -60,13 +84,18 @@ def _resolve_article(cur, article_id=None, review_id=None, pmid=None):
 def _refresh_consensus(cur, review_id, article_id, stage):
     cur.execute(
         """
-        SELECT reviewer_id, decision, exclusion_reason_code, reason
+        SELECT
+            reviewer_id,
+            decision,
+            exclusion_reason_code,
+            reason
         FROM review_screening_decisions
-        WHERE article_id = %s
+        WHERE review_id = %s
+          AND article_id = %s
           AND stage = %s
         ORDER BY created_at, reviewer_id
         """,
-        (article_id, stage),
+        (review_id, article_id, stage),
     )
 
     decisions = cur.fetchall()
@@ -79,19 +108,45 @@ def _refresh_consensus(cur, review_id, article_id, stage):
             "final_decision": None,
         }
 
-    first = decisions[0]
-    second = decisions[1]
+    decision_values = {
+        row[1]
+        for row in decisions
+    }
 
-    if first[1] == second[1]:
-        consensus_decision = first[1]
+    # Solo existe consenso automático si TODAS las decisiones coinciden.
+    if len(decision_values) == 1:
+        consensus_decision = decisions[0][1]
+
+        exclusion_code = None
+        exclusion_reason = None
+
+        if consensus_decision == "exclude":
+            exclusion_code = next(
+                (
+                    row[2]
+                    for row in decisions
+                    if row[2]
+                ),
+                None,
+            )
+
+            exclusion_reason = next(
+                (
+                    row[3]
+                    for row in decisions
+                    if row[3]
+                ),
+                None,
+            )
 
         cur.execute(
             """
             DELETE FROM review_screening_conflicts
-            WHERE article_id = %s
+            WHERE review_id = %s
+              AND article_id = %s
               AND stage = %s
             """,
-            (article_id, stage),
+            (review_id, article_id, stage),
         )
 
         if stage == "title_abstract":
@@ -99,12 +154,6 @@ def _refresh_consensus(cur, review_id, article_id, stage):
                 "pending"
                 if consensus_decision in {"include", "uncertain"}
                 else "not_started"
-            )
-
-            exclusion_code = (
-                first[2] or second[2]
-                if consensus_decision == "exclude"
-                else None
             )
 
             cur.execute(
@@ -115,34 +164,25 @@ def _refresh_consensus(cur, review_id, article_id, stage):
                     full_text_status = %s,
                     human_decision = %s,
                     exclusion_reason_code = %s,
-                    exclusion_reason = CASE
-                        WHEN %s = 'exclude' THEN COALESCE(%s, %s)
-                        ELSE NULL
-                    END,
+                    exclusion_reason = %s,
                     screening_status = 'reviewed',
                     screening_stage = 'title_abstract',
                     updated_at = NOW()
                 WHERE id = %s
+                  AND review_id = %s
                 """,
                 (
                     consensus_decision,
                     next_full_text_status,
                     consensus_decision,
                     exclusion_code,
-                    consensus_decision,
-                    first[3],
-                    second[3],
+                    exclusion_reason,
                     article_id,
+                    review_id,
                 ),
             )
 
         else:
-            exclusion_code = (
-                first[2] or second[2]
-                if consensus_decision == "exclude"
-                else None
-            )
-
             cur.execute(
                 """
                 UPDATE review_articles
@@ -151,24 +191,21 @@ def _refresh_consensus(cur, review_id, article_id, stage):
                     final_decision = %s,
                     human_decision = %s,
                     exclusion_reason_code = %s,
-                    exclusion_reason = CASE
-                        WHEN %s = 'exclude' THEN COALESCE(%s, %s)
-                        ELSE NULL
-                    END,
+                    exclusion_reason = %s,
                     screening_status = 'reviewed',
                     screening_stage = 'full_text',
                     updated_at = NOW()
                 WHERE id = %s
+                  AND review_id = %s
                 """,
                 (
                     consensus_decision,
                     consensus_decision,
                     consensus_decision,
                     exclusion_code,
-                    consensus_decision,
-                    first[3],
-                    second[3],
+                    exclusion_reason,
                     article_id,
+                    review_id,
                 ),
             )
 
@@ -179,6 +216,7 @@ def _refresh_consensus(cur, review_id, article_id, stage):
             "final_decision": consensus_decision,
         }
 
+    # Existe al menos una discrepancia: abrir o reabrir conflicto.
     conflict_id = str(uuid.uuid4())
 
     cur.execute(
@@ -193,6 +231,7 @@ def _refresh_consensus(cur, review_id, article_id, stage):
         VALUES (%s, %s, %s, %s, 'open')
         ON CONFLICT (article_id, stage)
         DO UPDATE SET
+            review_id = EXCLUDED.review_id,
             status = 'open',
             resolution = NULL,
             resolved_by = NULL,
@@ -217,9 +256,11 @@ def _refresh_consensus(cur, review_id, article_id, stage):
                 screening_stage = 'title_abstract',
                 updated_at = NOW()
             WHERE id = %s
+              AND review_id = %s
             """,
-            (article_id,),
+            (article_id, review_id),
         )
+
     else:
         cur.execute(
             """
@@ -230,8 +271,9 @@ def _refresh_consensus(cur, review_id, article_id, stage):
                 screening_stage = 'full_text',
                 updated_at = NOW()
             WHERE id = %s
+              AND review_id = %s
             """,
-            (article_id,),
+            (article_id, review_id),
         )
 
     return {
@@ -248,6 +290,7 @@ def handle(task_id, payload):
     try:
         article_id = payload.get("article_id")
         review_id = payload.get("review_id")
+        project_id = payload.get("project_id")
         pmid = payload.get("pmid")
 
         reviewer_id = (payload.get("reviewer_id") or "").strip()
@@ -257,6 +300,12 @@ def handle(task_id, payload):
         exclusion_reason = payload.get("exclusion_reason")
         exclusion_reason_code = payload.get("exclusion_reason_code")
         notes = payload.get("notes")
+
+        if not project_id:
+            raise ValueError("project_id es obligatorio")
+
+        if not review_id:
+            raise ValueError("review_id es obligatorio")
 
         if not reviewer_id:
             raise ValueError("reviewer_id es obligatorio")
@@ -285,8 +334,9 @@ def handle(task_id, payload):
             with conn.cursor() as cur:
                 article = _resolve_article(
                     cur,
-                    article_id=article_id,
+                    project_id=project_id,
                     review_id=review_id,
+                    article_id=article_id,
                     pmid=pmid,
                 )
 

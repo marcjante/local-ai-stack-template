@@ -71,24 +71,41 @@ while IFS=$'\t' read -r id command; do
 
     stopped=0
 
-    if [ -n "$command" ]; then
-        if bash -lc "cd '$ROOT_DIR' && $command" \
-            >/dev/null 2>&1; then
-            stopped=1
-        fi
-    fi
-
-    if [ "$stopped" -eq 0 ] && [ -f "$PID_DIR/$id" ]; then
+    if [ -f "$PID_DIR/$id" ]; then
         pid="$(cat "$PID_DIR/$id")"
 
         if kill -0 "$pid" >/dev/null 2>&1; then
             kill "$pid" >/dev/null 2>&1 || true
+
+            attempts=0
+            while kill -0 "$pid" >/dev/null 2>&1 && [ "$attempts" -lt 20 ]; do
+                sleep 0.25
+                attempts=$((attempts + 1))
+            done
+
+            if kill -0 "$pid" >/dev/null 2>&1; then
+                kill -9 "$pid" >/dev/null 2>&1 || true
+                sleep 0.2
+            fi
+        fi
+
+        if ! kill -0 "$pid" >/dev/null 2>&1; then
+            stopped=1
         fi
     fi
 
-    rm -f "$OWNED_DIR/$id" "$PID_DIR/$id"
+    if [ "$stopped" -eq 0 ] && [ -n "$command" ]; then
+        if bash -c "cd '$ROOT_DIR' && $command" >/dev/null 2>&1; then
+            stopped=1
+        fi
+    fi
 
-    echo "STOPPED"
+    if [ "$stopped" -eq 1 ]; then
+        rm -f "$OWNED_DIR/$id" "$PID_DIR/$id"
+        echo "STOPPED"
+    else
+        echo "ERROR"
+    fi
 done < /tmp/local_ai_stop_services.tsv
 
 rm -f /tmp/local_ai_stop_services.tsv

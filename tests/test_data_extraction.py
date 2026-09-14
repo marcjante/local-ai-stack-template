@@ -179,7 +179,21 @@ def test_data_extraction_only_selects_final_included_retrieved_articles(
         retrieval_status="retrieved",
     )
 
-    context = _load_extraction_context(review_id)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT project_id
+            FROM systematic_reviews
+            WHERE id = %s
+            """,
+            (review_id,),
+        )
+        project_id = cur.fetchone()[0]
+
+    context = _load_extraction_context(
+        review_id,
+        project_id,
+    )
 
     assert len(context["articles"]) == 1
     assert context["articles"][0]["id"] == eligible_id
@@ -248,7 +262,10 @@ def test_extraction_context_includes_project_and_full_text_document(
             ),
         )
 
-    context = _load_extraction_context(review_id)
+    context = _load_extraction_context(
+        review_id,
+        project_id,
+    )
 
     article = context["articles"][0]
 
@@ -534,6 +551,7 @@ def test_ai_data_extraction_creates_review_audit_event(monkeypatch):
         result = data_extraction.handle(
             task_id,
             {
+                "project_id": project_id,
                 "review_id": review_id,
                 "article_ids": [article_id],
             },

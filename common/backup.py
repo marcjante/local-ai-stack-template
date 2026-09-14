@@ -72,6 +72,16 @@ def import_backup(zip_file_storage, restore_services_yaml: bool, services_yaml_p
             names = zf.namelist()
             if "db_dump.sql" not in names:
                 raise ValueError("el .zip no contiene db_dump.sql — no parece un backup válido de esta plantilla")
+            base_dir = tmp_dir.resolve()
+
+            for member in zf.infolist():
+                target = (tmp_dir / member.filename).resolve()
+
+                if target != base_dir and base_dir not in target.parents:
+                    raise ValueError(
+                        f"Ruta insegura dentro del backup: {member.filename}"
+                    )
+
             zf.extractall(tmp_dir)
     except zipfile.BadZipFile:
         raise ValueError("el fichero subido no es un .zip válido")
@@ -83,13 +93,32 @@ def import_backup(zip_file_storage, restore_services_yaml: bool, services_yaml_p
 
     dump_path = tmp_dir / "db_dump.sql"
     result = subprocess.run(
-        ["psql", DB_DSN, "-f", str(dump_path)],
-        capture_output=True, text=True, timeout=180,
+        [
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "--single-transaction",
+            DB_DSN,
+            "-f",
+            str(dump_path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=180,
     )
-    # psql devuelve 0 aunque algunas sentencias individuales fallen (p.ej.
-    # "DROP TABLE IF EXISTS" de algo que no existía) — nos fijamos en
-    # errores reales, no en el código de salida a secas.
-    real_errors = [line for line in result.stderr.splitlines() if "ERROR" in line and "already exists" not in line]
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "La restauración de la base de datos falló: "
+            + result.stderr[-2000:]
+        )
+
+    real_errors = [
+        line
+        for line in result.stderr.splitlines()
+        if "ERROR" in line
+        and "already exists" not in line
+    ]
 
     restored_yaml = False
     if restore_services_yaml and (tmp_dir / "services.yaml").exists():

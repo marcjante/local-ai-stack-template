@@ -21,6 +21,7 @@ def handle(task_id, payload):
     try:
         article_id = payload.get("article_id")
         review_id = payload.get("review_id")
+        project_id = payload.get("project_id")
         stage = (payload.get("stage") or "").strip().lower()
         resolution = (payload.get("resolution") or "").strip().lower()
         resolved_by = (payload.get("resolved_by") or "").strip()
@@ -33,6 +34,9 @@ def handle(task_id, payload):
 
         if not review_id:
             raise ValueError("review_id es obligatorio")
+
+        if not project_id:
+            raise ValueError("project_id es obligatorio")
 
         if stage not in VALID_STAGES:
             raise ValueError("stage debe ser title_abstract o full_text")
@@ -75,8 +79,9 @@ def handle(task_id, payload):
                       ON sr.id = ra.review_id
                     WHERE ra.id = %s
                       AND ra.review_id = %s
+                      AND sr.project_id = %s
                     """,
-                    (article_id, review_id),
+                    (article_id, review_id, project_id),
                 )
 
                 article_before = cur.fetchone()
@@ -88,7 +93,7 @@ def handle(task_id, payload):
 
                 (
                     _db_article_id,
-                    project_id,
+                    db_project_id,
                     before_title_abstract_status,
                     before_full_text_status,
                     before_human_decision,
@@ -159,6 +164,7 @@ def handle(task_id, payload):
                             screening_stage = 'title_abstract',
                             updated_at = NOW()
                         WHERE id = %s
+                          AND review_id = %s
                         """,
                         (
                             resolution,
@@ -167,6 +173,7 @@ def handle(task_id, payload):
                             exclusion_reason_code,
                             exclusion_reason,
                             article_id,
+                            review_id,
                         ),
                     )
                 else:
@@ -183,6 +190,7 @@ def handle(task_id, payload):
                             screening_stage = 'full_text',
                             updated_at = NOW()
                         WHERE id = %s
+                          AND review_id = %s
                         """,
                         (
                             resolution,
@@ -191,6 +199,7 @@ def handle(task_id, payload):
                             exclusion_reason_code,
                             exclusion_reason,
                             article_id,
+                            review_id,
                         ),
                     )
 
