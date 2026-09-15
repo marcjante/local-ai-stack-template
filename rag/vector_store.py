@@ -24,6 +24,7 @@ de proyectos con esta plantilla no van a usar.
 
 import os
 import json
+from contextlib import nullcontext
 
 from db.db import get_conn
 from rag.embeddings import cosine_similarity, DIMENSIONS
@@ -31,13 +32,13 @@ from rag.embeddings import cosine_similarity, DIMENSIONS
 RAG_BACKEND = os.environ.get("RAG_BACKEND", "postgres_json")
 
 
-def add_chunks(chunks: list, embeddings: list, doc_version: str = "v1"):
+def add_chunks(chunks: list, embeddings: list, doc_version: str = "v1", *, conn=None):
     if RAG_BACKEND == "pgvector":
-        return _add_chunks_pgvector(chunks, embeddings, doc_version)
+        return _add_chunks_pgvector(chunks, embeddings, doc_version, conn=conn)
     if RAG_BACKEND != "postgres_json":
         raise NotImplementedError(f"Backend '{RAG_BACKEND}' no implementado en esta plantilla (ver docstring)")
 
-    with get_conn() as conn, conn.cursor() as cur:
+    with (nullcontext(conn) if conn is not None else get_conn()) as conn, conn.cursor() as cur:
         for chunk, emb in zip(chunks, embeddings):
             cur.execute(
                 """
@@ -164,8 +165,8 @@ def _vector_literal(embedding: list) -> str:
     return "[" + ",".join(f"{x:.8f}" for x in embedding) + "]"
 
 
-def _add_chunks_pgvector(chunks: list, embeddings: list, doc_version: str = "v1"):
-    with get_conn() as conn, conn.cursor() as cur:
+def _add_chunks_pgvector(chunks: list, embeddings: list, doc_version: str = "v1", *, conn=None):
+    with (nullcontext(conn) if conn is not None else get_conn()) as conn, conn.cursor() as cur:
         for chunk, emb in zip(chunks, embeddings):
             cur.execute(
                 """

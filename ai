@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+if ! command -v codex >/dev/null 2>&1; then
+  echo "Codex CLI no está instalado."
+  echo "Instálalo con una de estas opciones:"
+  echo "  brew install --cask codex"
+  echo "  npm install -g @openai/codex"
+  exit 1
+fi
+
+mkdir -p .codex/logs
+
+echo "===================================================="
+echo " Local AI Studio · Codex"
+echo " Repo: $ROOT"
+echo " Rama: $(git branch --show-current 2>/dev/null || echo 'sin git')"
+echo "===================================================="
+echo
+echo "Escribe lo que quieres hacer. Codex tiene AGENTS.md como reglas del proyecto."
+echo
+
+exec codex

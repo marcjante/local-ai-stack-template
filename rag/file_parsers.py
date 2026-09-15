@@ -15,6 +15,8 @@ import re
 from pypdf import PdfReader
 from docx import Document as DocxDocument
 from bs4 import BeautifulSoup
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 
 SECTION_ALIASES = {
@@ -240,9 +242,37 @@ def extract_html(content: bytes) -> str:
     return "\n".join(lines)
 
 
+def _spreadsheet_blocks(content):
+    workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=False)
+    try:
+        blocks = []
+        for sheet in workbook:
+            for row in sheet.iter_rows():
+                cells = [cell for cell in row if cell.value is not None]
+                if not cells:
+                    continue
+                blocks.append({
+                    "text": ", ".join(f"{cell.coordinate}: {cell.value}" for cell in cells),
+                    "page_number": None, "section": None,
+                    "source_locator": {
+                        "sheet": sheet.title,
+                        "range": f"{cells[0].coordinate}:{cells[-1].coordinate}",
+                        "columns": [get_column_letter(cell.column) for cell in cells],
+                    },
+                })
+        return blocks
+    finally:
+        workbook.close()
+
+
+def extract_xlsx(content: bytes) -> str:
+    return "\n".join(block["text"] for block in _spreadsheet_blocks(content))
+
+
 EXTRACTORS = {
     ".pdf": extract_pdf,
     ".docx": extract_docx,
+    ".xlsx": extract_xlsx,
     ".txt": extract_plain_text,
     ".md": extract_plain_text,
     ".csv": extract_csv,
@@ -307,6 +337,50 @@ def extract_structured_text(filename: str, content: bytes) -> list:
 
         return blocks
 
+    if ext == ".xlsx":
+        return _spreadsheet_blocks(content)
+
+    if ext == ".docx":
+        doc = DocxDocument(io.BytesIO(content))
+        blocks = []
+        section = None
+        for index, paragraph in enumerate(doc.paragraphs, 1):
+            if not paragraph.text.strip():
+                continue
+            if paragraph.style.name.startswith("Heading"):
+                section = paragraph.text
+            else:
+                section = detect_section_heading(paragraph.text) or section
+            blocks.append({
+                "text": paragraph.text, "page_number": None, "section": section,
+                "source_locator": {"paragraph_index": index, "section": section},
+            })
+        for table_index, table in enumerate(doc.tables, 1):
+            for row_index, row in enumerate(table.rows, 1):
+                text = " | ".join(cell.text for cell in row.cells)
+                if text.strip(" |"):
+                    blocks.append({
+                        "text": text, "page_number": None, "section": None,
+                        "source_locator": {"table_index": table_index, "row": row_index},
+                    })
+        return blocks
+
+    if ext == ".csv":
+        reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig")), strict=True)
+        blocks = []
+        previous_line = 1
+        for row_index, row in enumerate(reader, 1):
+            blocks.append({
+                "text": ", ".join(f"{k}: {v}" for k, v in row.items() if k),
+                "page_number": None, "section": None,
+                "source_locator": {
+                    "columns": reader.fieldnames, "data_row": row_index,
+                    "line_start": previous_line + 1, "line_end": reader.line_num,
+                },
+            })
+            previous_line = reader.line_num
+        return blocks
+
     plain_text = EXTRACTORS[ext](content)
 
     if not plain_text.strip():
@@ -317,4 +391,3 @@ def extract_structured_text(filename: str, content: bytes) -> list:
         "page_number": None,
         "section": None,
     }]
-

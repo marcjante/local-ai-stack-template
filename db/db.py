@@ -551,11 +551,32 @@ def get_document(doc_id: str):
 
 def delete_document(doc_id: str):
     with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT doc_id FROM documents WHERE doc_id = %s FOR UPDATE", (doc_id,))
+        if cur.fetchone() is None:
+            return True
+        if document_references(cur, doc_id):
+            return False
         cur.execute("DELETE FROM rag_chunks WHERE doc_id = %s", (doc_id,))
         cur.execute("SELECT to_regclass('public.rag_chunks_pgvector')")
         if cur.fetchone()[0] is not None:
             cur.execute("DELETE FROM rag_chunks_pgvector WHERE doc_id = %s", (doc_id,))
         cur.execute("DELETE FROM documents WHERE doc_id = %s", (doc_id,))
+        return True
+
+
+def document_references(cur, doc_id):
+    """Known owners of a shared document; caller holds its row lock when deleting."""
+    references = {}
+    for table, field in (("review_articles", "full_text_document_id"),
+                         ("thesis_file_ingestions", "doc_id"), ("thesis_fragments", "doc_id")):
+        cur.execute("SELECT to_regclass(%s)", (table,))
+        if cur.fetchone()[0] is None:
+            continue
+        cur.execute(f"SELECT count(*) FROM {table} WHERE {field} = %s", (doc_id,))
+        count = cur.fetchone()[0]
+        if count:
+            references[table] = count
+    return references
 
 
 def get_document_chunks(doc_id: str):

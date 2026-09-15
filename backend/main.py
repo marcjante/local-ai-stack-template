@@ -51,6 +51,10 @@ N8N_INBOUND_SECRET = os.environ.get("N8N_INBOUND_SECRET", "changeme-in-.env")
 
 app = Flask(__name__)
 
+from backend.thesis_routes import thesis_api  # noqa: E402
+
+app.register_blueprint(thesis_api)
+
 
 def require_api_key(fn):
     @functools.wraps(fn)

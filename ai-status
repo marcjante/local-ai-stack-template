@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+echo "=== REPOSITORIO ==="
+printf "Ruta: "; pwd
+printf "Rama: "; git branch --show-current 2>/dev/null || true
+echo
+echo "=== GIT STATUS ==="
+git status --short 2>/dev/null || true
+echo
+echo "=== ÚLTIMOS COMMITS ==="
+git --no-pager log --oneline -5 2>/dev/null || true
+echo
+echo "=== TAREAS CODEX ==="
+sed -n '1,120p' .codex/TASKS.md 2>/dev/null || true

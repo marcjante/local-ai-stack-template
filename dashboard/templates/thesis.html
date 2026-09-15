@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><h1>Thesis</h1><span style="color:var(--text-muted); font-size:12px;">{{ session.get('project_id', 'default') }}</span></div>
+
+{% if error %}
+<div class="card" style="color:var(--amber);">{{ error }}</div>
+{% else %}
+<form method="get" action="/thesis" class="card" style="display:flex; gap:8px; flex-wrap:wrap; align-items:end;">
+  <label style="font-size:12px; color:var(--text-muted);">Buscar<br><input name="q" value="{{ filters.q }}" placeholder="nombre o texto"></label>
+  <label style="font-size:12px; color:var(--text-muted);">Rol<br><select name="role"><option value="">Todos</option>{% for role in ['own_data','own_results','study_protocol','scientific_evidence','administrative','draft','writing_guideline','bibliography','unknown'] %}<option value="{{ role }}" {% if filters.role == role %}selected{% endif %}>{{ role }}</option>{% endfor %}</select></label>
+  <label style="font-size:12px; color:var(--text-muted);">Extracción<br><select name="extraction_status"><option value="">Todos</option>{% for status in ['pending','queued','extracting','indexed','failed'] %}<option value="{{ status }}" {% if filters.extraction_status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></label>
+  <label style="font-size:12px; color:var(--text-muted);">Propuesta<br><select name="suggestion_status"><option value="">Todas</option>{% for status in ['pending','approved','corrected','rejected'] %}<option value="{{ status }}" {% if filters.suggestion_status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></label>
+  <button type="submit">Filtrar</button><a href="/thesis" style="font-size:12px; padding:9px;">Limpiar</a>
+</form>
+
+<div class="card">
+  <h2 style="margin-top:0;">Perfil</h2>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; font-size:13px;">
+    <div><span style="color:var(--text-muted);">Título</span><br>{{ structure.profile.title or '—' }}</div>
+    <div><span style="color:var(--text-muted);">Autor</span><br>{{ structure.profile.author or '—' }}</div>
+    <div><span style="color:var(--text-muted);">Universidad</span><br>{{ structure.profile.university or '—' }}</div>
+    <div><span style="color:var(--text-muted);">Idioma</span><br>{{ structure.profile.language }}</div>
+  </div>
+</div>
+
+<h2 class="section-title">Estructura</h2>
+<div class="card">
+  {% for chapter in structure.chapters %}
+  <div style="padding:7px 0; border-top:1px solid var(--border); margin-left:{{ (chapter.parent_id is not none)|int * 18 }}px;">
+    <form method="post" action="/thesis/chapters/{{ chapter.id }}/title" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+      <span style="color:var(--text-muted);">{{ chapter.code }}.</span>
+      <input name="title" value="{{ chapter.title }}" aria-label="Título de {{ chapter.code }}" required style="flex:1; min-width:220px;">
+      <button type="submit">Guardar</button>
+      <span style="color:var(--text-muted); font-size:11px;">{{ chapter.chapter_type }} · {{ chapter.status }}</span>
+    </form>
+  </div>
+  {% else %}<span style="color:var(--text-muted);">Sin capítulos.</span>{% endfor %}
+</div>
+
+<h2 class="section-title">Archivos y fragmentos</h2>
+<div class="card">
+  {% for file in files %}
+  <details style="padding:8px 0; border-top:1px solid var(--border);">
+    <summary><strong>{{ file.filename or file.doc_id }}</strong> · {{ file.content_type or '—' }} · {{ file.source_role }} · {{ file.status }} · {{ file.fragment_count }} fragmentos{% if file.reused %} · reutilizado{% endif %}</summary>
+    <form method="post" action="/thesis/files/{{ file.id }}/classify" style="margin:8px 0 0 18px;">
+      <button type="submit">Clasificar y proponer destinos</button>
+      <span style="color:var(--text-muted); font-size:11px;">La operación es repetible y no duplica propuestas.</span>
+    </form>
+    <div style="margin:8px 0 0 18px; font-size:12px;">
+      {% for fragment in file.fragments %}
+      <div style="padding:7px 0; border-top:1px dashed var(--border);">
+        <span style="color:var(--text-muted);">{{ fragment.content_type or 'general_text' }} · {{ fragment.classification_status }} · {{ fragment.extraction_status }}</span>
+        <div>{{ fragment.text[:240] }}{% if fragment.text|length > 240 %}…{% endif %}</div>
+        {% if fragment.classification_reason %}<div style="color:var(--text-muted);">{{ fragment.classification_reason }} · confianza {{ fragment.classification_confidence }}</div>{% endif %}
+        <div style="color:var(--text-muted); font-size:11px;">doc_id={{ file.doc_id }} · fragment={{ fragment.id }} · rag_chunk={{ fragment.rag_chunk_id or fragment.pgvector_chunk_id or '—' }} · hash={{ fragment.fragment_hash or '—' }}</div>
+        <code style="color:var(--text-muted);">{{ fragment.source_locator }}</code>
+      </div>
+      {% else %}<span style="color:var(--text-muted);">Sin fragmentos disponibles.</span>{% endfor %}
+    </div>
+  </details>
+  {% else %}<span style="color:var(--text-muted);">No hay archivos Thesis.</span>{% endfor %}
+</div>
+
+<h2 class="section-title">Propuestas de destino</h2>
+<div class="card">
+  {% for suggestion in suggestions %}
+  <div style="padding:9px 0; border-top:1px solid var(--border);">
+    <div><strong>{{ suggestion.chapter_code }} · {{ suggestion.chapter_title }}</strong>
+      <span style="color:var(--text-muted);">{{ '%.0f'|format(suggestion.confidence * 100) }}% · {{ suggestion.status }}</span></div>
+    <div style="font-size:12px; margin:4px 0;">{{ suggestion.reason }} · {{ suggestion.source_role }} · {{ suggestion.source_locator }}</div>
+    {% if suggestion.status == 'pending' %}
+    <form method="post" action="/thesis/placements/{{ suggestion.id }}/review" style="display:flex; gap:6px; align-items:center;">
+      <button name="status" value="approved">Aprobar</button>
+      <button name="status" value="rejected">Rechazar</button>
+      <select name="corrected_chapter_id">
+        <option value="">Corregir a…</option>
+        {% for chapter in structure.chapters %}<option value="{{ chapter.id }}">{{ chapter.code }} · {{ chapter.title }}</option>{% endfor %}
+      </select>
+      <button name="status" value="corrected">Guardar corrección</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}<span style="color:var(--text-muted);">No hay propuestas de destino.</span>{% endfor %}
+</div>
+
+<h2 class="section-title">Procedencia</h2>
+<div class="card" style="overflow:auto;">
+  <table style="width:100%; font-size:12px; border-collapse:collapse;">
+    <tr style="color:var(--text-muted); text-align:left;"><th style="padding:5px;">documento</th><th>hash</th><th>rol</th><th>estado</th><th>fragmentos</th><th>almacenamiento</th></tr>
+    {% for file in files %}<tr style="border-top:1px solid var(--border);"><td style="padding:7px 5px;">{{ file.filename or file.doc_id }}<br><span style="color:var(--text-muted);">{{ file.doc_id }}</span></td><td>{{ file.content_hash or 'legacy_unverified' }}</td><td>{{ file.source_role }}</td><td>{{ file.status }}{% if file.error %}<br><span style="color:var(--red);">{{ file.error }}</span>{% endif %}</td><td>{{ file.fragment_count }}</td><td>{{ 'original disponible' if file.original_available else 'sin original' }}</td></tr>{% else %}<tr><td colspan="6" style="padding:8px; color:var(--text-muted);">Sin resultados.</td></tr>{% endfor %}
+  </table>
+</div>
+
+<h2 class="section-title">Versiones y afirmaciones</h2>
+<div class="card">
+  {% for version in versions %}
+  <details style="padding:8px 0; border-top:1px solid var(--border);">
+    <summary><strong>{{ version.chapter_code }} · {{ version.chapter_title }}</strong> · v{{ version.version_number }} · {{ version.status }} · {{ version.claims|length }} afirmaciones</summary>
+    <div style="margin:8px 0 0 18px; font-size:12px;">
+      <div style="white-space:pre-wrap; margin-bottom:8px;">{{ version.content_markdown }}</div>
+      <form method="post" action="/thesis/versions/{{ version.id }}/verify"><button type="submit">Verificar afirmaciones</button></form>
+      {% for claim in version.claims %}<div style="padding:5px 0; border-top:1px dashed var(--border);">{{ claim.claim_text }} <span style="color:var(--text-muted);">· {{ claim.claim_type }} · {{ claim.verification_status }}</span></div>{% else %}<span style="color:var(--text-muted);">Sin afirmaciones.</span>{% endfor %}
+    </div>
+  </details>
+  {% else %}<span style="color:var(--text-muted);">Todavía no hay versiones generadas.</span>{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

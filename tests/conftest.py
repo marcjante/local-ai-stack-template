@@ -38,6 +38,7 @@ def project_id():
     yield pid
     # limpieza: borra el proyecto y todo lo que cuelgue de él
     with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM thesis_claim_sources WHERE project_id = %s", (pid,))
         cur.execute("DELETE FROM documents WHERE project_id = %s", (pid,))
         cur.execute("DELETE FROM tasks WHERE project_id = %s", (pid,))
         cur.execute("DELETE FROM collections WHERE project_id = %s", (pid,))

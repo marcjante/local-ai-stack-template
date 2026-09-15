@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+if ! command -v codex >/dev/null 2>&1; then
+  echo "Codex CLI no está instalado."
+  exit 1
+fi
+
+PROMPT="$(cat .codex/SESSION_PROMPT.md)
+
+MODO SEGURO:
+Primero analiza y diagnostica. No hagas cambios destructivos, no hagas push y no alteres secretos.
+Si realizas cambios, mantenlos dentro del repositorio y valida con tests.
+Empieza mostrándome un resumen breve del estado actual y pregúntame la tarea si no he indicado ninguna."
+
+exec codex "$PROMPT"

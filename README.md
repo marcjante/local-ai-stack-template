@@ -19,7 +19,13 @@ soporte, lo que sea), cada uno aislado del resto.
 
 ![Dashboard de Local AI Studio](docs/images/dashboard.png)
 
-**[📖 Guía de uso completa, con capturas de cada pantalla →](docs/GUIA-USO.md)**
+## 📚 Documentación
+
+**[📖 Guía de uso en GitHub, con capturas de cada pantalla →](docs/GUIA-USO.md)**
+
+**[🧭 Manual funcional completo — instalación, arquitectura, proyectos, workers, RAG, Alembic, tests y CI →](docs/GUIA_USO_LOCAL_AI_STACK_TEMPLATE.html)**
+
+El manual HTML explica paso a paso cómo instalar, configurar, utilizar, ampliar, probar y mantener **Local AI Studio / local-ai-stack-template**, incluyendo la arquitectura multiproyecto y el módulo funcional de revisiones sistemáticas.
 
 ## Arranque rápido
 

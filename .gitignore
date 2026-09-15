@@ -20,3 +20,4 @@ workers/plugins.backup/
 
 .runtime/
 *.bak
+.thesis-test-runtime/

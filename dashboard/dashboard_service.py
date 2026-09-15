@@ -78,6 +78,7 @@ from db.db import (  # noqa: E402
 
 from common.system_checks import run_all_checks, pull_recommended_model  # noqa: E402
 from common.diagnostics import run_diagnostics  # noqa: E402
+from common import thesis_files, thesis_service, thesis_placements  # noqa: E402
 
 SETUP_STATE_PATH = BASE_DIR / "data" / "setup_state.json"
 
@@ -452,6 +453,121 @@ def index():
     )
 
 
+@app.route("/thesis")
+def thesis_page():
+    """Vista mínima del dominio Thesis sobre los datos ya ingeridos."""
+    project_id = current_project_id()
+    filters = {
+        "role": request.args.get("role", "").strip(),
+        "extraction_status": request.args.get("extraction_status", "").strip(),
+        "suggestion_status": request.args.get("suggestion_status", "").strip(),
+        "q": request.args.get("q", "").strip(),
+    }
+    try:
+        structure = thesis_service.get_structure(project_id)
+        from common import thesis_versions
+        versions = []
+        for chapter in structure["chapters"]:
+            for version in thesis_versions.list_versions(project_id, chapter["id"]):
+                version["chapter_code"] = chapter["code"]
+                version["chapter_title"] = chapter["title"]
+                version["claims"] = thesis_versions.list_claims(project_id, version["id"])
+                versions.append(version)
+        files = thesis_files.list_files(project_id)
+        for item in files:
+            detail = thesis_files.file_detail(project_id, item["id"])
+            item["fragments"] = detail.get("fragments", [])
+        suggestions = thesis_placements.list_suggestions(project_id)
+    except thesis_service.ThesisNotFound:
+        return render_template("thesis.html", page="thesis", project=get_project(project_id),
+                               structure=None, files=[], suggestions=[], versions=[], filters=filters,
+                               error="No hay una tesis creada para este proyecto."), 404
+    if filters["role"]:
+        files = [item for item in files if item.get("source_role") == filters["role"]]
+    if filters["extraction_status"]:
+        files = [item for item in files if item.get("status") == filters["extraction_status"]]
+    if filters["q"]:
+        query = filters["q"].casefold()
+        files = [item for item in files if query in (item.get("filename") or "").casefold()
+                 or any(query in (fragment.get("text") or "").casefold()
+                        for fragment in item.get("fragments", []))]
+    visible_doc_ids = {item["doc_id"] for item in files}
+    if filters["suggestion_status"]:
+        suggestions = [item for item in suggestions if item.get("status") == filters["suggestion_status"]]
+    if filters["role"] or filters["extraction_status"] or filters["q"]:
+        suggestions = [item for item in suggestions if item.get("doc_id") in visible_doc_ids]
+    return render_template("thesis.html", page="thesis", project=get_project(project_id),
+                           structure=structure, files=files, suggestions=suggestions, versions=versions,
+                           filters=filters, error=None)
+
+
+@app.route("/thesis/placements/<suggestion_id>/review", methods=["POST"])
+def thesis_review_placement_page(suggestion_id):
+    """Revisión de una propuesta desde la sesión del dashboard."""
+    project_id = current_project_id()
+    payload = request.form.to_dict() if request.form else (request.get_json(silent=True) or {})
+    if payload.get("corrected_chapter_id") == "":
+        payload["corrected_chapter_id"] = None
+    reviewer_id = session.get("user_id") or session.get("username") or "dashboard"
+    try:
+        thesis_placements.review_suggestion(project_id, suggestion_id, payload, reviewer_id)
+    except thesis_service.ThesisNotFound:
+        return jsonify({"error": "propuesta no encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if request.accept_mimetypes.best == "application/json" or request.is_json:
+        return jsonify({"updated": suggestion_id})
+    return redirect("/thesis")
+
+
+@app.route("/thesis/chapters/<chapter_id>/title", methods=["POST"])
+def thesis_update_chapter_title_page(chapter_id):
+    """Actualiza solo el título visible; chapter_type permanece estable."""
+    payload = request.form.to_dict() if request.form else (request.get_json(silent=True) or {})
+    try:
+        chapter = thesis_service.update_chapter_title(
+            current_project_id(), chapter_id, payload.get("title")
+        )
+    except thesis_service.ThesisNotFound:
+        return jsonify({"error": "capítulo no encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if request.accept_mimetypes.best == "application/json" or request.is_json:
+        return jsonify({"chapter": chapter})
+    return redirect("/thesis")
+
+
+@app.route("/thesis/files/<file_id>/classify", methods=["POST"])
+def thesis_classify_file_page(file_id):
+    """Ejecuta la clasificación existente y genera propuestas idempotentes."""
+    try:
+        thesis_files.file_detail(current_project_id(), file_id)
+        from common.thesis_classifier import classify_file
+        result = classify_file(current_project_id(), file_id)
+        result["placement"] = thesis_placements.generate_for_file(current_project_id(), file_id)
+    except thesis_service.ThesisNotFound:
+        return jsonify({"error": "archivo no encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if request.accept_mimetypes.best == "application/json" or request.is_json:
+        return jsonify(result)
+    return redirect("/thesis")
+
+
+@app.route("/thesis/versions/<version_id>/verify", methods=["POST"])
+def thesis_verify_version_page(version_id):
+    try:
+        from common.thesis_generation import verify_version
+        result = verify_version(current_project_id(), version_id)
+    except thesis_service.ThesisNotFound:
+        return jsonify({"error": "versión no encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if request.accept_mimetypes.best == "application/json" or request.is_json:
+        return jsonify(result)
+    return redirect("/thesis")
+
+
 @app.route("/onboarding")
 def onboarding_page():
     return render_template("onboarding.html", page="onboarding")
@@ -575,77 +691,34 @@ def _index_and_register(
     project_id="default",
     structured_blocks=None,
 ):
-    settings = get_project_settings(project_id)
-    chunk_size = settings["chunk_size"] if settings else 120
-    chunk_overlap = settings["chunk_overlap"] if settings else 20
+    from common.document_service import index_blocks
+    from psycopg2.extras import Json
 
-    if structured_blocks:
-        chunks = []
-        position_offset = 0
-
-        for block in structured_blocks:
-            block_text = (block.get("text") or "").strip()
-
-            if not block_text:
-                continue
-
-            block_chunks = split_into_chunks(
-                doc_id,
-                block_text,
-                chunk_size=chunk_size,
-                overlap=chunk_overlap,
-                page_number=block.get("page_number"),
-                section=block.get("section"),
-                position_offset=position_offset,
+    from common.document_service import DocumentConflict
+    from db.db import document_references
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT project_id FROM documents WHERE doc_id=%s FOR UPDATE", (doc_id,))
+            existing = cur.fetchone()
+            if existing and (existing[0] != project_id or document_references(cur, doc_id)):
+                raise DocumentConflict("documento compartido; no se puede sobrescribir o reindexar")
+        chunks, locators = index_blocks(
+            conn, doc_id, text, structured_blocks, project_id=project_id, doc_version=doc_version,
+        )
+        # Preserve the existing entry point for pasted text and reindexing.
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO documents (doc_id, collection_id, project_id, filename, content_type, "
+                "doc_version, embedding_model, raw_text, n_chunks, source_metadata) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (doc_id) DO UPDATE SET "
+                "collection_id=EXCLUDED.collection_id, filename=EXCLUDED.filename, "
+                "content_type=EXCLUDED.content_type, doc_version=EXCLUDED.doc_version, "
+                "embedding_model=EXCLUDED.embedding_model, raw_text=EXCLUDED.raw_text, "
+                "n_chunks=EXCLUDED.n_chunks, source_metadata=EXCLUDED.source_metadata, indexed_at=now()",
+                (doc_id, collection_id, project_id, filename, content_type, doc_version,
+                 EMBEDDING_MODEL_NAME, text, len(chunks),
+                 Json({"blocks": structured_blocks or [], "chunk_locators": locators})),
             )
-
-            chunks.extend(block_chunks)
-            position_offset += len(block_chunks)
-    else:
-        chunks = split_into_chunks(
-            doc_id,
-            text,
-            chunk_size=chunk_size,
-            overlap=chunk_overlap,
-        )
-
-    embeddings = [embed_text(c["text"]) for c in chunks]
-
-    if chunks:
-        vs_add_chunks(
-            chunks,
-            embeddings,
-            doc_version=doc_version,
-        )
-
-    source_metadata = None
-
-    if structured_blocks:
-        source_metadata = {
-            "blocks": [
-                {
-                    "text": block.get("text"),
-                    "page_number": block.get("page_number"),
-                    "section": block.get("section"),
-                }
-                for block in structured_blocks
-                if (block.get("text") or "").strip()
-            ]
-        }
-
-    register_document(
-        doc_id,
-        collection_id,
-        filename,
-        content_type,
-        doc_version,
-        EMBEDDING_MODEL_NAME,
-        text,
-        len(chunks),
-        project_id=project_id,
-        source_metadata=source_metadata,
-    )
-
     return len(chunks)
 
 
@@ -690,9 +763,13 @@ def knowledge_index():
     collection_id = payload.get("collection_id", "default")
     if not doc_id or not text:
         return jsonify({"error": "doc_id y text son obligatorios"}), 400
-    n_chunks = _index_and_register(doc_id, text, collection_id, filename=None,
-                                    content_type="text/plain", doc_version=doc_version,
-                                    project_id=current_project_id())
+    from common.document_service import DocumentConflict
+    try:
+        n_chunks = _index_and_register(doc_id, text, collection_id, filename=None,
+                                        content_type="text/plain", doc_version=doc_version,
+                                        project_id=current_project_id())
+    except DocumentConflict as exc:
+        return jsonify({"error": str(exc)}), 409
     return jsonify({"doc_id": doc_id, "doc_version": doc_version, "n_chunks": n_chunks})
 
 
@@ -705,37 +782,16 @@ def knowledge_upload():
     if not file or not file.filename:
         return jsonify({"error": "no se ha recibido ningún fichero"}), 400
 
-    doc_id = request.form.get("doc_id") or file.filename
-    content = file.read()
+    from common.document_service import upload_and_index, DocumentConflict
     try:
-        structured_blocks = extract_structured_text(
-            file.filename,
-            content,
-        )
-        text = "\n".join(
-            block["text"]
-            for block in structured_blocks
-            if block.get("text")
-        )
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": f"no se pudo extraer texto de '{file.filename}': {e}"}), 400
-
-    if not text.strip():
-        return jsonify({"error": f"'{file.filename}' se procesó pero no se extrajo ningún texto (¿PDF escaneado sin OCR?)"}), 400
-
-    n_chunks = _index_and_register(
-        doc_id,
-        text,
-        collection_id,
-        filename=file.filename,
-        content_type=file.content_type,
-        doc_version=doc_version,
-        project_id=current_project_id(),
-        structured_blocks=structured_blocks,
-    )
-    return jsonify({"doc_id": doc_id, "filename": file.filename, "n_chunks": n_chunks}), 201
+        doc, reused = upload_and_index(current_project_id(), file, collection_id=collection_id,
+                                       requested_doc_id=request.form.get("doc_id"), doc_version=doc_version)
+    except DocumentConflict as exc:
+        return jsonify({"error": str(exc)}), 409
+    except (ValueError, OSError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"doc_id": doc["doc_id"], "filename": doc["filename"],
+                    "n_chunks": doc["n_chunks"], "reused": reused}), 201
 
 
 @app.route("/api/knowledge/documents/<doc_id>/reindex", methods=["POST"])
@@ -752,24 +808,30 @@ def knowledge_reindex(doc_id):
     if source_metadata.get("blocks"):
         structured_blocks = source_metadata["blocks"]
 
-    n_chunks = _index_and_register(
-        doc_id,
-        doc["raw_text"],
-        doc["collection_id"],
-        filename=doc["filename"],
-        content_type=doc["content_type"],
-        doc_version=doc["doc_version"],
-        project_id=doc["project_id"],
-        structured_blocks=structured_blocks,
-    )
+    from common.document_service import DocumentConflict
+    try:
+        n_chunks = _index_and_register(
+            doc_id,
+            doc["raw_text"],
+            doc["collection_id"],
+            filename=doc["filename"],
+            content_type=doc["content_type"],
+            doc_version=doc["doc_version"],
+            project_id=doc["project_id"],
+            structured_blocks=structured_blocks,
+        )
+    except DocumentConflict as exc:
+        return jsonify({"error": str(exc)}), 409
     return jsonify({"doc_id": doc_id, "n_chunks": n_chunks})
 
 
 @app.route("/api/knowledge/documents/<doc_id>", methods=["DELETE"])
 def knowledge_delete(doc_id):
-    if not get_document(doc_id):
+    doc = get_document(doc_id)
+    if not doc or doc["project_id"] != current_project_id():
         return jsonify({"error": "documento no encontrado"}), 404
-    delete_document(doc_id)
+    if not delete_document(doc_id):
+        return jsonify({"error": "documento utilizado por revisión sistemática o Thesis"}), 409
     return jsonify({"deleted": doc_id})
 
 
@@ -2643,76 +2705,12 @@ def systematic_review_full_text_upload():
             ),
         }), 409
 
-    content = file.read()
-
+    from common.document_service import upload_and_index
+    document_id = None
     try:
-        structured_blocks = extract_structured_text(
-            file.filename,
-            content,
-        )
-        extracted_text = "\n".join(
-            block["text"]
-            for block in structured_blocks
-            if block.get("text")
-        )
-    except ValueError as exc:
-        return jsonify({
-            "ok": False,
-            "error": str(exc),
-        }), 400
-    except Exception as exc:
-        return jsonify({
-            "ok": False,
-            "error": (
-                f"No se pudo extraer texto de "
-                f"'{file.filename}': {exc}"
-            ),
-        }), 400
-
-    if not extracted_text or not extracted_text.strip():
-        return jsonify({
-            "ok": False,
-            "error": (
-                f"'{file.filename}' no contiene texto extraíble. "
-                "Puede ser un PDF escaneado que requiera OCR."
-            ),
-        }), 400
-
-    document_id = (
-        f"review-fulltext-{article_id}-"
-        f"{uuid.uuid4().hex[:12]}"
-    )
-
-    try:
-        ensure_default_collection(
-            project_id=project_id,
-        )
-
-        n_chunks = _index_and_register(
-            document_id,
-            extracted_text,
-            "default",
-            filename=file.filename,
-            content_type=file.content_type,
-            doc_version="v1",
-            project_id=project_id,
-            structured_blocks=structured_blocks,
-        )
-
-        if n_chunks <= 0:
-            try:
-                delete_document(document_id)
-            except Exception:
-                pass
-
-            return jsonify({
-                "ok": False,
-                "error": (
-                    "El documento se procesó pero no generó "
-                    "ningún fragmento indexable"
-                ),
-            }), 400
-
+        doc, reused = upload_and_index(project_id, file, role="scientific_evidence")
+        document_id = doc["doc_id"]
+        n_chunks = doc["n_chunks"]
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(
                 """
@@ -2776,7 +2774,15 @@ def systematic_review_full_text_upload():
                     remaining_references = cur.fetchone()[0]
 
                 if remaining_references == 0:
-                    delete_document(previous_document_id)
+                    deleted = delete_document(previous_document_id)
+                    if not deleted:
+                        log_review_audit(
+                            project_id=project_id, review_id=review_id, article_id=article_id,
+                            action="shared_document_retained", actor_type="system",
+                            actor_id="dashboard_api", stage="full_text",
+                            details={"document_id": previous_document_id,
+                                     "reason": "document still referenced by Thesis"},
+                        )
             except Exception:
                 app.logger.warning(
                     "No se pudo comprobar/eliminar el documento anterior %s "
@@ -2795,6 +2801,8 @@ def systematic_review_full_text_upload():
             "full_text_available": True,
         }), 201
 
+    except (ValueError, OSError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
     except Exception as exc:
         try:
             delete_document(document_id)
