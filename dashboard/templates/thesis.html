@@ -98,7 +98,9 @@
     <summary><strong>{{ version.chapter_code }} · {{ version.chapter_title }}</strong> · v{{ version.version_number }} · {{ version.status }} · {{ version.claims|length }} afirmaciones</summary>
     <div style="margin:8px 0 0 18px; font-size:12px;">
       <div style="white-space:pre-wrap; margin-bottom:8px;">{{ version.content_markdown }}</div>
-      <form method="post" action="/thesis/versions/{{ version.id }}/verify"><button type="submit">Verificar afirmaciones</button></form>
+      <form method="post" action="/thesis/versions/{{ version.id }}/verify" style="display:inline-block;"><button type="submit">Verificar afirmaciones</button></form>
+      <form method="post" action="/thesis/versions/{{ version.id }}/overlap" style="display:inline-block;"><button type="submit">Comprobar solapamiento</button></form>
+      {% if version.overlap %}<div style="color:var(--amber); margin:5px 0;">Solapamiento máximo: {{ version.overlap.max_score }} · {{ version.overlap.matches|length }} coincidencias</div>{% endif %}
       {% for claim in version.claims %}<div style="padding:5px 0; border-top:1px dashed var(--border);">{{ claim.claim_text }} <span style="color:var(--text-muted);">· {{ claim.claim_type }} · {{ claim.verification_status }}</span></div>{% else %}<span style="color:var(--text-muted);">Sin afirmaciones.</span>{% endfor %}
     </div>
   </details>

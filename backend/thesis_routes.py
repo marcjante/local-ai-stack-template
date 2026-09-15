@@ -214,3 +214,21 @@ def thesis_generate_chapter(project_id, chapter_id):
 def thesis_verify_version(project_id, version_id):
     task_id = _enqueue_thesis_task(project_id, "thesis_verify", {"project_id": project_id, "version_id": version_id}, "workers.plugins.thesis_verify.handle")
     return jsonify({"task_id": task_id, "status": "queued"}), 202
+
+
+@thesis_api.route("/api/projects/<project_id>/thesis/versions/<version_id>/overlap", methods=["GET"])
+@_json_errors
+@require_project_role("viewer")
+def thesis_get_overlap(project_id, version_id):
+    from common import thesis_overlap
+    return jsonify(thesis_overlap.get_check(project_id, version_id) or {"status": "pending", "version_id": version_id})
+
+
+@thesis_api.route("/api/projects/<project_id>/thesis/versions/<version_id>/overlap", methods=["POST"])
+@_json_errors
+@require_project_role("editor")
+def thesis_run_overlap(project_id, version_id):
+    from common import thesis_overlap
+    claims = getattr(request, "jwt_claims", {})
+    task_id = _enqueue_thesis_task(project_id, "thesis_check_overlap", {"project_id": project_id, "version_id": version_id, "checked_by": claims.get("sub")}, "workers.plugins.thesis_overlap.handle")
+    return jsonify({"task_id": task_id, "status": "queued"}), 202

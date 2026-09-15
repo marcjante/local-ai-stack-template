@@ -204,8 +204,8 @@ def test_creation_rolls_back_on_chapter_failure(project_id, monkeypatch):
 def test_migration_upgrade_downgrade_and_constraints():
     """Exercise real DDL in a private schema, rolled back even on assertion failure."""
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert scripts.get_heads() == ["e4f5a6b7c8d9"]
-    assert scripts.get_revision("e4f5a6b7c8d9").down_revision == "d3e4f12b9c07"
+    assert scripts.get_heads() == ["f6a7b8c9d0e1"]
+    assert scripts.get_revision("f6a7b8c9d0e1").down_revision == "e4f5a6b7c8d9"
     migration_path = Path("db/migrations/versions/f1a7c93d820b_add_thesis_profiles_and_chapters.py")
     spec = importlib.util.spec_from_file_location("thesis_migration", migration_path)
     migration = importlib.util.module_from_spec(spec)

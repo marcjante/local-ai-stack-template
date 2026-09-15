@@ -472,6 +472,8 @@ def thesis_page():
                 version["chapter_code"] = chapter["code"]
                 version["chapter_title"] = chapter["title"]
                 version["claims"] = thesis_versions.list_claims(project_id, version["id"])
+                from common import thesis_overlap
+                version["overlap"] = thesis_overlap.get_check(project_id, version["id"])
                 versions.append(version)
         files = thesis_files.list_files(project_id)
         for item in files:
@@ -563,6 +565,18 @@ def thesis_verify_version_page(version_id):
         return jsonify({"error": "versión no encontrada"}), 404
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    if request.accept_mimetypes.best == "application/json" or request.is_json:
+        return jsonify(result)
+    return redirect("/thesis")
+
+
+@app.route("/thesis/versions/<version_id>/overlap", methods=["POST"])
+def thesis_overlap_version_page(version_id):
+    try:
+        from common.thesis_overlap import check_version
+        result = check_version(current_project_id(), version_id, session.get("user_id") or "dashboard")
+    except thesis_service.ThesisNotFound:
+        return jsonify({"error": "versión no encontrada"}), 404
     if request.accept_mimetypes.best == "application/json" or request.is_json:
         return jsonify(result)
     return redirect("/thesis")
