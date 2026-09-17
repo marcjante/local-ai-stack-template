@@ -40,6 +40,8 @@ label.checkbox input { width: auto; }
 .ok-valles img { display: block; width: 5.5rem; height: 2rem; object-fit: contain; border-radius: .3rem; }
 .bar-vidal { color: #fff; background: #8b1e3f; font-family: Georgia, serif; font-style: italic; }
 .bar-vidal img { display: block; width: 5.5rem; height: 2rem; object-fit: contain; border-radius: .3rem; }
+.fleca-luron { background: #f7f5ed; }
+.fleca-luron img { display: block; width: 5.5rem; height: 2rem; object-fit: contain; border-radius: .3rem; }
 
 .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: .25rem; overflow-x: auto; background: var(--card); border-bottom: 1px solid var(--line); padding: 0 max(1rem, calc((100vw - 70rem) / 2)); }
 .tab { border: 0; background: transparent; padding: 1rem .85rem .8rem; color: var(--muted); white-space: nowrap; border-bottom: .2rem solid transparent; cursor: pointer; }
@@ -141,5 +143,6 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
   .sponsor { font-size: .68rem; padding: .3rem .45rem; }
   .bar-vidal img { width: 4.25rem; height: 1.65rem; }
   .ok-valles img { width: 4.25rem; height: 1.65rem; }
+  .fleca-luron img { width: 4.25rem; height: 1.65rem; }
   .crest { width: 3.25rem; height: 3.25rem; }
 }
