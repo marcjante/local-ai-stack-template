@@ -98,3 +98,10 @@ def test_admin_poll_interval_is_bounded(client) -> None:
     assert 'params.get("poll")' in javascript
     assert "requestedPollSeconds >= 5" in javascript
     assert "requestedPollSeconds <= 60" in javascript
+
+
+def test_unconfigured_whiteboard_link_is_visually_disabled(client) -> None:
+    styles = client.get("/app/styles.css").text
+
+    assert ".action.disabled" in styles
+    assert "pointer-events: none" in styles
