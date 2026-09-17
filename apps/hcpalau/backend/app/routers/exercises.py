@@ -55,6 +55,19 @@ def get_exercise(
     return exercise
 
 
+@router.delete("/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_exercise(
+    exercise_id: int,
+    _: Principal = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> None:
+    exercise = session.get(Exercise, exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercise not found")
+    session.delete(exercise)
+    session.commit()
+
+
 @router.post("/{exercise_id}/video", response_model=ExerciseRead)
 async def upload_exercise_video(
     exercise_id: int,

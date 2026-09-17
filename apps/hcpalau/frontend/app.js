@@ -114,8 +114,8 @@ function renderAdminPlayers(players) {
 }
 
 function renderAdminEvents(events) {
-  document.querySelector("#admin-events").innerHTML = events.length ? events.map(event => `<article class="card">
-    <p class="meta">${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</p><h4>${escapeHtml(event.title)}</h4><p>${escapeHtml(event.location || "Sense ubicació")}</p>
+  document.querySelector("#admin-events").innerHTML = events.length ? events.map(event => `<article class="card deletable-card">
+    <button class="delete-x" type="button" data-delete="/events/${event.id}" data-label="${escapeHtml(event.title)}" aria-label="Esborrar ${escapeHtml(event.title)}">×</button><p class="meta">${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</p><h4>${escapeHtml(event.title)}</h4><p>${escapeHtml(event.location || "Sense ubicació")}</p>
   </article>`).join("") : empty("No hi ha esdeveniments.");
 }
 
@@ -131,8 +131,8 @@ function renderAdminActivity(items) {
 }
 
 function renderAdminExercises(exercises, players) {
-  document.querySelector("#admin-exercises").innerHTML = exercises.length ? exercises.map(exercise => `<article class="card">
-    <p class="meta">${exercise.video_filename ? "Vídeo disponible" : "Sense vídeo"}</p>
+  document.querySelector("#admin-exercises").innerHTML = exercises.length ? exercises.map(exercise => `<article class="card deletable-card">
+    <button class="delete-x" type="button" data-delete="/exercises/${exercise.id}" data-label="${escapeHtml(exercise.title)}" aria-label="Esborrar ${escapeHtml(exercise.title)}">×</button><p class="meta">${exercise.video_filename ? "Vídeo disponible" : "Sense vídeo"}</p>
     <h4>${escapeHtml(exercise.title)}</h4><p>${escapeHtml(exercise.description || "")}</p>
   </article>`).join("") : empty("Encara no hi ha exercicis al catàleg.");
   const exerciseOptions = exercises.map(exercise => `<option value="${exercise.id}">${escapeHtml(exercise.title)}</option>`).join("");
@@ -193,6 +193,19 @@ async function loadAdmin() {
 }
 
 function setupAdminForms() {
+  document.querySelector("#admin-portal").addEventListener("click", async event => {
+    const button = event.target.closest("[data-delete]");
+    if (!button || !window.confirm(`Esborrar «${button.dataset.label}»?`)) return;
+    button.disabled = true;
+    try {
+      await api(button.dataset.delete, { method: "DELETE" });
+      await loadAdmin();
+      adminToast("Element esborrat");
+    } catch (_) {
+      button.disabled = false;
+      adminToast("No s'ha pogut esborrar (pot tenir dades vinculades)");
+    }
+  });
   document.querySelector("#standing-form input[name=season]").value = season;
   document.querySelector("#player-form").addEventListener("submit", async event => {
     event.preventDefault();

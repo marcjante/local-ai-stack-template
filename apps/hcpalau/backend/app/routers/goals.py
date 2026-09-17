@@ -42,6 +42,19 @@ def list_player_goals(
     return list(session.exec(statement))
 
 
+@router.delete("/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_goal(
+    goal_id: int,
+    _: Principal = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> None:
+    goal = session.get(Goal, goal_id)
+    if goal is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
+    session.delete(goal)
+    session.commit()
+
+
 @router.patch("/{goal_id}/done", response_model=GoalRead)
 def update_goal_done(
     goal_id: int,

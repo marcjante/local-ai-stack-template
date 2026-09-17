@@ -92,6 +92,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .exercise-option input { width: auto; }
 .standings-form { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
 .player-card { display: grid; gap: .7rem; }
+.deletable-card { position: relative; padding-right: 3rem; }
+.delete-x { position: absolute; top: .55rem; right: .65rem; width: 2rem; height: 2rem; border: 0; border-radius: 50%; background: #111; color: #ffd400; font-size: 1.35rem; line-height: 1; cursor: pointer; }
+.delete-x:hover { background: #d21f3c; color: white; }
+.delete-x:disabled { opacity: .5; cursor: wait; }
 .attendance-reason { display: grid; gap: .6rem; margin-top: .8rem; }
 .team-list { margin: 0; padding-left: 1.2rem; }
 .team-roster { margin-top: .8rem; padding: .8rem; border-radius: 12px; background: #fffbea; border: 1px solid #e7dfb2; }

@@ -52,6 +52,19 @@ def rename_event(
     return event
 
 
+@router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_event(
+    event_id: int,
+    _: Principal = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> None:
+    event = session.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    session.delete(event)
+    session.commit()
+
+
 @router.get("/{event_id}", response_model=EventRead)
 def get_event(
     event_id: int,
