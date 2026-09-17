@@ -117,6 +117,7 @@ function renderAdminEvents(events) {
   document.querySelector("#admin-events").innerHTML = events.length ? events.map(event => `<article class="card deletable-card">
     <button class="delete-x" type="button" data-delete="/events/${event.id}" data-label="${escapeHtml(event.title)}" aria-label="Esborrar ${escapeHtml(event.title)}">×</button><p class="meta">${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</p><h4>${escapeHtml(event.title)}</h4><p>${escapeHtml(event.location || "Sense ubicació")}</p>
   </article>`).join("") : empty("No hi ha esdeveniments.");
+  document.querySelector("#event-video-form select[name=event_id]").innerHTML = events.map(event => `<option value="${event.id}">${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("");
 }
 
 function renderAdminActivity(items) {
@@ -223,6 +224,16 @@ function setupAdminForms() {
       await api("/events", { method: "POST", body: JSON.stringify(form) });
       event.currentTarget.reset(); await loadAdmin(); adminToast("Esdeveniment creat");
     } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#event-video-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    try {
+      await api("/event-videos", { method: "POST", body: fields });
+      event.currentTarget.reset();
+      await loadAdmin();
+      adminToast("Vídeo publicat");
+    } catch (_) { adminToast("No s'ha pogut pujar el vídeo"); }
   });
   document.querySelector("#goal-form").addEventListener("submit", async event => {
     event.preventDefault();
@@ -364,6 +375,11 @@ function setupTabs() {
     button.classList.add("active");
     document.querySelector(`#${button.dataset.tab}`).classList.add("active");
   }));
+}
+
+function renderEventVideos(videosByEvent) {
+  const rows = [...videosByEvent.values()].flat();
+  document.querySelector("#event-videos-list").innerHTML = rows.length ? rows.map(video => `<article class="card"><a class="action primary" href="${escapeHtml(video.filename)}" target="_blank" rel="noopener noreferrer">Veure vídeo</a>${video.comment ? `<p>${escapeHtml(video.comment)}</p>` : ""}</article>`).join("") : empty("Encara no hi ha vídeos publicats.");
 }
 
 function renderEvents(events) {
@@ -512,11 +528,13 @@ async function start() {
     checkins.forEach(item => state.checkins.set(item.exercise_id, item));
     const matches = events.filter(event => event.event_type === "match");
     const teamLists = await Promise.all(matches.map(event => api(`/convocations/event/${event.id}/team`)));
+    const eventVideos = await Promise.all(events.filter(event => event.event_type !== "meeting").map(async event => [event.id, await api(`/event-videos/event/${event.id}`)]));
+    const videosByEvent = new Map(eventVideos);
     matches.forEach((event, index) => state.teamConvocations.set(event.id, teamLists[index]));
     document.querySelector("#welcome").textContent = `Hola, ${state.player.name}`;
     const planned = weeklyPlan.length ? weeklyPlan : assignments.map(item => ({ ...item, mandatory: false }));
     const activityExercises = await Promise.all(planned.map(item => api(`/exercises/${item.exercise_id}`)));
-    renderEvents(events); renderHomeActivities(planned, checkins, activityExercises); renderGoals(goals); await renderTraining(assignments, routines);
+    renderEvents(events); renderEventVideos(videosByEvent); renderHomeActivities(planned, checkins, activityExercises); renderGoals(goals); await renderTraining(assignments, routines);
     renderProgress(stats, followUp, mvp);
     document.querySelector("#season-label").textContent = `Temporada ${season}`;
     renderStandings(standings);

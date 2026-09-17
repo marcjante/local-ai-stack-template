@@ -34,6 +34,7 @@
       <button class="tab active" data-tab="agenda">Agenda</button>
       <button class="tab" data-tab="goals">Objectius</button>
       <button class="tab" data-tab="training">Treball</button>
+      <button class="tab" data-tab="videos">Vídeos</button>
       <button class="tab" data-tab="progress">Progrés</button>
       <button class="tab" data-tab="standings">Classificació</button>
     </nav>
@@ -63,6 +64,12 @@
         <div id="exercises-list" class="card-list"></div>
         <h3>Rutines</h3>
         <div id="routines-list" class="card-list compact"></div>
+      </section>
+
+      <section id="videos" class="panel" aria-labelledby="videos-title">
+        <div class="section-heading"><div><p class="eyebrow">Anàlisi d'equip</p><h2 id="videos-title">Vídeos de partits i entrenaments</h2></div></div>
+        <p class="note">Mira el vídeo i revisa l'explicació de l'entrenador.</p>
+        <div id="event-videos-list" class="card-list compact"></div>
       </section>
 
       <section id="progress" class="panel" aria-labelledby="progress-title">
@@ -116,6 +123,13 @@
           <button class="action primary" type="submit">Crear esdeveniment</button>
         </form>
         <div id="admin-events" class="card-list compact"></div>
+        <form id="event-video-form" class="card form-grid">
+          <h3 class="wide">Vídeo de partit o entrenament</h3>
+          <label>Partit o entrenament<select name="event_id" required></select></label>
+          <label class="wide">Enllaç del vídeo<input name="url" type="url" placeholder="https://..." required></label>
+          <label class="wide">Explicació del que passa<textarea name="comment" maxlength="2000" placeholder="Què ha de mirar l'equip?"></textarea></label>
+          <button class="action primary" type="submit">Pujar vídeo i comentari</button>
+        </form>
       </section>
 
       <section>
