@@ -22,6 +22,7 @@ from .routers.player_stats import router as player_stats_router
 from .routers.reinforcements import router as reinforcements_router
 from .routers.routines import router as routines_router
 from .routers.seguiment import router as seguiment_router
+from .routers.session import router as session_router
 from .routers.standings import router as standings_router
 
 
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     application.include_router(seguiment_router)
     application.include_router(reinforcements_router)
     application.include_router(player_stats_router)
+    application.include_router(session_router)
 
     @application.get("/health", tags=["system"])
     def health() -> dict[str, str]:

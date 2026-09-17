@@ -30,6 +30,11 @@ class PlayerAccessUpdate(SQLModel):
     access_active: bool
 
 
+class SessionRead(SQLModel):
+    role: Literal["admin", "player"]
+    player: Optional[PlayerRead] = None
+
+
 class EventCreate(SQLModel):
     title: str = Field(min_length=1, max_length=160)
     starts_at: datetime
