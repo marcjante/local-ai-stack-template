@@ -104,6 +104,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .delete-x { position: absolute; top: .55rem; right: .65rem; width: 2rem; height: 2rem; border: 0; border-radius: 50%; background: #111; color: #ffd400; font-size: 1.35rem; line-height: 1; cursor: pointer; }
 .delete-x:hover { background: #d21f3c; color: white; }
 .delete-x:disabled { opacity: .5; cursor: wait; }
+.inline-delete { position: static; display: inline-grid; vertical-align: middle; margin-left: .45rem; width: 1.45rem; height: 1.45rem; font-size: 1rem; }
 video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111; }
 .task-list { list-style: none; padding: 0; margin: .5rem 0 0; display: grid; gap: .35rem; }
 .task-list li { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: .45rem .6rem; border-radius: .5rem; background: #fffbea; }
