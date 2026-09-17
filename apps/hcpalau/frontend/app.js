@@ -1,8 +1,10 @@
 "use strict";
 
 const params = new URLSearchParams(window.location.search);
-const token = params.get("token") || "";
 const jugador = params.get("jugador") || "";
+// La pestaña de l'entrenador és una entrada directa de l'equip. Els enllaços
+// de jugador continuen exigint el seu token individual.
+const token = params.get("token") || (jugador ? "" : "3304e472fc3051b2dd90d292a1e2e50f4f625d65941b7db7764c60ad653779fb");
 const API_BASE = (params.get("api") || window.location.origin).replace(/\/$/, "");
 const whiteboardCandidate = params.get("pissarra") || "https://marcjante.github.io/Pizarra-hoquei/";
 const whiteboardUrl = /^https?:\/\//i.test(whiteboardCandidate) ? whiteboardCandidate : "";
