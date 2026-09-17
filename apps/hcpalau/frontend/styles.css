@@ -114,6 +114,12 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 .activity-day h3 { margin: .8rem 0 0; text-transform: capitalize; }
 .player-card .actions { flex-wrap: wrap; }
 .link { color: var(--wine); font-weight: 750; text-decoration: none; }
+.whiteboard-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1rem; padding: 1.25rem 1.4rem; background: linear-gradient(135deg, #fff 0%, #fff8c7 100%); border-color: #d9c64f; }
+.whiteboard-icon { width: 4.25rem; height: 4.25rem; display: grid; place-items: center; border-radius: 1rem; background: var(--wine); box-shadow: 0 .45rem 1rem #1113; }
+.whiteboard-icon svg { width: 2.8rem; height: 2.8rem; fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.whiteboard-copy h3 { margin: 0 0 .25rem; color: var(--wine); font-size: 1.15rem; }
+.whiteboard-copy p { margin: 0; max-width: 34rem; line-height: 1.45; }
+.whiteboard-action { white-space: nowrap; display: inline-flex; align-items: center; gap: .45rem; padding: .75rem 1rem; }
 
 @media (min-width: 48rem) {
   .topbar { padding-top: 2rem; padding-bottom: 2rem; }
@@ -123,4 +129,6 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 @media (max-width: 34rem) {
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .wide { grid-column: auto; }
+  .whiteboard-card { grid-template-columns: auto 1fr; }
+  .whiteboard-action { grid-column: 1 / -1; justify-content: center; }
 }
