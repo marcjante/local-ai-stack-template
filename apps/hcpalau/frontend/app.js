@@ -54,6 +54,13 @@ function showToast(message) {
 }
 
 function showAccessDisabled() {
+  if (!jugador) {
+    document.querySelector("#loading").classList.add("hidden");
+    document.querySelector("#access-disabled").classList.add("hidden");
+    document.querySelector("#portal").classList.add("hidden");
+    document.querySelector("#admin-portal").classList.remove("hidden");
+    return;
+  }
   document.querySelector("#loading").classList.add("hidden");
   document.querySelector("#portal").classList.add("hidden");
   document.querySelector("#admin-portal").classList.add("hidden");
