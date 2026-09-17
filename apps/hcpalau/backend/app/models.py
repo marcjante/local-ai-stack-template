@@ -31,6 +31,14 @@ class Event(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class EventVideo(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="event.id", index=True)
+    filename: str = Field(max_length=255)
+    comment: Optional[str] = Field(default=None, max_length=2000)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class Attendance(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("event_id", "player_id"),)
 

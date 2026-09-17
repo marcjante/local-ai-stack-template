@@ -52,6 +52,14 @@ class EventTitleUpdate(SQLModel):
     title: str = Field(min_length=1, max_length=160)
 
 
+class EventVideoRead(SQLModel):
+    id: int
+    event_id: int
+    filename: str
+    comment: Optional[str] = None
+    created_at: datetime
+
+
 class AttendanceUpdate(SQLModel):
     attending: bool
     absence_reason: Optional[str] = Field(default=None, max_length=500)

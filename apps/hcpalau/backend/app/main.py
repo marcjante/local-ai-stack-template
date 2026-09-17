@@ -20,6 +20,7 @@ from .routers.activity import router as activity_router
 from .routers.convocations import router as convocations_router
 from .routers.exam_periods import router as exam_periods_router
 from .routers.events import router as events_router
+from .routers.event_videos import router as event_videos_router
 from .routers.exercise_progress import router as exercise_progress_router
 from .routers.exercise_checkins import router as exercise_checkins_router
 from .routers.weekly_plan import router as weekly_plan_router
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     )
     application.include_router(players_router)
     application.include_router(events_router)
+    application.include_router(event_videos_router)
     application.include_router(attendance_router)
     application.include_router(activity_router)
     application.include_router(goals_router)
@@ -96,6 +98,7 @@ def create_app() -> FastAPI:
         return JSONResponse({"status": "ready", "service": "hcpalau"})
 
     application.mount("/app", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+    application.mount("/uploads", StaticFiles(directory=settings.video_dir, check_dir=False), name="uploads")
 
     return application
 
