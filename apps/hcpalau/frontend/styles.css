@@ -1,13 +1,13 @@
 :root {
   color-scheme: light;
-  --wine: #8b1538;
-  --wine-dark: #5e0d25;
-  --gold: #e9b949;
-  --ink: #242126;
-  --muted: #6f6872;
-  --paper: #f7f3ef;
+  --wine: #111111;
+  --wine-dark: #000000;
+  --gold: #ffd400;
+  --ink: #171717;
+  --muted: #625f53;
+  --paper: #fffbea;
   --card: #ffffff;
-  --line: #e7dfe2;
+  --line: #e7dfb2;
   --success: #247a52;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -15,7 +15,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--paper); color: var(--ink); min-height: 100vh; }
 button { font: inherit; }
-input, select, textarea { font: inherit; width: 100%; border: 1px solid #cdbec3; border-radius: .65rem; padding: .65rem .7rem; background: white; color: var(--ink); }
+input, select, textarea { font: inherit; width: 100%; border: 1px solid #cfc58c; border-radius: .65rem; padding: .65rem .7rem; background: white; color: var(--ink); }
 textarea { min-height: 6rem; resize: vertical; }
 label { display: grid; gap: .35rem; color: var(--muted); font-size: .82rem; font-weight: 750; }
 label.checkbox { display: flex; align-items: center; gap: .5rem; align-self: end; padding-bottom: .65rem; }
@@ -28,11 +28,12 @@ label.checkbox input { width: auto; }
 .spinner { width: 2.5rem; height: 2.5rem; border: .25rem solid #dccbd1; border-top-color: var(--wine); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.topbar { background: linear-gradient(135deg, var(--wine-dark), var(--wine)); color: white; padding: 1.5rem max(1.25rem, calc((100vw - 70rem) / 2)); display: flex; justify-content: space-between; align-items: center; }
+.topbar { background: linear-gradient(135deg, var(--wine-dark), var(--wine)); color: white; border-bottom: 5px solid var(--gold); padding: 1.5rem max(1.25rem, calc((100vw - 70rem) / 2)); display: flex; justify-content: space-between; align-items: center; }
 .topbar h1 { margin: .15rem 0 0; font-size: clamp(1.6rem, 4vw, 2.4rem); }
 .eyebrow { margin: 0; text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; font-weight: 800; color: var(--wine); }
-.topbar .eyebrow { color: #f2cbd6; }
-.crest { width: 3.4rem; height: 3.4rem; display: grid; place-items: center; border: 2px solid var(--gold); border-radius: 50%; color: var(--gold); font-weight: 900; }
+.topbar .eyebrow { color: var(--gold); }
+.crest { width: 4rem; height: 4rem; display: grid; place-items: center; border: 2px solid var(--gold); border-radius: 50%; background: white; overflow: hidden; }
+.crest img { width: 100%; height: 100%; object-fit: contain; }
 
 .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: .25rem; overflow-x: auto; background: var(--card); border-bottom: 1px solid var(--line); padding: 0 max(1rem, calc((100vw - 70rem) / 2)); }
 .tab { border: 0; background: transparent; padding: 1rem .85rem .8rem; color: var(--muted); white-space: nowrap; border-bottom: .2rem solid transparent; cursor: pointer; }
@@ -69,7 +70,7 @@ h3 { margin: 2rem 0 .75rem; }
 .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .75rem; }
 .metric { background: var(--wine); color: white; border-radius: 1rem; padding: 1rem; }
 .metric strong { display: block; font-size: 1.8rem; }
-.metric span { color: #f2cbd6; font-size: .8rem; }
+.metric span { color: var(--gold); font-size: .8rem; }
 .toast { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); background: var(--ink); color: white; padding: .75rem 1rem; border-radius: .75rem; box-shadow: 0 .5rem 2rem #0004; }
 .table-wrap { overflow-x: auto; background: white; border: 1px solid var(--line); border-radius: 1rem; }
 table { width: 100%; border-collapse: collapse; min-width: 34rem; }
@@ -86,11 +87,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .player-card { display: grid; gap: .7rem; }
 .attendance-reason { display: grid; gap: .6rem; margin-top: .8rem; }
 .team-list { margin: 0; padding-left: 1.2rem; }
-.team-roster { margin-top: .8rem; padding: .8rem; border-radius: 12px; background: #fff8fa; border: 1px solid #eadfe0; }
-.team-roster h4 { margin: 0 0 .4rem; color: #8b1538; }
+.team-roster { margin-top: .8rem; padding: .8rem; border-radius: 12px; background: #fffbea; border: 1px solid #e7dfb2; }
+.team-roster h4 { margin: 0 0 .4rem; color: var(--wine); }
 .event-schedule { display: grid; gap: .25rem; margin-bottom: .8rem; }
 .event-schedule strong { font-size: 1.15rem; text-transform: capitalize; }
-.event-type { color: #8b1538; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.event-type { color: var(--wine); font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .activity-day { display: grid; gap: .6rem; }
 .activity-day h3 { margin: .8rem 0 0; text-transform: capitalize; }
 .player-card .actions { flex-wrap: wrap; }
