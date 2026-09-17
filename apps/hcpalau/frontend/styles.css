@@ -86,8 +86,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .player-card { display: grid; gap: .7rem; }
 .attendance-reason { display: grid; gap: .6rem; margin-top: .8rem; }
 .team-list { margin: 0; padding-left: 1.2rem; }
-.team-roster { margin-top: .8rem; }
-.team-roster summary { cursor: pointer; color: #8b1538; font-weight: 700; }
+.team-roster { margin-top: .8rem; padding: .8rem; border-radius: 12px; background: #fff8fa; border: 1px solid #eadfe0; }
+.team-roster h4 { margin: 0 0 .4rem; color: #8b1538; }
+.event-schedule { display: grid; gap: .25rem; margin-bottom: .8rem; }
+.event-schedule strong { font-size: 1.15rem; text-transform: capitalize; }
+.event-type { color: #8b1538; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .activity-day { display: grid; gap: .6rem; }
 .activity-day h3 { margin: .8rem 0 0; text-transform: capitalize; }
 .player-card .actions { flex-wrap: wrap; }

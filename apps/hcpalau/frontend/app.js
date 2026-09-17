@@ -376,13 +376,15 @@ function renderEvents(events) {
     const convocation = state.convocations.get(event.id);
     const team = state.teamConvocations.get(event.id) || [];
     const type = { training: "Entrenament", match: "Partit", meeting: "Reunió" }[event.event_type];
+    const eventDate = new Date(event.starts_at);
+    const dayLabel = new Intl.DateTimeFormat("ca-ES", { weekday: "long", day: "numeric", month: "long" }).format(eventDate);
+    const timeLabel = new Intl.DateTimeFormat("ca-ES", { timeStyle: "short" }).format(eventDate);
     const callup = convocation ? { selected: "Convocat", reserve: "Reserva", not_selected: "No convocat" }[convocation.selection_status] : "";
     return `<article class="card">
-      <p class="meta">${escapeHtml(type)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</p>
+      <div class="event-schedule"><span class="event-type">${escapeHtml(type)}</span><strong>${escapeHtml(dayLabel)}</strong><span>${escapeHtml(timeLabel)} · ${escapeHtml(event.location || "Ubicació per confirmar")}</span></div>
       <h3>${escapeHtml(event.title)}</h3>
-      <p>${escapeHtml(event.location || "Ubicació per confirmar")}</p>
       ${callup ? `<span class="callup">${escapeHtml(callup)}</span>` : ""}
-      ${event.event_type === "match" ? `<details class="team-roster"><summary>Convocatòria i equip (${team.length})</summary>${team.length ? `<ul class="team-list">${team.map(player => `<li>${escapeHtml(player.player_name)}</li>`).join("")}</ul>` : `<p class="note">Encara no hi ha equip seleccionat.</p>`}</details>` : ""}
+      ${event.event_type === "match" ? `<div class="team-roster"><h4>Qui hi va (${team.length})</h4>${team.length ? `<ul class="team-list">${team.map(player => `<li>${escapeHtml(player.player_name)}</li>`).join("")}</ul>` : `<p class="note">Encara no hi ha equip seleccionat.</p>`}</div>` : ""}
       <div class="actions">
         <button class="action ${attendance?.attending === true ? "primary" : ""}" data-attendance="${event.id}" data-value="true">Hi aniré</button>
         <button class="action ${attendance?.attending === false ? "primary" : ""}" data-attendance="${event.id}" data-value="false">No hi podré anar</button>
