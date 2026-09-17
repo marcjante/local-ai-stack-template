@@ -26,7 +26,7 @@ def recent_activity(
         .order_by(Attendance.updated_at.desc())
         .limit(20)
     ):
-        items.append({"kind": "attendance", "player": player.name, "label": event.title, "value": attendance.attending, "updated_at": attendance.updated_at})
+        items.append({"kind": "attendance", "player": player.name, "label": event.title, "value": attendance.attending, "reason": attendance.absence_reason, "updated_at": attendance.updated_at})
     for progress, player, exercise in session.exec(
         select(ExerciseProgress, Player, Exercise)
         .join(ExerciseAssignment, ExerciseAssignment.id == ExerciseProgress.assignment_id)

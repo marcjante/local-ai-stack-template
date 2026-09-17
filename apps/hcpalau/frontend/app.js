@@ -107,7 +107,7 @@ function renderAdminEvents(events) {
 }
 
 function renderAdminActivity(items) {
-  document.querySelector("#admin-activity").innerHTML = items.length ? items.map(item => `<article class="card"><p class="meta">${escapeHtml(dateFormat.format(new Date(item.updated_at)))}</p><strong>${escapeHtml(item.player)}</strong><p>${item.kind === "attendance" ? `Assistència: ${item.value ? "sí" : "no"}` : `Exercici: ${item.value}/3`}</p><p>${escapeHtml(item.label)}</p></article>`).join("") : empty("Encara no hi ha actualitzacions dels jugadors.");
+  document.querySelector("#admin-activity").innerHTML = items.length ? items.map(item => `<article class="card"><p class="meta">${escapeHtml(dateFormat.format(new Date(item.updated_at)))}</p><strong>${escapeHtml(item.player)}</strong><p>${item.kind === "attendance" ? `Assistència: ${item.value ? "sí" : "no"}` : `Exercici: ${item.value}/3`}</p><p>${escapeHtml(item.label)}</p>${item.kind === "attendance" && !item.value && item.reason ? `<p class="meta">Motiu: ${escapeHtml(item.reason)}</p>` : ""}</article>`).join("") : empty("Encara no hi ha actualitzacions dels jugadors.");
 }
 
 function renderAdminExercises(exercises, players) {
@@ -334,13 +334,36 @@ function renderEvents(events) {
         <button class="action ${attendance?.attending === true ? "primary" : ""}" data-attendance="${event.id}" data-value="true">Hi aniré</button>
         <button class="action ${attendance?.attending === false ? "primary" : ""}" data-attendance="${event.id}" data-value="false">No hi podré anar</button>
       </div>
+      <div class="attendance-reason ${attendance?.attending === false ? "" : "hidden"}" data-reason-panel="${event.id}">
+        <label>Per què no podràs venir?<textarea data-reason-input maxlength="500" placeholder="Escriu el motiu" required>${escapeHtml(attendance?.absence_reason || "")}</textarea></label>
+        <button class="action" data-attendance-save="${event.id}">Desar motiu</button>
+      </div>
     </article>`;
   }).join("") : empty("No hi ha esdeveniments programats.");
 
   target.querySelectorAll("[data-attendance]").forEach(button => button.addEventListener("click", async () => {
+    if (button.dataset.value === "false") {
+      const panel = target.querySelector(`[data-reason-panel="${button.dataset.attendance}"]`);
+      panel.classList.remove("hidden");
+      panel.querySelector("textarea")?.focus();
+      return;
+    }
     try {
       const saved = await api(`/attendance/${button.dataset.attendance}/${state.player.id}`, {
-        method: "PATCH", body: JSON.stringify({ attending: button.dataset.value === "true" })
+        method: "PATCH", body: JSON.stringify({ attending: true })
+      });
+      state.attendance.set(saved.event_id, saved);
+      renderEvents(events);
+      showToast("Assistència desada");
+    } catch (_) { showAccessDisabled(); }
+  }));
+  target.querySelectorAll("[data-attendance-save]").forEach(button => button.addEventListener("click", async () => {
+    const panel = target.querySelector(`[data-reason-panel="${button.dataset.attendanceSave}"]`);
+    const reason = panel.querySelector("textarea")?.value.trim() || "";
+    if (!reason) { showToast("Escriu el motiu abans de desar"); return; }
+    try {
+      const saved = await api(`/attendance/${button.dataset.attendanceSave}/${state.player.id}`, {
+        method: "PATCH", body: JSON.stringify({ attending: false, absence_reason: reason })
       });
       state.attendance.set(saved.event_id, saved);
       renderEvents(events);

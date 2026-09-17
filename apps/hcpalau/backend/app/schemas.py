@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal, Optional
 
+from pydantic import model_validator
 from sqlmodel import Field, SQLModel
 
 
@@ -49,6 +50,17 @@ class EventRead(EventCreate):
 
 class AttendanceUpdate(SQLModel):
     attending: bool
+    absence_reason: Optional[str] = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_absence_reason(self) -> "AttendanceUpdate":
+        if not self.attending and not (self.absence_reason or "").strip():
+            raise ValueError("absence_reason is required when attending is false")
+        if self.attending:
+            self.absence_reason = None
+        elif self.absence_reason:
+            self.absence_reason = self.absence_reason.strip()
+        return self
 
 
 class AttendanceRead(AttendanceUpdate):

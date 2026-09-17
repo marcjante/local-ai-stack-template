@@ -56,9 +56,11 @@ def set_attendance(
             event_id=event_id,
             player_id=player_id,
             attending=body.attending,
+            absence_reason=body.absence_reason,
         )
     else:
         attendance.attending = body.attending
+        attendance.absence_reason = body.absence_reason
         attendance.updated_at = utc_now()
 
     session.add(attendance)

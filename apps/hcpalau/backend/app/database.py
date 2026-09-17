@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy.pool import StaticPool
 
@@ -22,6 +23,13 @@ engine = build_engine()
 
 def create_db_and_tables() -> None:
     SQLModel.metadata.create_all(engine)
+    # Keep existing deployments compatible when a new nullable field is added.
+    with engine.begin() as connection:
+        try:
+            connection.execute(text("ALTER TABLE attendance ADD COLUMN absence_reason VARCHAR(500)"))
+        except Exception:
+            # The column already exists (or the table is managed by a migration).
+            pass
 
 
 def get_session():

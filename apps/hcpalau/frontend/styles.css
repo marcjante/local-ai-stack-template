@@ -84,6 +84,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .form-grid .wide { grid-column: 1 / -1; }
 .standings-form { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
 .player-card { display: grid; gap: .7rem; }
+.attendance-reason { display: grid; gap: .6rem; margin-top: .8rem; }
 .player-card .actions { flex-wrap: wrap; }
 .link { color: var(--wine); font-weight: 750; text-decoration: none; }
 

@@ -50,7 +50,7 @@ def test_player_can_set_and_update_own_attendance(client, admin_headers) -> None
     )
     second = client.patch(
         f"/attendance/{event['id']}/{player['id']}",
-        json={"attending": False},
+        json={"attending": False, "absence_reason": "Examen de matemàtiques"},
         headers=headers,
     )
     listed = client.get(f"/attendance/{player['id']}", headers=headers)
@@ -59,6 +59,18 @@ def test_player_can_set_and_update_own_attendance(client, admin_headers) -> None
     assert second.status_code == 200
     assert second.json()["id"] == first.json()["id"]
     assert listed.json() == [second.json()]
+    assert second.json()["absence_reason"] == "Examen de matemàtiques"
+
+
+def test_player_must_explain_absence(client, admin_headers) -> None:
+    player = create_player(client, admin_headers, "biel", "biel-player-token")
+    event = create_event(client, admin_headers)
+    response = client.patch(
+        f"/attendance/{event['id']}/{player['id']}",
+        json={"attending": False},
+        headers={"Authorization": "Bearer biel-player-token"},
+    )
+    assert response.status_code == 422
 
 
 def test_player_cannot_write_another_players_attendance(client, admin_headers) -> None:

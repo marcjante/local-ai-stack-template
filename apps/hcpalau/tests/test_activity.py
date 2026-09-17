@@ -18,11 +18,11 @@ def test_player_attendance_appears_in_coach_activity(client, admin_headers) -> N
     saved = client.patch(
         f"/attendance/{event['id']}/{player['id']}",
         headers={"Authorization": "Bearer activity-player-token"},
-        json={"attending": True},
+        json={"attending": False, "absence_reason": "Lesió al turmell"},
     )
     assert saved.status_code == 200
 
     activity = client.get("/activity", headers=admin_headers)
 
     assert activity.status_code == 200
-    assert any(item["kind"] == "attendance" and item["player"] == "Activity Player" for item in activity.json())
+    assert any(item["kind"] == "attendance" and item["player"] == "Activity Player" and item["reason"] == "Lesió al turmell" for item in activity.json())

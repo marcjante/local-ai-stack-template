@@ -38,6 +38,7 @@ class Attendance(SQLModel, table=True):
     event_id: int = Field(foreign_key="event.id", index=True)
     player_id: int = Field(foreign_key="player.id", index=True)
     attending: bool
+    absence_reason: Optional[str] = Field(default=None, max_length=500)
     updated_at: datetime = Field(default_factory=utc_now)
 
 
