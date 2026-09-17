@@ -34,6 +34,11 @@ label.checkbox input { width: auto; }
 .topbar .eyebrow { color: var(--gold); }
 .crest { width: 4rem; height: 4rem; display: grid; place-items: center; border: 2px solid var(--gold); border-radius: 50%; background: white; overflow: hidden; }
 .crest img { width: 100%; height: 100%; object-fit: contain; }
+.sponsors { display: flex; align-items: center; gap: .65rem; }
+.sponsor { display: inline-flex; align-items: center; min-height: 2.25rem; padding: .35rem .65rem; border-radius: .55rem; font-size: .78rem; font-weight: 850; letter-spacing: -.02em; white-space: nowrap; }
+.ok-valles { color: #111; background: var(--gold); }
+.ok-valles b { margin-right: .25rem; padding: .1rem .25rem; border-radius: .25rem; color: var(--gold); background: #111; font-size: .85rem; }
+.bar-vidal { color: #fff; background: #8b1e3f; font-family: Georgia, serif; font-style: italic; }
 
 .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: .25rem; overflow-x: auto; background: var(--card); border-bottom: 1px solid var(--line); padding: 0 max(1rem, calc((100vw - 70rem) / 2)); }
 .tab { border: 0; background: transparent; padding: 1rem .85rem .8rem; color: var(--muted); white-space: nowrap; border-bottom: .2rem solid transparent; cursor: pointer; }
@@ -131,4 +136,7 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
   .form-grid .wide { grid-column: auto; }
   .whiteboard-card { grid-template-columns: auto 1fr; }
   .whiteboard-action { grid-column: 1 / -1; justify-content: center; }
+  .sponsors { gap: .35rem; }
+  .sponsor { font-size: .68rem; padding: .3rem .45rem; }
+  .crest { width: 3.25rem; height: 3.25rem; }
 }
