@@ -28,7 +28,7 @@ label.checkbox input { width: auto; }
 .spinner { width: 2.5rem; height: 2.5rem; border: .25rem solid #dccbd1; border-top-color: var(--wine); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.topbar { background: linear-gradient(135deg, var(--wine-dark), var(--wine)); color: white; border-bottom: 5px solid var(--gold); padding: 1.5rem max(1.25rem, calc((100vw - 70rem) / 2)); display: flex; justify-content: space-between; align-items: center; }
+.topbar { background: linear-gradient(135deg, var(--wine-dark), var(--wine)); color: white; border-bottom: 5px solid var(--gold); padding: 1.5rem max(1.25rem, calc((100vw - 70rem) / 2)); display: flex; justify-content: space-between; align-items: center; gap: 1.25rem; }
 .topbar h1 { margin: .15rem 0 0; font-size: clamp(1.6rem, 4vw, 2.4rem); }
 .eyebrow { margin: 0; text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; font-weight: 800; color: var(--wine); }
 .topbar .eyebrow { color: var(--gold); }
@@ -47,7 +47,7 @@ label.checkbox input { width: auto; }
 .tab { border: 0; background: transparent; padding: 1rem .85rem .8rem; color: var(--muted); white-space: nowrap; border-bottom: .2rem solid transparent; cursor: pointer; }
 .tab.active { color: var(--wine); border-bottom-color: var(--wine); font-weight: 800; }
 
-.content { max-width: 70rem; margin: auto; padding: 1.5rem 1rem 5rem; }
+.content { max-width: 70rem; margin: auto; padding: 1.75rem 1rem 5rem; }
 .panel { display: none; }
 .panel.active { display: block; }
 .section-heading { display: flex; justify-content: space-between; align-items: end; margin-bottom: 1rem; }
@@ -59,7 +59,7 @@ h3 { margin: 2rem 0 .75rem; }
 .card h3, .card h4 { margin: 0 0 .4rem; }
 .card p { color: var(--muted); margin: .3rem 0; line-height: 1.45; }
 .meta { font-size: .82rem; font-weight: 700; color: var(--wine) !important; }
-.actions { display: flex; gap: .5rem; margin-top: .9rem; }
+.actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .9rem; }
 .action { border: 1px solid var(--wine); border-radius: .65rem; background: white; color: var(--wine); padding: .55rem .75rem; cursor: pointer; font-weight: 750; }
 .action.primary { color: white; background: var(--wine); }
 .action:disabled { opacity: .55; cursor: default; }
@@ -88,8 +88,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .standing-team { font-weight: 800; }
 .callup { display: inline-block; margin-top: .45rem; border-radius: 999px; padding: .25rem .55rem; font-size: .75rem; font-weight: 800; color: white; background: var(--wine); }
 .admin-grid { display: grid; gap: 2.5rem; }
+.admin-grid > section { min-width: 0; }
 .split-forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 1rem; margin-top: 1rem; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+.form-grid > .action { justify-self: start; }
 .form-grid .wide { grid-column: 1 / -1; }
 .simple-plan-form { max-width: 52rem; }
 .exercise-picker { border: 1px solid var(--line); border-radius: .8rem; padding: .8rem; display: grid; gap: .8rem; }
@@ -144,8 +146,12 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 }
 
 @media (max-width: 34rem) {
+  .topbar { align-items: flex-start; flex-direction: column; }
+  .topbar .sponsors { width: 100%; justify-content: flex-start; }
+  .section-heading { align-items: flex-start; }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .wide { grid-column: auto; }
+  .form-grid > .action { width: 100%; }
   .whiteboard-card { grid-template-columns: auto 1fr; }
   .whiteboard-action { grid-column: 1 / -1; justify-content: center; }
   .sponsors { gap: .35rem; }
