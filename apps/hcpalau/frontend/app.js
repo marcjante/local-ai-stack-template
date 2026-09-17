@@ -94,9 +94,20 @@ function renderAdminExercises(exercises, players) {
   document.querySelector("#assignment-form select[name=player_id]").innerHTML = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
 }
 
+function renderAdminCompetition(players, events) {
+  const matches = events.filter(event => event.event_type === "match");
+  const matchOptions = matches.map(event => `<option value="${event.id}">${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("");
+  const playerOptions = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
+  ["#convocation-form", "#mvp-form"].forEach(selector => {
+    document.querySelector(`${selector} select[name=event_id]`).innerHTML = matchOptions;
+    document.querySelector(`${selector} select[name=player_id]`).innerHTML = playerOptions;
+  });
+  document.querySelector("#reinforcement-form select[name=event_id]").innerHTML = matchOptions;
+}
+
 async function loadAdmin() {
   const [players, events, exercises] = await Promise.all([api("/players"), api("/events"), api("/exercises")]);
-  renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players);
+  renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); renderAdminCompetition(players, events);
 }
 
 function setupAdminForms() {
@@ -151,6 +162,35 @@ function setupAdminForms() {
     try {
       await api(`/exercises/${exerciseId}/video`, { method: "POST", body: upload });
       event.currentTarget.reset(); await loadAdmin(); adminToast("Vídeo pujat");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#convocation-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const path = `/convocations/${form.event_id}/${form.player_id}`;
+    delete form.event_id; delete form.player_id;
+    try {
+      await api(path, { method: "PUT", body: JSON.stringify(form) });
+      adminToast("Convocatòria desada");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#mvp-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const path = `/mvp/${form.event_id}/${form.player_id}`;
+    const body = { note: form.note };
+    try {
+      await api(path, { method: "PUT", body: JSON.stringify(body) });
+      adminToast("MVP actualitzat");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#reinforcement-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    form.event_id = Number(form.event_id);
+    try {
+      await api("/reinforcements", { method: "POST", body: JSON.stringify(form) });
+      event.currentTarget.reset(); await loadAdmin(); adminToast("Reforç afegit");
     } catch (_) { showAccessDisabled(); }
   });
 }
