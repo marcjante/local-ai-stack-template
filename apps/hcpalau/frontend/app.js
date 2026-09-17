@@ -155,6 +155,10 @@ function renderAdminActivity(items, players, assignmentsByPlayer, exercises, att
   }).join("") || empty("Encara no hi ha jugadors.");
 }
 
+function renderEventAttendanceSummary(rows) {
+  document.querySelector("#event-attendance-summary").innerHTML = rows.length ? rows.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)).map(row => `<div class="attendance-event"><span>${escapeHtml(dateFormat.format(new Date(row.starts_at)))} · ${escapeHtml(row.title)}</span><strong>${row.attending}</strong><small> disponibles de ${row.total} confirmats</small></div>`).join("") : "";
+}
+
 function renderAdminExercises(exercises, players) {
   document.querySelector("#admin-exercises").innerHTML = exercises.length ? exercises.map(exercise => `<article class="card deletable-card">
     <button class="delete-x" type="button" data-delete="/exercises/${exercise.id}" data-label="${escapeHtml(exercise.title)}" aria-label="Esborrar ${escapeHtml(exercise.title)}">×</button><p class="meta">${exercise.video_filename ? "Vídeo disponible" : "Sense vídeo"}</p>
@@ -206,7 +210,7 @@ async function loadAdmin() {
   if (adminLoadInFlight) return;
   adminLoadInFlight = true;
   try {
-  const [players, events, exercises, standings, activity, attendanceSummary, eventVideos] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity"), api("/activity/attendance-summary"), api("/event-videos")]);
+  const [players, events, exercises, standings, activity, attendanceSummary, eventVideos, eventAttendanceSummary] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity"), api("/activity/attendance-summary"), api("/event-videos"), api("/activity/event-attendance-summary")]);
   const goalsByPlayer = new Map(await Promise.all(players.map(async player => [player.id, await api(`/goals/player/${player.id}`)])));
   const playerData = await Promise.all(players.map(async player => [player.id, await api(`/exercises/player/${player.id}`), await api(`/exercise-progress/player/${player.id}`)]));
   const assignmentsByPlayer = new Map(playerData.map(([id, assignments]) => [id, assignments]));
@@ -216,6 +220,7 @@ async function loadAdmin() {
   renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); await renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
   renderStandings(standings, "#admin-standings-body");
   renderAdminActivity(activity, players, assignmentsByPlayer, exercises, attendanceSummary, progressByPlayer);
+  renderEventAttendanceSummary(eventAttendanceSummary);
   renderAdminEventVideos(eventVideos, events);
   renderAdminGoals(goalsByPlayer, players);
   } finally {

@@ -54,3 +54,14 @@ def attendance_summary(_: Principal = Depends(require_admin), session: Session =
             rows[attendance.player_id]["total"] += 1
             rows[attendance.player_id]["attending"] += int(attendance.attending)
     return [{**row, "percentage": round(row["attending"] * 100 / row["total"]) if row["total"] else None} for row in rows.values()]
+
+
+@router.get("/event-attendance-summary")
+def event_attendance_summary(_: Principal = Depends(require_admin), session: Session = Depends(get_session)) -> list[dict]:
+    events = {event.id: event for event in session.exec(select(Event))}
+    rows = {event_id: {"event_id": event_id, "total": 0, "attending": 0} for event_id in events}
+    for attendance in session.exec(select(Attendance)):
+        if attendance.event_id in rows:
+            rows[attendance.event_id]["total"] += 1
+            rows[attendance.event_id]["attending"] += int(attendance.attending)
+    return [{**row, "title": events[row["event_id"]].title, "starts_at": events[row["event_id"]].starts_at} for row in rows.values() if row["total"]]
