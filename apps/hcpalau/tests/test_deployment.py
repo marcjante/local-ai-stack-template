@@ -14,3 +14,12 @@ def test_container_includes_alembic_configuration_and_migrations() -> None:
     assert "/ready" in dockerfile
     assert (APP_ROOT / "alembic.ini").is_file()
     assert list((APP_ROOT / "backend" / "migrations" / "versions").glob("*.py"))
+
+
+def test_compose_defines_postgres_and_runs_migrations_before_startup() -> None:
+    compose = (APP_ROOT / "docker-compose.yml").read_text()
+
+    assert "postgres:16-alpine" in compose
+    assert "DATABASE_URL:" in compose
+    assert "alembic upgrade head" in compose
+    assert "condition: service_healthy" in compose

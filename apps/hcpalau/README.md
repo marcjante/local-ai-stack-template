@@ -65,6 +65,9 @@ El contracte funcional, els rols i els endpoints també estan documentats a
 La preparació de contenidor i els passos de desplegament són a
 [`docs/deploy.md`](docs/deploy.md).
 
+Per provar PostgreSQL localment amb Docker Compose, defineix `POSTGRES_PASSWORD`
+i `ADMIN_TOKEN` a l'entorn i executa `docker compose up --build`.
+
 ## Proves
 
 ```bash
