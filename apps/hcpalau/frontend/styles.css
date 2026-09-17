@@ -130,6 +130,7 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 .attendance-percent span { color: #ddd; font-size: .8rem; }
 .attendance-events { display: grid; gap: .5rem; margin-bottom: 1rem; }
 .activity-filters { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-bottom: 1rem; }
+.export-actions { margin: 0 0 1rem; }
 .attendance-event { display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap; padding: .7rem .85rem; border-radius: .65rem; background: #111; color: white; }
 .attendance-event span { flex: 1 1 14rem; font-weight: 750; }
 .attendance-event strong { color: var(--gold); font-size: 1.35rem; }
@@ -189,4 +190,10 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
   .sponsor { min-height: 2.5rem; font-size: .68rem; padding: .3rem .4rem; }
   .bar-vidal img, .ok-valles img, .fleca-luron img { width: 6rem; height: 2.25rem; }
   .crest { width: 3.25rem; height: 3.25rem; }
+}
+
+@media print {
+  .topbar, .admin-tabs, .activity-filters, .export-actions, form, button, .delete-x { display: none !important; }
+  .admin-grid > section { display: block !important; break-inside: avoid; }
+  body { background: white; }
 }

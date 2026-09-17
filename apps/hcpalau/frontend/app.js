@@ -22,6 +22,7 @@ const currentWeekStart = weekDate.toISOString().slice(0, 10);
 const state = { player: null, attendance: new Map(), progress: new Map(), checkins: new Map(), convocations: new Map(), teamConvocations: new Map() };
 let adminLoadInFlight = false;
 let adminActivityItems = [];
+let adminExportRows = [];
 const dateFormat = new Intl.DateTimeFormat("ca-ES", { dateStyle: "medium", timeStyle: "short" });
 
 async function api(path, options = {}) {
@@ -139,6 +140,7 @@ function renderAdminEventVideos(videos, events) {
 
 function renderAdminActivity(items, players, assignmentsByPlayer, exercises, attendanceSummary, progressByPlayer) {
   adminActivityItems = items;
+  adminExportRows = players.map(player => { const attendance = attendanceSummary.find(row => row.player_id === player.id); const progress = progressByPlayer.get(player.id) || []; const latest = progress.reduce((row, item) => !row || `${item.iso_year}-${item.iso_week}` > `${row.iso_year}-${row.iso_week}` ? item : row, null); const weekRows = latest ? progress.filter(item => item.iso_year === latest.iso_year && item.iso_week === latest.iso_week) : []; const assignments = assignmentsByPlayer.get(player.id) || []; return { jugador: player.name, asistencia: attendance?.percentage == null ? "" : `${attendance.percentage}%`, exercicis_setmana: assignments.length ? `${Math.round(weekRows.reduce((sum, row) => sum + row.repetitions, 0) * 100 / (assignments.length * 3))}%` : "" }; });
   const latest = new Map();
   items.filter(item => item.kind === "checkin").forEach(item => latest.set(`${item.player}:${item.label}`, item));
   const exerciseById = new Map(exercises.map(exercise => [exercise.id, exercise]));
@@ -160,6 +162,11 @@ function renderAdminActivity(items, players, assignmentsByPlayer, exercises, att
     const exercisePercent = assignments.length ? Math.round(weekRows.reduce((sum, row) => sum + row.repetitions, 0) * 100 / (assignments.length * 3)) : null;
     return `<article class="card player-activity"><h3>${escapeHtml(player.name)}</h3><p class="meta">Assistència a entrenaments i partits</p>${attendance ? `<ul class="task-list">${attendance}</ul>` : `<p class="note">Encara no ha confirmat cap dia.</p>`}<p class="attendance-percent">Assistència total <strong>${percentage}</strong>${summary?.total ? ` <span>(${summary.attending}/${summary.total})</span>` : ""}</p><details class="activity-exercises"><summary>Exercicis i estiraments${assignments.length ? ` (${assignments.length})` : ""}</summary><p class="exercise-percent">Aquesta setmana: <strong>${exercisePercent == null ? "Sense dades" : `${exercisePercent}%`}</strong></p>${tasks ? `<ul class="task-list">${tasks}</ul>` : `<p class="note">No té exercicis assignats.</p>`}</details></article>`;
   }).join("") || empty("Encara no hi ha jugadors.");
+}
+
+function setupExports() {
+  document.querySelector("#export-csv").onclick = () => { const csv = [Object.keys(adminExportRows[0] || { jugador: "", asistencia: "", exercicis_setmana: "" }).join(","), ...adminExportRows.map(row => Object.values(row).map(value => `"${String(value).replaceAll('"', '""')}"`).join(","))].join("\n"); const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "hcpalau-assistencia-exercicis.csv"; link.click(); URL.revokeObjectURL(link.href); };
+  document.querySelector("#export-pdf").onclick = () => window.print();
 }
 
 function setupActivityFilters(players) {
@@ -249,6 +256,7 @@ async function loadAdmin() {
   renderStandings(standings, "#admin-standings-body");
   renderAdminActivity(activity, players, assignmentsByPlayer, exercises, attendanceSummary, progressByPlayer);
   setupActivityFilters(players);
+  setupExports();
   renderAdminWeekCalendar(events);
   renderEventAttendanceSummary(eventAttendanceSummary);
   renderAdminEventVideos(eventVideos, events);
