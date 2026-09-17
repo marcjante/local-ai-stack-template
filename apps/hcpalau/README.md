@@ -18,6 +18,9 @@ Per defecte crea `hcpalau.db` dins d'aquest directori. Es pot canviar amb
 `HCPALAU_DATABASE_URL`. La documentació OpenAPI queda disponible a
 `http://127.0.0.1:8000/docs`.
 
+El contracte funcional, els rols i els endpoints també estan documentats a
+[`docs/api-spec.md`](docs/api-spec.md).
+
 ## Proves
 
 ```bash
