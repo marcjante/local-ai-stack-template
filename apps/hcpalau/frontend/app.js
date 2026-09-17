@@ -4,8 +4,11 @@ const params = new URLSearchParams(window.location.search);
 const token = params.get("token") || "";
 const jugador = params.get("jugador") || "";
 const API_BASE = (params.get("api") || window.location.origin).replace(/\/$/, "");
+const now = new Date();
+const seasonStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+const season = params.get("season") || `${seasonStart}-${String(seasonStart + 1).slice(-2)}`;
 
-const state = { player: null, attendance: new Map(), progress: new Map() };
+const state = { player: null, attendance: new Map(), progress: new Map(), convocations: new Map() };
 const dateFormat = new Intl.DateTimeFormat("ca-ES", { dateStyle: "medium", timeStyle: "short" });
 
 async function api(path, options = {}) {
@@ -114,14 +117,22 @@ function renderAdminPlanning(players, exercises, routines) {
   document.querySelector("#routine-exercise-form select[name=exercise_id]").innerHTML = exercises.map(exercise => `<option value="${exercise.id}">${escapeHtml(exercise.title)}</option>`).join("");
 }
 
+function renderStandings(rows, targetSelector = "#standings-body") {
+  const target = document.querySelector(targetSelector);
+  const detailed = targetSelector === "#standings-body";
+  target.innerHTML = rows.length ? rows.map(row => `<tr><td>${row.position}</td><td class="standing-team">${escapeHtml(row.team)}</td><td>${row.played}</td>${detailed ? `<td>${row.won}</td><td>${row.drawn}</td><td>${row.lost}</td>` : ""}<td>${row.points}</td></tr>`).join("") : `<tr><td colspan="${detailed ? 7 : 4}">Encara no hi ha classificació disponible.</td></tr>`;
+}
+
 async function loadAdmin() {
-  const [players, events, exercises] = await Promise.all([api("/players"), api("/events"), api("/exercises")]);
+  const [players, events, exercises, standings] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`)]);
   const routineGroups = await Promise.all(players.map(player => api(`/routines/player/${player.id}`)));
   const routines = routineGroups.flatMap((items, index) => items.map(item => ({ ...item, player_name: players[index].name })));
   renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
+  renderStandings(standings, "#admin-standings-body");
 }
 
 function setupAdminForms() {
+  document.querySelector("#standing-form input[name=season]").value = season;
   document.querySelector("#player-form").addEventListener("submit", async event => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -246,6 +257,15 @@ function setupAdminForms() {
       event.currentTarget.reset(); await loadAdmin(); adminToast("Seguiment desat");
     } catch (_) { showAccessDisabled(); }
   });
+  document.querySelector("#standing-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    ["position", "played", "won", "drawn", "lost", "goals_for", "goals_against", "points"].forEach(field => { form[field] = Number(form[field]); });
+    try {
+      await api("/standings", { method: "POST", body: JSON.stringify(form) });
+      await loadAdmin(); adminToast("Classificació actualitzada");
+    } catch (_) { showAccessDisabled(); }
+  });
 }
 
 async function startAdmin() {
@@ -267,11 +287,14 @@ function renderEvents(events) {
   const target = document.querySelector("#events-list");
   target.innerHTML = events.length ? events.map(event => {
     const attendance = state.attendance.get(event.id);
+    const convocation = state.convocations.get(event.id);
     const type = { training: "Entrenament", match: "Partit", meeting: "Reunió" }[event.event_type];
+    const callup = convocation ? { selected: "Convocat", reserve: "Reserva", not_selected: "No convocat" }[convocation.selection_status] : "";
     return `<article class="card">
       <p class="meta">${escapeHtml(type)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</p>
       <h3>${escapeHtml(event.title)}</h3>
       <p>${escapeHtml(event.location || "Ubicació per confirmar")}</p>
+      ${callup ? `<span class="callup">${escapeHtml(callup)}</span>` : ""}
       <div class="actions">
         <button class="action ${attendance?.attending === true ? "primary" : ""}" data-attendance="${event.id}" data-value="true">Hi aniré</button>
         <button class="action ${attendance?.attending === false ? "primary" : ""}" data-attendance="${event.id}" data-value="false">No hi podré anar</button>
@@ -350,17 +373,21 @@ async function start() {
     if (!jugador || session.role !== "player" || !session.player) return showAccessDisabled();
     state.player = session.player;
     const id = state.player.id;
-    const [events, attendance, goals, assignments, progress, routines, stats, followUp, exams, mvp] = await Promise.all([
+    const [events, attendance, goals, assignments, progress, routines, stats, followUp, exams, mvp, convocations, standings] = await Promise.all([
       api("/events"), api(`/attendance/${id}`), api(`/goals/player/${id}`),
       api(`/exercises/player/${id}`), api(`/exercise-progress/player/${id}`),
       api(`/routines/player/${id}`), api(`/player-stats/player/${id}`),
-      api(`/seguiment/player/${id}`), api(`/exam-periods/player/${id}`), api(`/mvp/player/${id}`)
+      api(`/seguiment/player/${id}`), api(`/exam-periods/player/${id}`), api(`/mvp/player/${id}`),
+      api(`/convocations/player/${id}`), api(`/standings?season=${encodeURIComponent(season)}`)
     ]);
     attendance.forEach(item => state.attendance.set(item.event_id, item));
     progress.forEach(item => state.progress.set(item.assignment_id, item));
+    convocations.forEach(item => state.convocations.set(item.event_id, item));
     document.querySelector("#welcome").textContent = `Hola, ${state.player.name}`;
     renderEvents(events); renderGoals(goals); await renderTraining(assignments, routines);
     renderProgress(stats, followUp, exams, mvp);
+    document.querySelector("#season-label").textContent = `Temporada ${season}`;
+    renderStandings(standings);
     setupTabs();
     document.querySelector("#loading").classList.add("hidden");
     document.querySelector("#portal").classList.remove("hidden");

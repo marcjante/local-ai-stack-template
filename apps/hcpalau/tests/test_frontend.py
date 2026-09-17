@@ -63,3 +63,14 @@ def test_admin_frontend_manages_individual_planning(client) -> None:
     assert "`/routines/${routineId}/exercises`" in javascript.text
     assert 'api("/exam-periods"' in javascript.text
     assert 'api("/seguiment"' in javascript.text
+
+
+def test_frontend_renders_convocations_and_standings(client) -> None:
+    html = client.get("/app/")
+    javascript = client.get("/app/app.js")
+
+    assert 'data-tab="standings"' in html.text
+    assert 'id="standing-form"' in html.text
+    assert "api(`/convocations/player/${id}`)" in javascript.text
+    assert "api(`/standings?season=${encodeURIComponent(season)}`)" in javascript.text
+    assert 'api("/standings"' in javascript.text

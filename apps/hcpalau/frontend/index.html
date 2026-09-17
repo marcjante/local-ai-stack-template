@@ -35,6 +35,7 @@
       <button class="tab" data-tab="goals">Objectius</button>
       <button class="tab" data-tab="training">Treball</button>
       <button class="tab" data-tab="progress">Progrés</button>
+      <button class="tab" data-tab="standings">Classificació</button>
     </nav>
 
     <main class="content">
@@ -70,6 +71,13 @@
         <div id="follow-up-list" class="card-list compact"></div>
         <h3>Períodes d'exàmens</h3>
         <div id="exam-list" class="card-list compact"></div>
+      </section>
+
+      <section id="standings" class="panel" aria-labelledby="standings-title">
+        <div class="section-heading">
+          <div><p class="eyebrow" id="season-label">Temporada</p><h2 id="standings-title">Classificació</h2></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Pos.</th><th>Equip</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>Pts</th></tr></thead><tbody id="standings-body"></tbody></table></div>
       </section>
     </main>
 
@@ -203,6 +211,24 @@
             <button class="action primary" type="submit">Desar seguiment</button>
           </form>
         </div>
+      </section>
+
+      <section>
+        <div class="section-heading"><div><p class="eyebrow">Competició</p><h2>Classificació</h2></div></div>
+        <form id="standing-form" class="card form-grid standings-form">
+          <label>Temporada<input name="season" required maxlength="32"></label>
+          <label>Equip<input name="team" required maxlength="160"></label>
+          <label>Posició<input name="position" type="number" min="1" required></label>
+          <label>Partits<input name="played" type="number" min="0" value="0" required></label>
+          <label>Guanyats<input name="won" type="number" min="0" value="0" required></label>
+          <label>Empatats<input name="drawn" type="number" min="0" value="0" required></label>
+          <label>Perduts<input name="lost" type="number" min="0" value="0" required></label>
+          <label>Gols a favor<input name="goals_for" type="number" min="0" value="0" required></label>
+          <label>Gols en contra<input name="goals_against" type="number" min="0" value="0" required></label>
+          <label>Punts<input name="points" type="number" min="0" value="0" required></label>
+          <button class="action primary" type="submit">Desar classificació</button>
+        </form>
+        <div class="table-wrap"><table><thead><tr><th>Pos.</th><th>Equip</th><th>PJ</th><th>Pts</th></tr></thead><tbody id="admin-standings-body"></tbody></table></div>
       </section>
     </main>
     <div id="admin-toast" class="toast hidden" role="status" aria-live="polite"></div>
