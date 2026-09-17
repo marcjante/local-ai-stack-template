@@ -152,7 +152,7 @@ async function renderAdminCompetition(players, events) {
 
 function renderAdminPlanning(players, exercises, routines) {
   const playerOptions = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
-  ["#exam-form", "#follow-up-form", "#weekly-plan-form"].forEach(selector => {
+  ["#follow-up-form", "#weekly-plan-form"].forEach(selector => {
     document.querySelector(`${selector} select[name=player_id]`).innerHTML = playerOptions;
   });
   const categories = [
@@ -295,15 +295,6 @@ function setupAdminForms() {
       await Promise.all(exerciseIds.map(exerciseId => api("/weekly-plan", { method: "POST", body: JSON.stringify({ player_id: Number(playerId), exercise_id: Number(exerciseId), week_start: weekStart, mandatory }) })));
       event.currentTarget.reset();
       adminToast("Pla setmanal enviat");
-    } catch (_) { showAccessDisabled(); }
-  });
-  document.querySelector("#exam-form").addEventListener("submit", async event => {
-    event.preventDefault();
-    const form = Object.fromEntries(new FormData(event.currentTarget));
-    form.player_id = Number(form.player_id);
-    try {
-      await api("/exam-periods", { method: "POST", body: JSON.stringify(form) });
-      event.currentTarget.reset(); await loadAdmin(); adminToast("Període registrat");
     } catch (_) { showAccessDisabled(); }
   });
   document.querySelector("#follow-up-form").addEventListener("submit", async event => {
@@ -463,13 +454,12 @@ async function renderTraining(assignments, routines) {
   routineTarget.innerHTML = routines.length ? routines.map(routine => `<article class="card"><h4>${escapeHtml(routine.title)}</h4><p>${routine.active ? "Rutina activa" : "Rutina finalitzada"}</p></article>`).join("") : empty("No hi ha rutines actives.");
 }
 
-function renderProgress(stats, followUp, exams, mvp) {
+function renderProgress(stats, followUp, mvp) {
   const totals = stats.reduce((sum, row) => ({ games: sum.games + row.games, goals: sum.goals + row.goals, assists: sum.assists + row.assists }), { games: 0, goals: 0, assists: 0 });
   document.querySelector("#metrics").innerHTML = [
     [totals.games, "Partits"], [totals.goals, "Gols"], [totals.assists, "Assistències"], [mvp.length, "MVP"]
   ].map(([value, label]) => `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`).join("");
   document.querySelector("#follow-up-list").innerHTML = followUp.length ? followUp.map(item => `<article class="card"><p class="meta">${escapeHtml(item.observed_on)} · ${escapeHtml(item.category)}</p><p>${escapeHtml(item.note)}</p></article>`).join("") : empty("Encara no hi ha observacions compartides.");
-  document.querySelector("#exam-list").innerHTML = exams.length ? exams.map(item => `<article class="card"><h4>${escapeHtml(item.start_date)} — ${escapeHtml(item.end_date)}</h4><p>${escapeHtml(item.note || "Període d'exàmens")}</p></article>`).join("") : empty("No tens períodes d'exàmens registrats.");
 }
 
 async function start() {
@@ -481,11 +471,11 @@ async function start() {
     if (!jugador || session.role !== "player" || !session.player) return showAccessDisabled();
     state.player = session.player;
     const id = state.player.id;
-    const [events, attendance, goals, assignments, progress, routines, stats, followUp, exams, mvp, convocations, standings, checkins, weeklyPlan] = await Promise.all([
+    const [events, attendance, goals, assignments, progress, routines, stats, followUp, mvp, convocations, standings, checkins, weeklyPlan] = await Promise.all([
       api("/events"), api(`/attendance/${id}`), api(`/goals/player/${id}`),
       api(`/exercises/player/${id}`), api(`/exercise-progress/player/${id}`),
       api(`/routines/player/${id}`), api(`/player-stats/player/${id}`),
-      api(`/seguiment/player/${id}`), api(`/exam-periods/player/${id}`), api(`/mvp/player/${id}`),
+      api(`/seguiment/player/${id}`), api(`/mvp/player/${id}`),
       api(`/convocations/player/${id}`), api(`/standings?season=${encodeURIComponent(season)}`), api(`/exercise-checkins/player/${id}`), api(`/weekly-plan/player/${id}?week_start=${currentWeekStart}`)
     ]);
     attendance.forEach(item => state.attendance.set(item.event_id, item));
@@ -499,7 +489,7 @@ async function start() {
     const planned = weeklyPlan.length ? weeklyPlan : assignments.map(item => ({ ...item, mandatory: false }));
     const activityExercises = await Promise.all(planned.map(item => api(`/exercises/${item.exercise_id}`)));
     renderEvents(events); renderHomeActivities(planned, checkins, activityExercises); renderGoals(goals); await renderTraining(assignments, routines);
-    renderProgress(stats, followUp, exams, mvp);
+    renderProgress(stats, followUp, mvp);
     document.querySelector("#season-label").textContent = `Temporada ${season}`;
     renderStandings(standings);
     setupTabs();

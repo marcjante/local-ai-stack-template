@@ -59,10 +59,10 @@ def test_admin_frontend_manages_individual_planning(client) -> None:
 
     assert 'id="weekly-plan-form"' in html.text
     assert 'id="weekly-exercise-options"' in html.text
-    assert 'id="exam-form"' in html.text
+    assert 'id="exam-form"' not in html.text
     assert 'id="follow-up-form"' in html.text
     assert 'api("/weekly-plan"' in javascript.text
-    assert 'api("/exam-periods"' in javascript.text
+    assert 'api("/exam-periods"' not in javascript.text
     assert 'api("/seguiment"' in javascript.text
 
 
