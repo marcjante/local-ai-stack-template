@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import create_db_and_tables
 from .routers.attendance import router as attendance_router
+from .routers.convocations import router as convocations_router
 from .routers.events import router as events_router
 from .routers.exercise_progress import router as exercise_progress_router
 from .routers.exercises import router as exercises_router
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     application.include_router(goals_router)
     application.include_router(exercises_router)
     application.include_router(exercise_progress_router)
+    application.include_router(convocations_router)
 
     @application.get("/health", tags=["system"])
     def health() -> dict[str, str]:

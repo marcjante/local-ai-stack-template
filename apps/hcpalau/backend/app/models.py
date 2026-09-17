@@ -80,3 +80,14 @@ class ExerciseProgress(SQLModel, table=True):
     iso_week: int
     repetitions: int = Field(default=0, ge=0, le=3)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class Convocation(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("event_id", "player_id"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="event.id", index=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    selection_status: str = Field(max_length=32)
+    note: Optional[str] = Field(default=None, max_length=500)
+    updated_at: datetime = Field(default_factory=utc_now)

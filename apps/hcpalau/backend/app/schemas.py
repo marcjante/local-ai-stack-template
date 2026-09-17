@@ -95,3 +95,15 @@ class ExerciseProgressRead(SQLModel):
     iso_week: int
     repetitions: int
     updated_at: datetime
+
+
+class ConvocationUpdate(SQLModel):
+    selection_status: Literal["selected", "reserve", "not_selected"]
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class ConvocationRead(ConvocationUpdate):
+    id: int
+    event_id: int
+    player_id: int
+    updated_at: datetime
