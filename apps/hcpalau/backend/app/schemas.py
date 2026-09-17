@@ -159,3 +159,14 @@ class StandingUpdate(SQLModel):
 class StandingRead(StandingUpdate):
     id: int
     updated_at: datetime
+
+
+class MvpUpdate(SQLModel):
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class MvpRead(MvpUpdate):
+    id: int
+    event_id: int
+    player_id: int
+    awarded_at: datetime

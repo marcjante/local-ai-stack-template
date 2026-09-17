@@ -151,3 +151,13 @@ class Standing(SQLModel, table=True):
     goals_against: int = Field(default=0, ge=0)
     points: int = Field(default=0, ge=0)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class MvpRecognition(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("event_id"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="event.id", index=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    note: Optional[str] = Field(default=None, max_length=500)
+    awarded_at: datetime = Field(default_factory=utc_now)
