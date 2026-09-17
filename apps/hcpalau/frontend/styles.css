@@ -37,7 +37,7 @@ label.checkbox input { width: auto; }
 .sponsors { display: flex; align-items: center; gap: .65rem; }
 .sponsor { display: inline-flex; align-items: center; min-height: 2.25rem; padding: .35rem .65rem; border-radius: .55rem; font-size: .78rem; font-weight: 850; letter-spacing: -.02em; white-space: nowrap; }
 .ok-valles { color: #111; background: var(--gold); }
-.ok-valles b { margin-right: .25rem; padding: .1rem .25rem; border-radius: .25rem; color: var(--gold); background: #111; font-size: .85rem; }
+.ok-valles img { display: block; width: 5.5rem; height: 2rem; object-fit: contain; border-radius: .3rem; }
 .bar-vidal { color: #fff; background: #8b1e3f; font-family: Georgia, serif; font-style: italic; }
 .bar-vidal img { display: block; width: 5.5rem; height: 2rem; object-fit: contain; border-radius: .3rem; }
 
@@ -140,5 +140,6 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
   .sponsors { gap: .35rem; }
   .sponsor { font-size: .68rem; padding: .3rem .45rem; }
   .bar-vidal img { width: 4.25rem; height: 1.65rem; }
+  .ok-valles img { width: 4.25rem; height: 1.65rem; }
   .crest { width: 3.25rem; height: 3.25rem; }
 }
