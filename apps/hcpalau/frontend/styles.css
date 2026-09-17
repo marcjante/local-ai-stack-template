@@ -97,6 +97,12 @@ tbody tr:last-child td { border-bottom: 0; }
 .delete-x:hover { background: #d21f3c; color: white; }
 .delete-x:disabled { opacity: .5; cursor: wait; }
 video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111; }
+.task-list { list-style: none; padding: 0; margin: .5rem 0 0; display: grid; gap: .35rem; }
+.task-list li { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: .45rem .6rem; border-radius: .5rem; background: #fffbea; }
+.task-status { font-size: .78rem; white-space: nowrap; }
+.task-status.done { color: #187a35; }
+.task-status.missed { color: #c62828; }
+.task-status.pending { color: #806b00; }
 .attendance-reason { display: grid; gap: .6rem; margin-top: .8rem; }
 .team-list { margin: 0; padding-left: 1.2rem; }
 .team-roster { margin-top: .8rem; padding: .8rem; border-radius: 12px; background: #fffbea; border: 1px solid #e7dfb2; }

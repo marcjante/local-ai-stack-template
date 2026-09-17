@@ -120,15 +120,20 @@ function renderAdminEvents(events) {
   document.querySelector("#event-video-form select[name=event_id]").innerHTML = events.map(event => `<option value="${event.id}">${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("");
 }
 
-function renderAdminActivity(items) {
-  if (!items.length) { document.querySelector("#admin-activity").innerHTML = empty("Encara no hi ha actualitzacions dels jugadors."); return; }
-  const grouped = new Map();
-  items.forEach(item => {
-    const day = String(item.event_date || item.updated_at).slice(0, 10);
-    if (!grouped.has(day)) grouped.set(day, []);
-    grouped.get(day).push(item);
-  });
-  document.querySelector("#admin-activity").innerHTML = [...grouped.entries()].map(([day, dayItems]) => `<section class="activity-day"><h3>${escapeHtml(new Intl.DateTimeFormat("ca-ES", { dateStyle: "full" }).format(new Date(`${day}T12:00:00`)))}</h3>${dayItems.map(item => `<article class="card"><strong>${escapeHtml(item.player)}</strong><p>${item.kind === "attendance" ? `Assistència: ${item.value ? "sí" : "no"}` : item.kind === "checkin" ? `Treball a casa: ${item.value ? "fet" : "no fet"}` : `Exercici: ${item.value}/3`}</p><p>${escapeHtml(item.label)}</p>${item.kind === "attendance" && !item.value && item.reason ? `<p class="meta">Motiu: ${escapeHtml(item.reason)}</p>` : ""}<p class="meta">Confirmat ${escapeHtml(dateFormat.format(new Date(item.updated_at)))}</p></article>`).join("")}</section>`).join("");
+function renderAdminActivity(items, players, assignmentsByPlayer, exercises) {
+  const latest = new Map();
+  items.filter(item => item.kind === "checkin").forEach(item => latest.set(`${item.player}:${item.label}`, item));
+  const exerciseById = new Map(exercises.map(exercise => [exercise.id, exercise]));
+  document.querySelector("#admin-activity").innerHTML = players.map(player => {
+    const assignments = assignmentsByPlayer.get(player.id) || [];
+    const tasks = assignments.map(assignment => {
+      const exercise = exerciseById.get(assignment.exercise_id);
+      const checkin = latest.get(`${player.name}:${exercise?.title}`);
+      const status = checkin ? (checkin.value ? "Fet" : "No fet") : "Pendent";
+      return `<li><span>${escapeHtml(exercise?.title || "Exercici")}</span><strong class="task-status ${status === "Fet" ? "done" : status === "No fet" ? "missed" : "pending"}">${status}</strong></li>`;
+    }).join("");
+    return `<article class="card player-activity"><h3>${escapeHtml(player.name)}</h3>${tasks ? `<ul class="task-list">${tasks}</ul>` : `<p class="note">No té exercicis assignats.</p>`}</article>`;
+  }).join("") || empty("Encara no hi ha jugadors.");
 }
 
 function renderAdminExercises(exercises, players) {
@@ -183,11 +188,12 @@ async function loadAdmin() {
   adminLoadInFlight = true;
   try {
   const [players, events, exercises, standings, activity] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity")]);
+  const assignmentsByPlayer = new Map(await Promise.all(players.map(async player => [player.id, await api(`/exercises/player/${player.id}`)])));
   const routineGroups = await Promise.all(players.map(player => api(`/routines/player/${player.id}`)));
   const routines = routineGroups.flatMap((items, index) => items.map(item => ({ ...item, player_name: players[index].name })));
   renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); await renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
   renderStandings(standings, "#admin-standings-body");
-  renderAdminActivity(activity);
+  renderAdminActivity(activity, players, assignmentsByPlayer, exercises);
   } finally {
     adminLoadInFlight = false;
   }
