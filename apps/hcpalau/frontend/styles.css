@@ -61,6 +61,7 @@ h3 { margin: 2rem 0 .75rem; }
 .metric span { color: #f2cbd6; font-size: .8rem; }
 .toast { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); background: var(--ink); color: white; padding: .75rem 1rem; border-radius: .75rem; box-shadow: 0 .5rem 2rem #0004; }
 .admin-grid { display: grid; gap: 2.5rem; }
+.split-forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 1rem; margin-top: 1rem; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-bottom: 1rem; }
 .form-grid .wide { grid-column: 1 / -1; }
 .player-card { display: grid; gap: .7rem; }

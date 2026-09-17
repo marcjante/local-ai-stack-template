@@ -114,6 +114,30 @@
           <button class="action primary" type="submit">Assignar objectiu</button>
         </form>
       </section>
+
+      <section>
+        <div class="section-heading"><div><p class="eyebrow">Catàleg tècnic</p><h2>Exercicis</h2></div></div>
+        <form id="exercise-form" class="card form-grid">
+          <label class="wide">Títol<input name="title" required maxlength="160"></label>
+          <label class="wide">Descripció<textarea name="description" maxlength="2000"></textarea></label>
+          <button class="action primary" type="submit">Crear exercici</button>
+        </form>
+        <div id="admin-exercises" class="card-list compact"></div>
+        <div class="split-forms">
+          <form id="assignment-form" class="card form-grid">
+            <h3 class="wide">Assignació individual</h3>
+            <label>Jugador<select name="player_id" required></select></label>
+            <label>Exercici<select name="exercise_id" required></select></label>
+            <button class="action primary" type="submit">Assignar</button>
+          </form>
+          <form id="video-form" class="card form-grid">
+            <h3 class="wide">Vídeo de l'exercici</h3>
+            <label>Exercici<select name="exercise_id" required></select></label>
+            <label>MP4 o WebM<input name="video" type="file" accept="video/mp4,video/webm,.mp4,.webm" required></label>
+            <button class="action primary" type="submit">Pujar vídeo</button>
+          </form>
+        </div>
+      </section>
     </main>
     <div id="admin-toast" class="toast hidden" role="status" aria-live="polite"></div>
   </div>

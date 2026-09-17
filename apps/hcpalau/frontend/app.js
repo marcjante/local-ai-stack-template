@@ -83,9 +83,20 @@ function renderAdminEvents(events) {
   </article>`).join("") : empty("No hi ha esdeveniments.");
 }
 
+function renderAdminExercises(exercises, players) {
+  document.querySelector("#admin-exercises").innerHTML = exercises.length ? exercises.map(exercise => `<article class="card">
+    <p class="meta">${exercise.video_filename ? "Vídeo disponible" : "Sense vídeo"}</p>
+    <h4>${escapeHtml(exercise.title)}</h4><p>${escapeHtml(exercise.description || "")}</p>
+  </article>`).join("") : empty("Encara no hi ha exercicis al catàleg.");
+  const exerciseOptions = exercises.map(exercise => `<option value="${exercise.id}">${escapeHtml(exercise.title)}</option>`).join("");
+  document.querySelector("#assignment-form select[name=exercise_id]").innerHTML = exerciseOptions;
+  document.querySelector("#video-form select[name=exercise_id]").innerHTML = exerciseOptions;
+  document.querySelector("#assignment-form select[name=player_id]").innerHTML = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
+}
+
 async function loadAdmin() {
-  const [players, events] = await Promise.all([api("/players"), api("/events")]);
-  renderAdminPlayers(players); renderAdminEvents(events);
+  const [players, events, exercises] = await Promise.all([api("/players"), api("/events"), api("/exercises")]);
+  renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players);
 }
 
 function setupAdminForms() {
@@ -113,6 +124,33 @@ function setupAdminForms() {
     try {
       await api("/goals", { method: "POST", body: JSON.stringify(form) });
       event.currentTarget.reset(); adminToast("Objectiu assignat");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#exercise-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      await api("/exercises", { method: "POST", body: JSON.stringify(form) });
+      event.currentTarget.reset(); await loadAdmin(); adminToast("Exercici creat");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#assignment-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      await api(`/exercises/${form.exercise_id}/assign/${form.player_id}`, { method: "POST" });
+      adminToast("Exercici assignat al jugador");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#video-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    const exerciseId = fields.get("exercise_id");
+    const upload = new FormData();
+    upload.set("video", fields.get("video"));
+    try {
+      await api(`/exercises/${exerciseId}/video`, { method: "POST", body: upload });
+      event.currentTarget.reset(); await loadAdmin(); adminToast("Vídeo pujat");
     } catch (_) { showAccessDisabled(); }
   });
 }
