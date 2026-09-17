@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from ..auth import Principal, get_current_principal, require_admin
 from ..database import get_session
 from ..models import Event
-from ..schemas import EventCreate, EventRead
+from ..schemas import EventCreate, EventRead, EventTitleUpdate
 
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -33,6 +33,23 @@ def list_events(
     session: Session = Depends(get_session),
 ) -> list[Event]:
     return list(session.exec(select(Event).order_by(Event.starts_at)))
+
+
+@router.patch("/{event_id}", response_model=EventRead)
+def rename_event(
+    event_id: int,
+    body: EventTitleUpdate,
+    _: Principal = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Event:
+    event = session.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    event.title = body.title
+    session.add(event)
+    session.commit()
+    session.refresh(event)
+    return event
 
 
 @router.get("/{event_id}", response_model=EventRead)

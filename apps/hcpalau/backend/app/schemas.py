@@ -48,6 +48,10 @@ class EventRead(EventCreate):
     created_at: datetime
 
 
+class EventTitleUpdate(SQLModel):
+    title: str = Field(min_length=1, max_length=160)
+
+
 class AttendanceUpdate(SQLModel):
     attending: bool
     absence_reason: Optional[str] = Field(default=None, max_length=500)

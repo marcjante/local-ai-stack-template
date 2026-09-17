@@ -38,6 +38,13 @@ def test_active_player_can_list_events(client, admin_headers) -> None:
     assert player["access_active"] is True
 
 
+def test_admin_can_rename_event(client, admin_headers) -> None:
+    event = create_event(client, admin_headers)
+    response = client.patch(f"/events/{event['id']}", json={"title": "Entrenament d'equip"}, headers=admin_headers)
+    assert response.status_code == 200
+    assert response.json()["title"] == "Entrenament d'equip"
+
+
 def test_player_can_set_and_update_own_attendance(client, admin_headers) -> None:
     player = create_player(client, admin_headers, "biel", "biel-player-token")
     event = create_event(client, admin_headers)

@@ -55,7 +55,7 @@ def populate(session: Session) -> dict[str, int]:
          ("Entrenament tàctic", "training"), ("Partit de lliga", "match"),
          ("Reunió d'equip", "meeting")),
     ):
-        unique_title = f"{title} · Demo {offset + 1}"
+        unique_title = title
         if unique_title not in existing_events:
             session.add(Event(title=unique_title, event_type=event_type, starts_at=today + timedelta(days=offset * 3), location="Pavelló HC Palau"))
             events_created += 1
@@ -65,7 +65,7 @@ def populate(session: Session) -> dict[str, int]:
     for title in EXERCISES:
         exercise = session.exec(select(Exercise).where(Exercise.title == title)).first()
         if exercise is None:
-            exercise = Exercise(title=title, description="Exercici de catàleg demo")
+            exercise = Exercise(title=title, description="Exercici de catàleg")
             session.add(exercise)
             session.flush()
             exercises_created += 1
@@ -75,9 +75,9 @@ def populate(session: Session) -> dict[str, int]:
     goal = session.exec(select(Goal).where(Goal.player_id == biel.id, Goal.title == "Millorar la presa de decisions")).first()
     if goal is None:
         session.add(Goal(player_id=biel.id, title="Millorar la presa de decisions", description="Escollir la millor línia després de recuperar la bola."))
-    routine = session.exec(select(Routine).where(Routine.player_id == biel.id, Routine.title == "Rutina demo de Biel")).first()
+    routine = session.exec(select(Routine).where(Routine.player_id == biel.id, Routine.title == "Rutina de Biel")).first()
     if routine is None:
-        routine = Routine(player_id=biel.id, title="Rutina demo de Biel")
+        routine = Routine(player_id=biel.id, title="Rutina de Biel")
         session.add(routine)
         session.flush()
         for position, exercise in enumerate(exercise_rows[:3], start=1):
