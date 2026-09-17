@@ -88,3 +88,18 @@ docker run --rm -p 8000:8000 \
 ```
 
 En producció s'ha d'utilitzar PostgreSQL, un token no reutilitzat i HTTPS.
+
+## PostgreSQL local amb Compose
+
+Des de `apps/hcpalau`, sense guardar les variables en un fitxer versionat:
+
+```bash
+export POSTGRES_PASSWORD='canvia-aquest-password-local'
+export ADMIN_TOKEN='canvia-aquest-token-local'
+docker compose up --build
+```
+
+Quan `/ready` respongui correctament, obre
+`http://127.0.0.1:8000/app/?token=$ADMIN_TOKEN`. Per aturar el servei conserva
+el volum de dades amb `docker compose down`, o elimina'l explícitament amb
+`docker compose down -v` si vols reiniciar la base local.
