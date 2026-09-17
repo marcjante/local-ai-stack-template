@@ -407,9 +407,10 @@ function setupTabs() {
   }));
 }
 
-function renderEventVideos(videosByEvent) {
-  const rows = [...videosByEvent.values()].flat();
-  document.querySelector("#event-videos-list").innerHTML = rows.length ? rows.map(video => { const source = /^https?:\/\//i.test(video.filename) ? video.filename : `${API_BASE}/uploads/${encodeURIComponent(video.filename)}`; return `<article class="card"><a class="action primary" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">Veure vídeo</a>${video.comment ? `<p>${escapeHtml(video.comment)}</p>` : ""}</article>`; }).join("") : empty("Encara no hi ha vídeos publicats.");
+function renderEventVideos(videosByEvent, events) {
+  const eventById = new Map(events.map(event => [event.id, event]));
+  const rows = [...videosByEvent.entries()].flatMap(([eventId, videos]) => videos.map(video => ({ video, event: eventById.get(eventId) })));
+  document.querySelector("#event-videos-list").innerHTML = rows.length ? rows.map(({ video, event }) => { const source = /^https?:\/\//i.test(video.filename) ? video.filename : `${API_BASE}/uploads/${encodeURIComponent(video.filename)}`; const label = event ? `${new Intl.DateTimeFormat("ca-ES", { weekday: "short", day: "numeric", month: "short" }).format(new Date(event.starts_at))} · ${event.event_type === "match" ? "Partit" : "Entrenament"}` : "Vídeo de l'equip"; return `<article class="card event-video-card"><div><p class="meta">${escapeHtml(label)}</p><h4>${escapeHtml(event?.title || "Vídeo de l'equip")}</h4></div><a class="action primary" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">Veure vídeo <span aria-hidden="true">↗</span></a>${video.comment ? `<p class="video-comment">${escapeHtml(video.comment)}</p>` : ""}</article>`; }).join("") : empty("Encara no hi ha vídeos publicats.");
 }
 
 function renderEvents(events) {
@@ -564,7 +565,7 @@ async function start() {
     document.querySelector("#welcome").textContent = `Hola, ${state.player.name}`;
     const planned = weeklyPlan.length ? weeklyPlan : assignments.map(item => ({ ...item, mandatory: false }));
     const activityExercises = await Promise.all(planned.map(item => api(`/exercises/${item.exercise_id}`)));
-    renderEvents(events); renderEventVideos(videosByEvent); renderHomeActivities(planned, checkins, activityExercises); renderGoals(goals); await renderTraining(assignments, routines);
+    renderEvents(events); renderEventVideos(videosByEvent, events); renderHomeActivities(planned, checkins, activityExercises); renderGoals(goals); await renderTraining(assignments, routines);
     renderProgress(stats, followUp, mvp);
     document.querySelector("#season-label").textContent = `Temporada ${season}`;
     renderStandings(standings);

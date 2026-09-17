@@ -119,6 +119,10 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 .attendance-percent span { color: #ddd; font-size: .8rem; }
 .exercise-percent { margin: .65rem 0 !important; color: var(--muted); }
 .exercise-percent strong { color: var(--wine); font-size: 1.1rem; }
+.event-video-card { display: grid; gap: .7rem; min-width: 0; }
+.event-video-card h4 { margin: 0; overflow-wrap: anywhere; }
+.event-video-card .action { justify-self: start; }
+.video-comment { padding-top: .55rem; border-top: 1px solid var(--line); }
 .attendance-reason { display: grid; gap: .6rem; margin-top: .8rem; }
 .team-list { margin: 0; padding-left: 1.2rem; }
 .team-roster { margin-top: .8rem; padding: .8rem; border-radius: 12px; background: #fffbea; border: 1px solid #e7dfb2; }
