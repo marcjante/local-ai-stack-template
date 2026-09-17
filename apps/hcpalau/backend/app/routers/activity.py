@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 
 from ..auth import Principal, require_admin
 from ..database import get_session
-from ..models import Attendance, Event, Exercise, ExerciseAssignment, ExerciseProgress, Player
+from ..models import Attendance, Event, Exercise, ExerciseAssignment, ExerciseCheckin, ExerciseProgress, Player
 
 
 router = APIRouter(prefix="/activity", tags=["activity"])
@@ -36,4 +36,11 @@ def recent_activity(
         .limit(20)
     ):
         items.append({"kind": "progress", "player": player.name, "label": exercise.title, "value": progress.repetitions, "updated_at": progress.updated_at})
+    for checkin, player, exercise in session.exec(
+        select(ExerciseCheckin, Player, Exercise)
+        .join(Player, Player.id == ExerciseCheckin.player_id)
+        .join(Exercise, Exercise.id == ExerciseCheckin.exercise_id)
+        .order_by(ExerciseCheckin.updated_at.desc()).limit(20)
+    ):
+        items.append({"kind": "checkin", "player": player.name, "label": exercise.title, "value": checkin.completed, "updated_at": checkin.updated_at})
     return sorted(items, key=lambda item: item["updated_at"], reverse=True)[:20]

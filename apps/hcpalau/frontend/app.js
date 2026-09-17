@@ -13,7 +13,7 @@ const now = new Date();
 const seasonStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
 const season = params.get("season") || `${seasonStart}-${String(seasonStart + 1).slice(-2)}`;
 
-const state = { player: null, attendance: new Map(), progress: new Map(), convocations: new Map(), teamConvocations: new Map() };
+const state = { player: null, attendance: new Map(), progress: new Map(), checkins: new Map(), convocations: new Map(), teamConvocations: new Map() };
 let adminLoadInFlight = false;
 const dateFormat = new Intl.DateTimeFormat("ca-ES", { dateStyle: "medium", timeStyle: "short" });
 
@@ -107,7 +107,7 @@ function renderAdminEvents(events) {
 }
 
 function renderAdminActivity(items) {
-  document.querySelector("#admin-activity").innerHTML = items.length ? items.map(item => `<article class="card"><p class="meta">${escapeHtml(dateFormat.format(new Date(item.updated_at)))}</p><strong>${escapeHtml(item.player)}</strong><p>${item.kind === "attendance" ? `Assistència: ${item.value ? "sí" : "no"}` : `Exercici: ${item.value}/3`}</p><p>${escapeHtml(item.label)}</p>${item.kind === "attendance" && !item.value && item.reason ? `<p class="meta">Motiu: ${escapeHtml(item.reason)}</p>` : ""}</article>`).join("") : empty("Encara no hi ha actualitzacions dels jugadors.");
+  document.querySelector("#admin-activity").innerHTML = items.length ? items.map(item => `<article class="card"><p class="meta">${escapeHtml(dateFormat.format(new Date(item.updated_at)))}</p><strong>${escapeHtml(item.player)}</strong><p>${item.kind === "attendance" ? `Assistència: ${item.value ? "sí" : "no"}` : item.kind === "checkin" ? `Treball a casa: ${item.value ? "fet" : "no fet"}` : `Exercici: ${item.value}/3`}</p><p>${escapeHtml(item.label)}</p>${item.kind === "attendance" && !item.value && item.reason ? `<p class="meta">Motiu: ${escapeHtml(item.reason)}</p>` : ""}</article>`).join("") : empty("Encara no hi ha actualitzacions dels jugadors.");
 }
 
 function renderAdminExercises(exercises, players) {
@@ -125,9 +125,10 @@ async function renderAdminCompetition(players, events) {
   const matches = events.filter(event => event.event_type === "match");
   const matchOptions = matches.map(event => `<option value="${event.id}">${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("");
   const playerOptions = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
-  ["#convocation-form", "#mvp-form"].forEach(selector => {
+  ["#convocation-form", "#team-convocation-form", "#mvp-form"].forEach(selector => {
     document.querySelector(`${selector} select[name=event_id]`).innerHTML = matchOptions;
-    document.querySelector(`${selector} select[name=player_id]`).innerHTML = playerOptions;
+    const playerSelect = document.querySelector(`${selector} select[name=player_id], ${selector} select[name=player_ids]`);
+    if (playerSelect) playerSelect.innerHTML = playerOptions;
   });
   document.querySelector("#reinforcement-form select[name=event_id]").innerHTML = matchOptions;
   const teamTarget = document.querySelector("#convocation-team");
@@ -232,6 +233,21 @@ function setupAdminForms() {
       await api(path, { method: "PUT", body: JSON.stringify(form) });
       await loadAdmin();
       adminToast("Convocatòria desada");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#team-convocation-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    const eventId = fields.get("event_id");
+    const playerIds = fields.getAll("player_ids");
+    const note = fields.get("note") || null;
+    try {
+      await Promise.all(playerIds.map(playerId => api(`/convocations/${eventId}/${playerId}`, {
+        method: "PUT", body: JSON.stringify({ selection_status: "selected", note })
+      })));
+      event.currentTarget.reset();
+      await loadAdmin();
+      adminToast("Equip convocat");
     } catch (_) { showAccessDisabled(); }
   });
   document.querySelector("#mvp-form").addEventListener("submit", async event => {
@@ -402,6 +418,23 @@ function renderGoals(goals) {
   }));
 }
 
+function renderHomeActivities(assignments, checkins, exercises) {
+  const target = document.querySelector("#home-activities");
+  target.innerHTML = assignments.length ? assignments.map(assignment => {
+    const checkin = state.checkins.get(assignment.exercise_id);
+    const exercise = exercises.find(item => item.id === assignment.exercise_id);
+    return `<article class="card home-activity"><div><p class="meta">Avui</p><h4>${escapeHtml(exercise?.title || "Exercici")}</h4><p>${escapeHtml(exercise?.description || "")}</p></div><div class="actions"><button class="action ${checkin?.completed === true ? "primary" : ""}" data-checkin="${assignment.exercise_id}" data-completed="true">Fet</button><button class="action ${checkin?.completed === false ? "primary" : ""}" data-checkin="${assignment.exercise_id}" data-completed="false">No fet</button></div></article>`;
+  }).join("") : empty("No tens treball a casa assignat.");
+  target.querySelectorAll("[data-checkin]").forEach(button => button.addEventListener("click", async () => {
+    try {
+      const saved = await api(`/exercise-checkins/${state.player.id}/${button.dataset.checkin}`, { method: "PATCH", body: JSON.stringify({ completed: button.dataset.completed === "true" }) });
+      state.checkins.set(saved.exercise_id, saved);
+      renderHomeActivities(assignments, checkins, exercises);
+      showToast("Activitat actualitzada");
+    } catch (_) { showAccessDisabled(); }
+  }));
+}
+
 async function renderTraining(assignments, routines) {
   const exercises = await Promise.all(assignments.map(item => api(`/exercises/${item.exercise_id}`)));
   const exerciseTarget = document.querySelector("#exercises-list");
@@ -443,21 +476,23 @@ async function start() {
     if (!jugador || session.role !== "player" || !session.player) return showAccessDisabled();
     state.player = session.player;
     const id = state.player.id;
-    const [events, attendance, goals, assignments, progress, routines, stats, followUp, exams, mvp, convocations, standings] = await Promise.all([
+    const [events, attendance, goals, assignments, progress, routines, stats, followUp, exams, mvp, convocations, standings, checkins] = await Promise.all([
       api("/events"), api(`/attendance/${id}`), api(`/goals/player/${id}`),
       api(`/exercises/player/${id}`), api(`/exercise-progress/player/${id}`),
       api(`/routines/player/${id}`), api(`/player-stats/player/${id}`),
       api(`/seguiment/player/${id}`), api(`/exam-periods/player/${id}`), api(`/mvp/player/${id}`),
-      api(`/convocations/player/${id}`), api(`/standings?season=${encodeURIComponent(season)}`)
+      api(`/convocations/player/${id}`), api(`/standings?season=${encodeURIComponent(season)}`), api(`/exercise-checkins/player/${id}`)
     ]);
     attendance.forEach(item => state.attendance.set(item.event_id, item));
     progress.forEach(item => state.progress.set(item.assignment_id, item));
     convocations.forEach(item => state.convocations.set(item.event_id, item));
+    checkins.forEach(item => state.checkins.set(item.exercise_id, item));
     const matches = events.filter(event => event.event_type === "match");
     const teamLists = await Promise.all(matches.map(event => api(`/convocations/event/${event.id}/team`)));
     matches.forEach((event, index) => state.teamConvocations.set(event.id, teamLists[index]));
     document.querySelector("#welcome").textContent = `Hola, ${state.player.name}`;
-    renderEvents(events); renderGoals(goals); await renderTraining(assignments, routines);
+    const activityExercises = await Promise.all(assignments.map(item => api(`/exercises/${item.exercise_id}`)));
+    renderEvents(events); renderHomeActivities(assignments, checkins, activityExercises); renderGoals(goals); await renderTraining(assignments, routines);
     renderProgress(stats, followUp, exams, mvp);
     document.querySelector("#season-label").textContent = `Temporada ${season}`;
     renderStandings(standings);

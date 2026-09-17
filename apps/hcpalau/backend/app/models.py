@@ -83,6 +83,17 @@ class ExerciseProgress(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class ExerciseCheckin(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("player_id", "exercise_id", "activity_date"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    exercise_id: int = Field(foreign_key="exercise.id", index=True)
+    activity_date: date = Field(index=True)
+    completed: bool
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class Convocation(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("event_id", "player_id"),)
 

@@ -118,6 +118,19 @@ class ExerciseProgressRead(SQLModel):
     updated_at: datetime
 
 
+class ExerciseCheckinUpdate(SQLModel):
+    completed: bool
+    activity_date: Optional[date] = None
+
+
+class ExerciseCheckinRead(ExerciseCheckinUpdate):
+    id: int
+    player_id: int
+    exercise_id: int
+    activity_date: date
+    updated_at: datetime
+
+
 class ConvocationUpdate(SQLModel):
     selection_status: Literal["selected", "reserve", "not_selected"]
     note: Optional[str] = Field(default=None, max_length=500)

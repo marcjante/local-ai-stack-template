@@ -44,6 +44,9 @@
           <div><p class="eyebrow">Properes dates</p><h2 id="agenda-title">Agenda</h2></div>
         </div>
         <div id="events-list" class="card-list"></div>
+        <h3>Treball a casa</h3>
+        <p class="note">Marca si has fet o no els exercicis de força i estiraments d'avui.</p>
+        <div id="home-activities" class="card-list compact"></div>
       </section>
 
       <section id="goals" class="panel" aria-labelledby="goals-title">
@@ -161,6 +164,13 @@
             <label>Estat<select name="selection_status"><option value="selected">Convocat</option><option value="reserve">Reserva</option><option value="not_selected">No convocat</option></select></label>
             <label class="wide">Nota<input name="note" maxlength="500"></label>
             <button class="action primary" type="submit">Desar convocatòria</button>
+          </form>
+          <form id="team-convocation-form" class="card form-grid">
+            <h3 class="wide">Convocatòria de tot l'equip</h3>
+            <label>Partit<select name="event_id" required></select></label>
+            <label class="wide">Jugadors convocats<select name="player_ids" multiple size="7" required></select></label>
+            <label class="wide">Nota<input name="note" maxlength="500"></label>
+            <button class="action primary" type="submit">Convocar equip seleccionat</button>
           </form>
           <form id="mvp-form" class="card form-grid">
             <h3 class="wide">MVP del partit</h3>

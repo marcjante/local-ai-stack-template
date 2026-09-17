@@ -44,6 +44,8 @@ def test_admin_frontend_manages_matchday_data(client) -> None:
     javascript = client.get("/app/app.js")
 
     assert 'id="convocation-form"' in html.text
+    assert 'id="team-convocation-form"' in html.text
+    assert 'name="player_ids" multiple' in html.text
     assert 'id="mvp-form"' in html.text
     assert 'id="reinforcement-form"' in html.text
     assert "`/convocations/${form.event_id}/${form.player_id}`" in javascript.text
