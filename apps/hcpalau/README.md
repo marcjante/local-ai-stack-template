@@ -31,6 +31,15 @@ jugador:
 http://127.0.0.1:8000/app/?token=<HCPALAU_ADMIN_TOKEN>
 ```
 
+Per tenir dades de prova locals (sis jugadors, calendari, exercicis, rutina i
+classificació):
+
+```bash
+python -m backend.seed
+```
+
+La comanda és idempotent i rebutja bases de dades no SQLite per defecte.
+
 El contracte funcional, els rols i els endpoints també estan documentats a
 [`docs/api-spec.md`](docs/api-spec.md).
 
