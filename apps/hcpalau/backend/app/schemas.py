@@ -200,3 +200,25 @@ class ReinforcementRead(ReinforcementCreate):
 
 class ReinforcementConfirmationUpdate(SQLModel):
     confirmed: bool
+
+
+class PlayerStatsIncrement(SQLModel):
+    season: str = Field(min_length=1, max_length=32)
+    source_key: str = Field(min_length=1, max_length=255)
+    games: int = Field(default=0, ge=0)
+    goals: int = Field(default=0, ge=0)
+    assists: int = Field(default=0, ge=0)
+    yellow_cards: int = Field(default=0, ge=0)
+    red_cards: int = Field(default=0, ge=0)
+
+
+class PlayerStatsRead(SQLModel):
+    id: int
+    player_id: int
+    season: str
+    games: int
+    goals: int
+    assists: int
+    yellow_cards: int
+    red_cards: int
+    updated_at: datetime

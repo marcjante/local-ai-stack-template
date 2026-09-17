@@ -183,3 +183,32 @@ class Reinforcement(SQLModel, table=True):
     playing_position: str = Field(max_length=32)
     confirmed: bool = False
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class PlayerStats(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("player_id", "season"),
+        CheckConstraint(
+            "games >= 0 AND goals >= 0 AND assists >= 0 AND yellow_cards >= 0 AND red_cards >= 0"
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    season: str = Field(index=True, max_length=32)
+    games: int = Field(default=0, ge=0)
+    goals: int = Field(default=0, ge=0)
+    assists: int = Field(default=0, ge=0)
+    yellow_cards: int = Field(default=0, ge=0)
+    red_cards: int = Field(default=0, ge=0)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class PlayerStatsImport(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("player_id", "season", "source_key"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    season: str = Field(max_length=32)
+    source_key: str = Field(max_length=255)
+    imported_at: datetime = Field(default_factory=utc_now)
