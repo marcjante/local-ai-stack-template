@@ -111,7 +111,14 @@ function renderAdminEvents(events) {
 }
 
 function renderAdminActivity(items) {
-  document.querySelector("#admin-activity").innerHTML = items.length ? items.map(item => `<article class="card"><p class="meta">${escapeHtml(dateFormat.format(new Date(item.updated_at)))}</p><strong>${escapeHtml(item.player)}</strong><p>${item.kind === "attendance" ? `Assistència: ${item.value ? "sí" : "no"}` : item.kind === "checkin" ? `Treball a casa: ${item.value ? "fet" : "no fet"}` : `Exercici: ${item.value}/3`}</p><p>${escapeHtml(item.label)}</p>${item.kind === "attendance" && !item.value && item.reason ? `<p class="meta">Motiu: ${escapeHtml(item.reason)}</p>` : ""}</article>`).join("") : empty("Encara no hi ha actualitzacions dels jugadors.");
+  if (!items.length) { document.querySelector("#admin-activity").innerHTML = empty("Encara no hi ha actualitzacions dels jugadors."); return; }
+  const grouped = new Map();
+  items.forEach(item => {
+    const day = String(item.event_date || item.updated_at).slice(0, 10);
+    if (!grouped.has(day)) grouped.set(day, []);
+    grouped.get(day).push(item);
+  });
+  document.querySelector("#admin-activity").innerHTML = [...grouped.entries()].map(([day, dayItems]) => `<section class="activity-day"><h3>${escapeHtml(new Intl.DateTimeFormat("ca-ES", { dateStyle: "full" }).format(new Date(`${day}T12:00:00`)))}</h3>${dayItems.map(item => `<article class="card"><strong>${escapeHtml(item.player)}</strong><p>${item.kind === "attendance" ? `Assistència: ${item.value ? "sí" : "no"}` : item.kind === "checkin" ? `Treball a casa: ${item.value ? "fet" : "no fet"}` : `Exercici: ${item.value}/3`}</p><p>${escapeHtml(item.label)}</p>${item.kind === "attendance" && !item.value && item.reason ? `<p class="meta">Motiu: ${escapeHtml(item.reason)}</p>` : ""}<p class="meta">Confirmat ${escapeHtml(dateFormat.format(new Date(item.updated_at)))}</p></article>`).join("")}</section>`).join("");
 }
 
 function renderAdminExercises(exercises, players) {

@@ -26,7 +26,7 @@ def recent_activity(
         .order_by(Attendance.updated_at.desc())
         .limit(20)
     ):
-        items.append({"kind": "attendance", "player": player.name, "label": event.title, "value": attendance.attending, "reason": attendance.absence_reason, "updated_at": attendance.updated_at})
+        items.append({"kind": "attendance", "player": player.name, "label": event.title, "value": attendance.attending, "reason": attendance.absence_reason, "event_date": event.starts_at, "updated_at": attendance.updated_at})
     for progress, player, exercise in session.exec(
         select(ExerciseProgress, Player, Exercise)
         .join(ExerciseAssignment, ExerciseAssignment.id == ExerciseProgress.assignment_id)
@@ -42,5 +42,5 @@ def recent_activity(
         .join(Exercise, Exercise.id == ExerciseCheckin.exercise_id)
         .order_by(ExerciseCheckin.updated_at.desc()).limit(20)
     ):
-        items.append({"kind": "checkin", "player": player.name, "label": exercise.title, "value": checkin.completed, "updated_at": checkin.updated_at})
+        items.append({"kind": "checkin", "player": player.name, "label": exercise.title, "value": checkin.completed, "event_date": checkin.activity_date, "updated_at": checkin.updated_at})
     return sorted(items, key=lambda item: item["updated_at"], reverse=True)[:20]
