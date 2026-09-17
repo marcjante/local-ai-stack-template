@@ -1,6 +1,7 @@
 name: HC Palau
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "apps/hcpalau/**"
