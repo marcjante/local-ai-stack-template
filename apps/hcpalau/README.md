@@ -64,6 +64,7 @@ El worker FECAPA de la temporada 2026/27 usa per defecte el grup Infantil OR
 
 ```bash
 python -m integrations.local_ai_stack.sync_fecapa
+python -m integrations.local_ai_stack.sync_fecapa --persist --season 2026-27
 python -m integrations.local_ai_stack.sync_fecapa --actas-only
 ```
 

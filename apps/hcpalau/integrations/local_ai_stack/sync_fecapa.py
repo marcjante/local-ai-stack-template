@@ -189,13 +189,24 @@ def upsert_standings(rows: list[Standing], session: Session, *, season: str = "2
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=SOURCE_URL)
+    parser.add_argument("--season", default="2026-27")
+    parser.add_argument("--persist", action="store_true", help="persist standings in the configured database")
     parser.add_argument(
         "--actas-only",
         action="store_true",
         help="print published acta links instead of parsing standings",
     )
     args = parser.parse_args()
-    payload = fetch_acta_links(args.url) if args.actas_only else [asdict(row) for row in fetch_standings(args.url)]
+    if args.actas_only:
+        payload = fetch_acta_links(args.url)
+    else:
+        rows = fetch_standings(args.url)
+        if args.persist:
+            from backend.app.database import engine
+
+            with Session(engine) as session:
+                upsert_standings(rows, session, season=args.season)
+        payload = [asdict(row) for row in rows]
     print(json.dumps(payload, ensure_ascii=False))
 
 
