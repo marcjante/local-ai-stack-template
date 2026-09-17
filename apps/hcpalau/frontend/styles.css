@@ -120,6 +120,7 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 .event-type { color: var(--wine); font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .activity-day { display: grid; gap: .6rem; }
 .activity-day h3 { margin: .8rem 0 0; text-transform: capitalize; }
+.activity-subtitle { margin-top: 1rem !important; padding-top: .65rem; border-top: 1px solid var(--line); }
 .player-card .actions { flex-wrap: wrap; }
 .link { color: var(--wine); font-weight: 750; text-decoration: none; }
 .whiteboard-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1rem; padding: 1.25rem 1.4rem; background: linear-gradient(135deg, #fff 0%, #fff8c7 100%); border-color: #d9c64f; }
