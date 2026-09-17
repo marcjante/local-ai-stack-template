@@ -23,6 +23,7 @@ from .routers.exercise_progress import router as exercise_progress_router
 from .routers.exercises import router as exercises_router
 from .routers.goals import router as goals_router
 from .routers.mvp import router as mvp_router
+from .routers.notifications import router as notifications_router
 from .routers.players import router as players_router
 from .routers.player_stats import router as player_stats_router
 from .routers.reinforcements import router as reinforcements_router
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     application.include_router(exam_periods_router)
     application.include_router(standings_router)
     application.include_router(mvp_router)
+    application.include_router(notifications_router)
     application.include_router(seguiment_router)
     application.include_router(reinforcements_router)
     application.include_router(player_stats_router)

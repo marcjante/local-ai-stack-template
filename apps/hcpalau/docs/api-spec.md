@@ -95,6 +95,12 @@ mai s'inclou al perfil retornat a un jugador.
 | `PATCH` | `/reinforcements/{reinforcement_id}` | A | Actualitza `{ "confirmed": bool }`. |
 | `DELETE` | `/reinforcements/{reinforcement_id}` | A | Elimina un reforç. |
 
+## Notificacions
+
+| Mètode | Ruta | Rol | Comportament |
+|---|---|---|---|
+| `POST` | `/notifications/send/{player_id}/{event_id}` | A | Retorna `501 provider_not_configured` fins que el club confirmi un proveïdor; mai simula un lliurament. |
+
 ## Sistema i errors
 
 | Mètode | Ruta | Rol | Comportament |
@@ -110,6 +116,7 @@ Codis habituals:
 - `404`: recurs inexistent.
 - `409`: duplicat o límit setmanal assolit.
 - `422`: cos o paràmetres no vàlids.
+- `501`: la funcionalitat requereix configurar un proveïdor extern.
 
 ## Configuració
 
