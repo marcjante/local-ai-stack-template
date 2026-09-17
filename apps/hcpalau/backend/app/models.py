@@ -161,3 +161,13 @@ class MvpRecognition(SQLModel, table=True):
     player_id: int = Field(foreign_key="player.id", index=True)
     note: Optional[str] = Field(default=None, max_length=500)
     awarded_at: datetime = Field(default_factory=utc_now)
+
+
+class FollowUp(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    observed_on: date = Field(index=True)
+    category: str = Field(max_length=32)
+    note: str = Field(max_length=2000)
+    visible_to_player: bool = False
+    created_at: datetime = Field(default_factory=utc_now)

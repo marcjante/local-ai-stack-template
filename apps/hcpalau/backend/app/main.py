@@ -19,6 +19,7 @@ from .routers.goals import router as goals_router
 from .routers.mvp import router as mvp_router
 from .routers.players import router as players_router
 from .routers.routines import router as routines_router
+from .routers.seguiment import router as seguiment_router
 from .routers.standings import router as standings_router
 
 
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     application.include_router(exam_periods_router)
     application.include_router(standings_router)
     application.include_router(mvp_router)
+    application.include_router(seguiment_router)
 
     @application.get("/health", tags=["system"])
     def health() -> dict[str, str]:

@@ -170,3 +170,16 @@ class MvpRead(MvpUpdate):
     event_id: int
     player_id: int
     awarded_at: datetime
+
+
+class FollowUpCreate(SQLModel):
+    player_id: int
+    observed_on: date
+    category: Literal["technical", "tactical", "physical", "attitude"]
+    note: str = Field(min_length=1, max_length=2000)
+    visible_to_player: bool = False
+
+
+class FollowUpRead(FollowUpCreate):
+    id: int
+    created_at: datetime
