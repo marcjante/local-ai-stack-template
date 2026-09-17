@@ -89,6 +89,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .callup { display: inline-block; margin-top: .45rem; border-radius: 999px; padding: .25rem .55rem; font-size: .75rem; font-weight: 800; color: white; background: var(--wine); }
 .admin-grid { display: grid; gap: 2.5rem; }
 .admin-grid > section { min-width: 0; }
+.admin-hidden { display: none !important; }
+.admin-tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: .25rem; overflow-x: auto; background: var(--card); border-bottom: 1px solid var(--line); padding: 0 max(1rem, calc((100vw - 70rem) / 2)); }
+.admin-tab { border: 0; background: transparent; padding: .9rem .85rem .75rem; color: var(--muted); white-space: nowrap; border-bottom: .2rem solid transparent; cursor: pointer; font-weight: 700; }
+.admin-tab.active { color: var(--wine); border-bottom-color: var(--gold); font-weight: 850; }
 .admin-section { background: #ffffffb8; border: 1px solid var(--line); border-radius: 1rem; padding: 0 1rem; box-shadow: 0 .35rem 1.2rem #4812220a; }
 .admin-section + .admin-section { margin-top: .9rem; }
 .admin-section > summary { list-style: none; cursor: pointer; padding: 1rem 0; display: flex; align-items: end; justify-content: space-between; }

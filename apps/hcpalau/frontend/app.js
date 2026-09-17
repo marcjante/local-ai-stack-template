@@ -402,7 +402,33 @@ function setupAdminSections() {
   });
 }
 
+function setupAdminTabs() {
+  const main = document.querySelector("#admin-portal .admin-grid");
+  const sections = [...main.querySelectorAll(":scope > section")];
+  const nav = document.createElement("nav");
+  nav.className = "admin-tabs";
+  nav.setAttribute("aria-label", "Apartats de l'entrenador");
+  sections.forEach((section, index) => {
+    const title = section.querySelector("h2")?.textContent?.trim() || `Apartat ${index + 1}`;
+    const id = `admin-tab-${index}`;
+    section.dataset.adminSection = id;
+    section.classList.toggle("admin-hidden", index !== 0);
+    const button = document.createElement("button");
+    button.className = `admin-tab${index === 0 ? " active" : ""}`;
+    button.type = "button";
+    button.textContent = title;
+    button.addEventListener("click", () => {
+      nav.querySelectorAll(".admin-tab").forEach(item => item.classList.remove("active"));
+      button.classList.add("active");
+      sections.forEach(item => item.classList.toggle("admin-hidden", item !== section));
+    });
+    nav.appendChild(button);
+  });
+  main.parentElement.insertBefore(nav, main);
+}
+
 async function startAdmin() {
+  setupAdminTabs();
   setupAdminForms();
   setupWhiteboard();
   try {
