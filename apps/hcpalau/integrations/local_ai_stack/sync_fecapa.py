@@ -14,6 +14,7 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from html.parser import HTMLParser
+from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 
@@ -66,6 +67,25 @@ class _TableParser(HTMLParser):
         elif tag == "table" and self._table is not None:
             self.tables.append(self._table)
             self._table = None
+
+
+class _ActaLinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag == "a":
+            href = dict(attrs).get("href", "")
+            if "acta" in href.lower():
+                self.links.append(href)
+
+
+def extract_acta_links(html: str, *, base_url: str = SOURCE_URL) -> list[str]:
+    """Return published acta links; upcoming matches may have none."""
+    parser = _ActaLinkParser()
+    parser.feed(html)
+    return list(dict.fromkeys(urljoin(base_url, link) for link in parser.links))
 
 
 def _number(value: str) -> int:
