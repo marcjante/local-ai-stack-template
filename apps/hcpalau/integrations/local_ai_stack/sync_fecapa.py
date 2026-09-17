@@ -160,8 +160,14 @@ def fetch_acta_links(url: str = SOURCE_URL) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=SOURCE_URL)
+    parser.add_argument(
+        "--actas-only",
+        action="store_true",
+        help="print published acta links instead of parsing standings",
+    )
     args = parser.parse_args()
-    print(json.dumps([asdict(row) for row in fetch_standings(args.url)], ensure_ascii=False))
+    payload = fetch_acta_links(args.url) if args.actas_only else [asdict(row) for row in fetch_standings(args.url)]
+    print(json.dumps(payload, ensure_ascii=False))
 
 
 if __name__ == "__main__":
