@@ -100,6 +100,7 @@ mai s'inclou al perfil retornat a un jugador.
 | Mètode | Ruta | Rol | Comportament |
 |---|---|---|---|
 | `GET` | `/health` | Públic | Retorna `{ "status": "ok", "service": "hcpalau" }`. |
+| `GET` | `/ready` | Públic | Comprova que l'aplicació pot consultar la base de dades; retorna `503` si no està preparada. |
 
 Codis habituals:
 

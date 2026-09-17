@@ -5,12 +5,16 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from sqlmodel import Session
+from sqlalchemy import text
 
 from .config import get_settings
 from .database import create_db_and_tables
+from .database import get_session
 from .routers.attendance import router as attendance_router
 from .routers.convocations import router as convocations_router
 from .routers.exam_periods import router as exam_periods_router
@@ -70,6 +74,17 @@ def create_app() -> FastAPI:
     @application.get("/health", tags=["system"])
     def health() -> dict[str, str]:
         return {"status": "ok", "service": "hcpalau"}
+
+    @application.get("/ready", tags=["system"])
+    def ready(session: Session = Depends(get_session)) -> JSONResponse:
+        try:
+            session.exec(text("SELECT 1"))
+        except Exception:
+            return JSONResponse(
+                {"status": "not_ready", "service": "hcpalau"},
+                status_code=503,
+            )
+        return JSONResponse({"status": "ready", "service": "hcpalau"})
 
     application.mount("/app", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 

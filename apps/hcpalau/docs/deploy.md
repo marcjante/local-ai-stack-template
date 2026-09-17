@@ -37,8 +37,8 @@ vídeos.
 4. Referencia la URL privada del servei PostgreSQL com a `DATABASE_URL`.
 5. Genera un `ADMIN_TOKEN` aleatori i configura `CORS_ORIGINS` amb el domini
    públic final, sense comodí `*`.
-6. Configura el healthcheck HTTP a `/health`.
-7. Genera el domini públic i comprova `/health`, `/docs` i `/app/`.
+6. Configura el healthcheck HTTP a `/ready`.
+7. Genera el domini públic i comprova `/health`, `/ready`, `/docs` i `/app/`.
 8. Si s'utilitzen vídeos, afegeix un volum persistent, munta'l a `/data` i
    configura `VIDEO_DIR=/data/exercise-videos`.
 
