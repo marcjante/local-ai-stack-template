@@ -76,6 +76,48 @@
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   </div>
 
+  <div id="admin-portal" class="hidden">
+    <header class="topbar">
+      <div><p class="eyebrow">HC Palau · Infantil D</p><h1>Espai entrenador</h1></div>
+      <div class="crest" aria-hidden="true">HCP</div>
+    </header>
+    <main class="content admin-grid">
+      <section>
+        <div class="section-heading"><div><p class="eyebrow">Plantilla</p><h2>Jugadors</h2></div></div>
+        <form id="player-form" class="card form-grid">
+          <label>Nom<input name="name" required maxlength="120"></label>
+          <label>Slug<input name="slug" required pattern="[a-z0-9-]+" maxlength="64"></label>
+          <label class="wide">Token d'accés<input name="access_token" required minlength="16" maxlength="255"></label>
+          <button class="action primary" type="submit">Crear jugador</button>
+        </form>
+        <div id="admin-players" class="card-list"></div>
+      </section>
+
+      <section>
+        <div class="section-heading"><div><p class="eyebrow">Calendari</p><h2>Nou esdeveniment</h2></div></div>
+        <form id="event-form" class="card form-grid">
+          <label class="wide">Títol<input name="title" required maxlength="160"></label>
+          <label>Data i hora<input name="starts_at" type="datetime-local" required></label>
+          <label>Tipus<select name="event_type"><option value="training">Entrenament</option><option value="match">Partit</option><option value="meeting">Reunió</option></select></label>
+          <label class="wide">Lloc<input name="location" maxlength="200"></label>
+          <button class="action primary" type="submit">Crear esdeveniment</button>
+        </form>
+        <div id="admin-events" class="card-list compact"></div>
+      </section>
+
+      <section>
+        <div class="section-heading"><div><p class="eyebrow">Treball individual</p><h2>Assignar objectiu</h2></div></div>
+        <form id="goal-form" class="card form-grid">
+          <label>Jugador<select name="player_id" required></select></label>
+          <label class="wide">Objectiu<input name="title" required maxlength="160"></label>
+          <label class="wide">Descripció<textarea name="description" maxlength="1000"></textarea></label>
+          <button class="action primary" type="submit">Assignar objectiu</button>
+        </form>
+      </section>
+    </main>
+    <div id="admin-toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </div>
+
   <script src="./app.js" defer></script>
 </body>
 </html>

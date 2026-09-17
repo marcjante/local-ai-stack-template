@@ -13,3 +13,14 @@ def test_frontend_uses_real_api_and_bearer_token(client) -> None:
     assert 'headers.set("Authorization", `Bearer ${token}`)' in response.text
     assert 'fetch(`${API_BASE}${path}`' in response.text
     assert "/auth/session?jugador=" in response.text
+
+
+def test_frontend_supports_admin_mode(client) -> None:
+    html = client.get("/app/")
+    javascript = client.get("/app/app.js")
+
+    assert 'id="admin-portal"' in html.text
+    assert 'api("/players")' in javascript.text
+    assert 'api("/events")' in javascript.text
+    assert 'api("/goals"' in javascript.text
+    assert 'session.role === "admin"' in javascript.text

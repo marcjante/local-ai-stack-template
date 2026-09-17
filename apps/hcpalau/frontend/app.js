@@ -41,7 +41,87 @@ function showToast(message) {
 function showAccessDisabled() {
   document.querySelector("#loading").classList.add("hidden");
   document.querySelector("#portal").classList.add("hidden");
+  document.querySelector("#admin-portal").classList.add("hidden");
   document.querySelector("#access-disabled").classList.remove("hidden");
+}
+
+function adminToast(message) {
+  const toast = document.querySelector("#admin-toast");
+  toast.textContent = message;
+  toast.classList.remove("hidden");
+  window.setTimeout(() => toast.classList.add("hidden"), 2200);
+}
+
+function playerLink(player) {
+  const url = new URL("./", window.location.href);
+  url.search = new URLSearchParams({ jugador: player.slug, token: player.access_token });
+  return url.toString();
+}
+
+function renderAdminPlayers(players) {
+  const target = document.querySelector("#admin-players");
+  target.innerHTML = players.length ? players.map(player => `<article class="card player-card">
+    <div><p class="meta">${player.access_active ? "Accés actiu" : "Accés desactivat"}</p><h3>${escapeHtml(player.name)}</h3><p>@${escapeHtml(player.slug)}</p></div>
+    <div class="actions">
+      <a class="action link" href="${escapeHtml(playerLink(player))}" target="_blank" rel="noopener">Obrir enllaç</a>
+      <button class="action" data-access="${player.id}" data-active="${!player.access_active}">${player.access_active ? "Desactivar" : "Activar"}</button>
+    </div>
+  </article>`).join("") : empty("Encara no hi ha jugadors.");
+  target.querySelectorAll("[data-access]").forEach(button => button.addEventListener("click", async () => {
+    try {
+      await api(`/players/${button.dataset.access}/access`, { method: "PATCH", body: JSON.stringify({ access_active: button.dataset.active === "true" }) });
+      await loadAdmin(); adminToast("Accés actualitzat");
+    } catch (_) { showAccessDisabled(); }
+  }));
+  const options = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
+  document.querySelector("#goal-form select[name=player_id]").innerHTML = options;
+}
+
+function renderAdminEvents(events) {
+  document.querySelector("#admin-events").innerHTML = events.length ? events.map(event => `<article class="card">
+    <p class="meta">${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</p><h4>${escapeHtml(event.title)}</h4><p>${escapeHtml(event.location || "Sense ubicació")}</p>
+  </article>`).join("") : empty("No hi ha esdeveniments.");
+}
+
+async function loadAdmin() {
+  const [players, events] = await Promise.all([api("/players"), api("/events")]);
+  renderAdminPlayers(players); renderAdminEvents(events);
+}
+
+function setupAdminForms() {
+  document.querySelector("#player-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/players", { method: "POST", body: JSON.stringify(Object.fromEntries(form)) });
+      event.currentTarget.reset(); await loadAdmin(); adminToast("Jugador creat");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#event-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    form.starts_at = new Date(form.starts_at).toISOString();
+    try {
+      await api("/events", { method: "POST", body: JSON.stringify(form) });
+      event.currentTarget.reset(); await loadAdmin(); adminToast("Esdeveniment creat");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#goal-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    form.player_id = Number(form.player_id);
+    try {
+      await api("/goals", { method: "POST", body: JSON.stringify(form) });
+      event.currentTarget.reset(); adminToast("Objectiu assignat");
+    } catch (_) { showAccessDisabled(); }
+  });
+}
+
+async function startAdmin() {
+  setupAdminForms();
+  await loadAdmin();
+  document.querySelector("#loading").classList.add("hidden");
+  document.querySelector("#admin-portal").classList.remove("hidden");
 }
 
 function setupTabs() {
@@ -131,10 +211,12 @@ function renderProgress(stats, followUp, exams, mvp) {
 }
 
 async function start() {
-  if (!token || !jugador) return showAccessDisabled();
+  if (!token) return showAccessDisabled();
   try {
-    const session = await api(`/auth/session?jugador=${encodeURIComponent(jugador)}`);
-    if (session.role !== "player" || !session.player) return showAccessDisabled();
+    const sessionPath = jugador ? `/auth/session?jugador=${encodeURIComponent(jugador)}` : "/auth/session";
+    const session = await api(sessionPath);
+    if (session.role === "admin") return await startAdmin();
+    if (!jugador || session.role !== "player" || !session.player) return showAccessDisabled();
     state.player = session.player;
     const id = state.player.id;
     const [events, attendance, goals, assignments, progress, routines, stats, followUp, exams, mvp] = await Promise.all([

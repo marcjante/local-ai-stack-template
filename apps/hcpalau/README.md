@@ -24,6 +24,13 @@ El portal del jugador queda servit pel mateix backend a:
 http://127.0.0.1:8000/app/?jugador=biel&token=<token-real>
 ```
 
+El mode entrenador utilitza el token d'administració sense paràmetre de
+jugador:
+
+```text
+http://127.0.0.1:8000/app/?token=<HCPALAU_ADMIN_TOKEN>
+```
+
 El contracte funcional, els rols i els endpoints també estan documentats a
 [`docs/api-spec.md`](docs/api-spec.md).
 

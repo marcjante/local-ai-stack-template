@@ -15,6 +15,9 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--paper); color: var(--ink); min-height: 100vh; }
 button { font: inherit; }
+input, select, textarea { font: inherit; width: 100%; border: 1px solid #cdbec3; border-radius: .65rem; padding: .65rem .7rem; background: white; color: var(--ink); }
+textarea { min-height: 6rem; resize: vertical; }
+label { display: grid; gap: .35rem; color: var(--muted); font-size: .82rem; font-weight: 750; }
 .hidden { display: none !important; }
 
 .state-screen { min-height: 100vh; display: grid; place-items: center; padding: 2rem; text-align: center; }
@@ -57,8 +60,19 @@ h3 { margin: 2rem 0 .75rem; }
 .metric strong { display: block; font-size: 1.8rem; }
 .metric span { color: #f2cbd6; font-size: .8rem; }
 .toast { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); background: var(--ink); color: white; padding: .75rem 1rem; border-radius: .75rem; box-shadow: 0 .5rem 2rem #0004; }
+.admin-grid { display: grid; gap: 2.5rem; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+.form-grid .wide { grid-column: 1 / -1; }
+.player-card { display: grid; gap: .7rem; }
+.player-card .actions { flex-wrap: wrap; }
+.link { color: var(--wine); font-weight: 750; text-decoration: none; }
 
 @media (min-width: 48rem) {
   .topbar { padding-top: 2rem; padding-bottom: 2rem; }
   .content { padding-top: 2rem; }
+}
+
+@media (max-width: 34rem) {
+  .form-grid { grid-template-columns: 1fr; }
+  .form-grid .wide { grid-column: auto; }
 }
