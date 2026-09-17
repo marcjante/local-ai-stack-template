@@ -1,4 +1,6 @@
-from backend.app.config import DEFAULT_DATABASE_URL, DEFAULT_VIDEO_DIR, get_settings
+import pytest
+
+from backend.app.config import DEFAULT_DATABASE_URL, DEFAULT_VIDEO_DIR, get_settings, validate_runtime_settings
 
 
 def test_standard_provider_environment_variables_are_supported(monkeypatch, tmp_path) -> None:
@@ -49,3 +51,29 @@ def test_local_defaults_remain_available(monkeypatch) -> None:
     assert settings.database_url == DEFAULT_DATABASE_URL
     assert settings.admin_token == "dev-admin-token"
     assert settings.video_dir == DEFAULT_VIDEO_DIR
+
+
+def test_managed_database_rejects_development_admin_token() -> None:
+    settings = get_settings()
+    settings = settings.__class__(
+        database_url="postgresql://example/hcpalau",
+        admin_token="dev-admin-token",
+        cors_origins=("https://club.example",),
+        video_dir=settings.video_dir,
+    )
+
+    with pytest.raises(RuntimeError, match="ADMIN_TOKEN"):
+        validate_runtime_settings(settings)
+
+
+def test_managed_database_rejects_wildcard_cors() -> None:
+    settings = get_settings()
+    settings = settings.__class__(
+        database_url="postgresql://example/hcpalau",
+        admin_token="production-token",
+        cors_origins=("*",),
+        video_dir=settings.video_dir,
+    )
+
+    with pytest.raises(RuntimeError, match="CORS_ORIGINS"):
+        validate_runtime_settings(settings)

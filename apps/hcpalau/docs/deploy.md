@@ -42,6 +42,10 @@ vídeos.
 8. Si s'utilitzen vídeos, afegeix un volum persistent, munta'l a `/data` i
    configura `VIDEO_DIR=/data/exercise-videos`.
 
+L'aplicació rebutja l'arrencada amb PostgreSQL si falta `ADMIN_TOKEN`, si es
+manté el valor de desenvolupament `dev-admin-token` o si `CORS_ORIGINS` conté
+`*`.
+
 Per habilitar el botó de Pizarra-hoquei al portal entrenador, afegeix el
 paràmetre URL-encoded `pissarra=https%3A%2F%2F...` a l'enllaç del portal. La
 URL s'obre en una pestanya nova i no rep el token d'HC Palau.

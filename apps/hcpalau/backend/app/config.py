@@ -20,6 +20,16 @@ class Settings:
     video_dir: Path
 
 
+def validate_runtime_settings(settings: Settings) -> None:
+    """Fail fast on unsafe defaults when running against managed infrastructure."""
+    if settings.database_url.startswith("sqlite"):
+        return
+    if settings.admin_token == "dev-admin-token":
+        raise RuntimeError("ADMIN_TOKEN must be configured when using a non-SQLite database")
+    if "*" in settings.cors_origins:
+        raise RuntimeError("CORS_ORIGINS must not contain '*' in managed deployments")
+
+
 def get_settings() -> Settings:
     origins = os.getenv("HCPALAU_CORS_ORIGINS") or os.getenv("CORS_ORIGINS") or (
         "http://localhost:8000,http://127.0.0.1:8000"

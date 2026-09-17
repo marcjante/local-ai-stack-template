@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session
 from sqlalchemy import text
 
-from .config import get_settings
+from .config import get_settings, validate_runtime_settings
 from .database import create_db_and_tables
 from .database import get_session
 from .routers.attendance import router as attendance_router
@@ -38,6 +38,7 @@ FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_runtime_settings(get_settings())
     create_db_and_tables()
     yield
 
