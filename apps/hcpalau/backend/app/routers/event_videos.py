@@ -18,6 +18,10 @@ router = APIRouter(prefix="/event-videos", tags=["event-videos"])
 def list_event_videos(event_id: int, _: Principal = Depends(get_current_principal), session: Session = Depends(get_session)) -> list[EventVideo]:
     return list(session.exec(select(EventVideo).where(EventVideo.event_id == event_id).order_by(EventVideo.created_at)))
 
+@router.get("", response_model=list[EventVideoRead])
+def list_all_event_videos(_: Principal = Depends(require_admin), session: Session = Depends(get_session)) -> list[EventVideo]:
+    return list(session.exec(select(EventVideo).order_by(EventVideo.created_at.desc())))
+
 @router.post("", response_model=EventVideoRead, status_code=status.HTTP_201_CREATED)
 async def upload_event_video(event_id: int = Form(...), url: str = Form(default=""), comment: str = Form(default=""), video: Optional[UploadFile] = File(default=None), _: Principal = Depends(require_admin), session: Session = Depends(get_session)) -> EventVideo:
     if session.get(Event, event_id) is None:
@@ -44,3 +48,13 @@ async def upload_event_video(event_id: int = Form(...), url: str = Form(default=
     session.commit()
     session.refresh(row)
     return row
+
+@router.delete("/{video_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_event_video(video_id: int, _: Principal = Depends(require_admin), session: Session = Depends(get_session)) -> None:
+    row = session.get(EventVideo, video_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if not row.filename.startswith(("http://", "https://")):
+        (get_settings().video_dir / row.filename).unlink(missing_ok=True)
+    session.delete(row)
+    session.commit()
