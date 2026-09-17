@@ -150,6 +150,13 @@ def fetch_standings(url: str = SOURCE_URL) -> list[Standing]:
         return parse_standings_html(response.read().decode("utf-8", errors="replace"))
 
 
+def fetch_acta_links(url: str = SOURCE_URL) -> list[str]:
+    request = Request(url, headers={"User-Agent": "HC-Palau-FECAPA-Sync/1.0"})
+    with urlopen(request, timeout=20) as response:
+        html = response.read().decode("utf-8", errors="replace")
+        return extract_acta_links(html, base_url=url)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=SOURCE_URL)

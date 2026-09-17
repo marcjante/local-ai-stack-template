@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from integrations.local_ai_stack.sync_fecapa import extract_acta_links, parse_standings_html
+from integrations.local_ai_stack.sync_fecapa import extract_acta_links, fetch_acta_links, parse_standings_html
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fecapa_infantil_or9.html"
@@ -27,3 +27,21 @@ def test_acta_links_are_discovered_only_when_published() -> None:
 
     assert links == ["https://fecapa.example/acta/12345"]
     assert extract_acta_links("<p>Partit encara no disputat</p>") == []
+
+
+def test_fetch_acta_links_uses_the_competition_page(monkeypatch) -> None:
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'<a href="/acta/77">Acta</a>'
+
+    monkeypatch.setattr("integrations.local_ai_stack.sync_fecapa.urlopen", lambda *_args, **_kwargs: Response())
+
+    assert fetch_acta_links("https://fecapa.example/league/4786") == [
+        "https://fecapa.example/acta/77"
+    ]
