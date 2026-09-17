@@ -9,5 +9,7 @@ def test_container_includes_alembic_configuration_and_migrations() -> None:
 
     assert "COPY alembic.ini ./" in dockerfile
     assert "COPY backend ./backend" in dockerfile
+    assert "HEALTHCHECK" in dockerfile
+    assert "/ready" in dockerfile
     assert (APP_ROOT / "alembic.ini").is_file()
     assert list((APP_ROOT / "backend" / "migrations" / "versions").glob("*.py"))

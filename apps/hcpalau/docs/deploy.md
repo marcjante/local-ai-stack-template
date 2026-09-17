@@ -55,6 +55,7 @@ directori arrel del servei. Les migracions són reversibles amb
 `alembic downgrade -1`; no s'ha d'editar una migració ja aplicada.
 
 Railway proporciona `PORT`; el contenidor l'utilitza automàticament.
+La imatge també declara un `HEALTHCHECK` local contra `/ready`.
 
 ## Verificació posterior
 
