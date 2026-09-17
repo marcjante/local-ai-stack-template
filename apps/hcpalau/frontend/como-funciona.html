@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#8b1538">
+  <title>HC Palau · Cómo funciona</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, sans-serif; color: #28242a; background: #f8f2ef; }
+    body { margin: 0; }
+    main { max-width: 980px; margin: 0 auto; padding: 48px 20px 72px; }
+    .eyebrow { color: #8b1538; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; font-size: .78rem; }
+    h1 { font-size: clamp(2.2rem, 6vw, 4.5rem); line-height: .98; margin: .4rem 0 1rem; }
+    h2 { margin-top: 0; font-size: 1.45rem; }
+    .lead { color: #665f68; font-size: 1.15rem; max-width: 700px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-top: 28px; }
+    .card { background: white; border: 1px solid #eadfe0; border-radius: 18px; padding: 24px; box-shadow: 0 8px 24px #5b31400d; }
+    .number { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #8b1538; color: white; font-weight: 800; margin-bottom: 12px; }
+    li { margin: .65rem 0; }
+    .flow { display: grid; gap: 10px; margin: 18px 0 0; }
+    .flow div { border-left: 4px solid #c77f98; padding: 12px 16px; background: #fff8fa; border-radius: 8px; }
+    .button { display: inline-block; background: #8b1538; color: white; text-decoration: none; padding: 12px 18px; border-radius: 10px; font-weight: 700; margin-top: 8px; }
+    .note { color: #665f68; font-size: .95rem; }
+    code { background: #f2e8eb; border-radius: 5px; padding: 2px 5px; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">HC Palau · Infantil D</p>
+    <h1>Cómo funciona la app</h1>
+    <p class="lead">La aplicación conecta al entrenador y a cada jugador en un mismo calendario. El entrenador publica la información y el jugador confirma su asistencia desde su enlace personal.</p>
+
+    <div class="grid">
+      <section class="card">
+        <span class="number">1</span>
+        <h2>El entrenador crea el entrenamiento</h2>
+        <ul>
+          <li>Abre el <strong>panel del entrenador</strong>.</li>
+          <li>Indica título, día y hora.</li>
+          <li>Añade el pabellón o ubicación.</li>
+          <li>Guarda el evento.</li>
+        </ul>
+      </section>
+      <section class="card">
+        <span class="number">2</span>
+        <h2>El jugador recibe su enlace</h2>
+        <p>Desde la sección <strong>Jugadores</strong>, el entrenador abre o comparte el enlace personal de cada jugador.</p>
+        <p class="note">Cada enlace solo permite acceder a los datos de ese jugador.</p>
+      </section>
+      <section class="card">
+        <span class="number">3</span>
+        <h2>Confirma la asistencia</h2>
+        <p>En <strong>Agenda</strong>, el jugador ve fecha, hora y ubicación y elige:</p>
+        <div class="flow"><div>✅ <strong>Hi aniré</strong> — confirma que viene.</div><div>❌ <strong>No hi podré anar</strong> — debe escribir el motivo.</div></div>
+      </section>
+      <section class="card">
+        <span class="number">4</span>
+        <h2>El entrenador lo ve automáticamente</h2>
+        <p>La sección <strong>Activitat dels jugadors</strong> se actualiza sola cada pocos segundos con la respuesta y, si no viene, el motivo.</p>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:18px">
+      <h2>Accesos</h2>
+      <p><strong>Entrenador:</strong> usa el enlace privado con su token de administrador.</p>
+      <p><strong>Jugador:</strong> usa el enlace personal que le entrega el entrenador. No necesita instalar ninguna aplicación.</p>
+      <a class="button" href="./">Abrir la aplicación</a>
+    </section>
+
+    <p class="note" style="margin-top:28px">Si una pantalla antigua sigue abierta, recarga la página. La app funciona desde móvil, tableta u ordenador.</p>
+  </main>
+</body>
+</html>
