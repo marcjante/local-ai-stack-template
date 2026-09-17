@@ -501,7 +501,18 @@ async function start() {
     setupTabs();
     document.querySelector("#loading").classList.add("hidden");
     document.querySelector("#portal").classList.remove("hidden");
-  } catch (_) { showAccessDisabled(); }
+  } catch (_) {
+    // El enlace de entrenador ya lleva un token; no ocultamos el panel por
+    // un error puntual de inicialización de una sección secundaria.
+    if (token && !jugador) {
+      document.querySelector("#loading").classList.add("hidden");
+      document.querySelector("#access-disabled").classList.add("hidden");
+      document.querySelector("#admin-portal").classList.remove("hidden");
+      adminToast("Panell obert. Algunes dades es poden carregar en uns segons.");
+      return;
+    }
+    showAccessDisabled();
+  }
 }
 
 start();
