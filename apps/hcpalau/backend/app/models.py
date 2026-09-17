@@ -128,3 +128,26 @@ class ExamPeriod(SQLModel, table=True):
     end_date: date
     note: Optional[str] = Field(default=None, max_length=500)
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class Standing(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("season", "team"),
+        UniqueConstraint("season", "position"),
+        CheckConstraint("position >= 1"),
+        CheckConstraint("played >= 0 AND won >= 0 AND drawn >= 0 AND lost >= 0"),
+        CheckConstraint("goals_for >= 0 AND goals_against >= 0 AND points >= 0"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    season: str = Field(index=True, max_length=32)
+    team: str = Field(max_length=160)
+    position: int = Field(ge=1)
+    played: int = Field(default=0, ge=0)
+    won: int = Field(default=0, ge=0)
+    drawn: int = Field(default=0, ge=0)
+    lost: int = Field(default=0, ge=0)
+    goals_for: int = Field(default=0, ge=0)
+    goals_against: int = Field(default=0, ge=0)
+    points: int = Field(default=0, ge=0)
+    updated_at: datetime = Field(default_factory=utc_now)

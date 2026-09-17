@@ -141,3 +141,21 @@ class ExamPeriodCreate(SQLModel):
 class ExamPeriodRead(ExamPeriodCreate):
     id: int
     created_at: datetime
+
+
+class StandingUpdate(SQLModel):
+    season: str = Field(min_length=1, max_length=32)
+    team: str = Field(min_length=1, max_length=160)
+    position: int = Field(ge=1)
+    played: int = Field(default=0, ge=0)
+    won: int = Field(default=0, ge=0)
+    drawn: int = Field(default=0, ge=0)
+    lost: int = Field(default=0, ge=0)
+    goals_for: int = Field(default=0, ge=0)
+    goals_against: int = Field(default=0, ge=0)
+    points: int = Field(default=0, ge=0)
+
+
+class StandingRead(StandingUpdate):
+    id: int
+    updated_at: datetime

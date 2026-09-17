@@ -18,6 +18,7 @@ from .routers.exercises import router as exercises_router
 from .routers.goals import router as goals_router
 from .routers.players import router as players_router
 from .routers.routines import router as routines_router
+from .routers.standings import router as standings_router
 
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ def create_app() -> FastAPI:
     application.include_router(convocations_router)
     application.include_router(routines_router)
     application.include_router(exam_periods_router)
+    application.include_router(standings_router)
 
     @application.get("/health", tags=["system"])
     def health() -> dict[str, str]:
