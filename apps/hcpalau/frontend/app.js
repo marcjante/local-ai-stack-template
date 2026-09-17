@@ -322,7 +322,13 @@ function setupAdminForms() {
 async function startAdmin() {
   setupAdminForms();
   setupWhiteboard();
-  await loadAdmin();
+  try {
+    await loadAdmin();
+  } catch (_) {
+    // El token ya ha sido validado; un fallo puntual de datos no debe bloquear
+    // el acceso del entrenador al panel ni a sus formularios de edición.
+    adminToast("No s'han pogut carregar totes les dades. Torna-ho a provar.");
+  }
   window.setInterval(() => {
     if (!document.activeElement?.closest("form")) loadAdmin().catch(() => {});
   }, adminPollMs);
