@@ -11,6 +11,7 @@ const seasonStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() 
 const season = params.get("season") || `${seasonStart}-${String(seasonStart + 1).slice(-2)}`;
 
 const state = { player: null, attendance: new Map(), progress: new Map(), convocations: new Map() };
+let adminLoadInFlight = false;
 const dateFormat = new Intl.DateTimeFormat("ca-ES", { dateStyle: "medium", timeStyle: "short" });
 
 async function api(path, options = {}) {
@@ -144,12 +145,18 @@ function renderStandings(rows, targetSelector = "#standings-body") {
 }
 
 async function loadAdmin() {
+  if (adminLoadInFlight) return;
+  adminLoadInFlight = true;
+  try {
   const [players, events, exercises, standings, activity] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity")]);
   const routineGroups = await Promise.all(players.map(player => api(`/routines/player/${player.id}`)));
   const routines = routineGroups.flatMap((items, index) => items.map(item => ({ ...item, player_name: players[index].name })));
   renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
   renderStandings(standings, "#admin-standings-body");
   renderAdminActivity(activity);
+  } finally {
+    adminLoadInFlight = false;
+  }
 }
 
 function setupAdminForms() {
@@ -293,7 +300,9 @@ async function startAdmin() {
   setupAdminForms();
   setupWhiteboard();
   await loadAdmin();
-  window.setInterval(() => loadAdmin().catch(() => {}), 8000);
+  window.setInterval(() => {
+    if (!document.activeElement?.closest("form")) loadAdmin().catch(() => {});
+  }, 8000);
   document.querySelector("#loading").classList.add("hidden");
   document.querySelector("#admin-portal").classList.remove("hidden");
 }

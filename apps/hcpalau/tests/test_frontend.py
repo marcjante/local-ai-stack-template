@@ -83,3 +83,10 @@ def test_admin_frontend_exposes_configurable_whiteboard_link(client) -> None:
     assert 'id="whiteboard-link"' in html.text
     assert 'params.get("pissarra")' in javascript.text
     assert "setupWhiteboard()" in javascript.text
+
+
+def test_admin_polling_does_not_refresh_active_forms(client) -> None:
+    javascript = client.get("/app/app.js").text
+
+    assert "adminLoadInFlight" in javascript
+    assert 'document.activeElement?.closest("form")' in javascript
