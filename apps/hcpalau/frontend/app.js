@@ -102,6 +102,10 @@ function renderAdminEvents(events) {
   </article>`).join("") : empty("No hi ha esdeveniments.");
 }
 
+function renderAdminActivity(items) {
+  document.querySelector("#admin-activity").innerHTML = items.length ? items.map(item => `<article class="card"><p class="meta">${escapeHtml(dateFormat.format(new Date(item.updated_at)))}</p><strong>${escapeHtml(item.player)}</strong><p>${item.kind === "attendance" ? `Assistència: ${item.value ? "sí" : "no"}` : `Exercici: ${item.value}/3`}</p><p>${escapeHtml(item.label)}</p></article>`).join("") : empty("Encara no hi ha actualitzacions dels jugadors.");
+}
+
 function renderAdminExercises(exercises, players) {
   document.querySelector("#admin-exercises").innerHTML = exercises.length ? exercises.map(exercise => `<article class="card">
     <p class="meta">${exercise.video_filename ? "Vídeo disponible" : "Sense vídeo"}</p>
@@ -140,11 +144,12 @@ function renderStandings(rows, targetSelector = "#standings-body") {
 }
 
 async function loadAdmin() {
-  const [players, events, exercises, standings] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`)]);
+  const [players, events, exercises, standings, activity] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity")]);
   const routineGroups = await Promise.all(players.map(player => api(`/routines/player/${player.id}`)));
   const routines = routineGroups.flatMap((items, index) => items.map(item => ({ ...item, player_name: players[index].name })));
   renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
   renderStandings(standings, "#admin-standings-body");
+  renderAdminActivity(activity);
 }
 
 function setupAdminForms() {
@@ -288,6 +293,7 @@ async function startAdmin() {
   setupAdminForms();
   setupWhiteboard();
   await loadAdmin();
+  window.setInterval(() => loadAdmin().catch(() => {}), 8000);
   document.querySelector("#loading").classList.add("hidden");
   document.querySelector("#admin-portal").classList.remove("hidden");
 }

@@ -102,6 +102,12 @@ mai s'inclou al perfil retornat a un jugador.
 |---|---|---|---|
 | `POST` | `/notifications/send/{player_id}/{event_id}` | A | Retorna `501 provider_not_configured` fins que el club confirmi un proveïdor; mai simula un lliurament. |
 
+## Activitat del jugador
+
+| Mètode | Ruta | Rol | Comportament |
+|---|---|---|---|
+| `GET` | `/activity` | A | Retorna les darreres assistències i progressos actualitzats pels jugadors per al polling del panell entrenador. |
+
 ## Sistema i errors
 
 | Mètode | Ruta | Rol | Comportament |
