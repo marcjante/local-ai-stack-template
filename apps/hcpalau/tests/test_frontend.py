@@ -90,3 +90,11 @@ def test_admin_polling_does_not_refresh_active_forms(client) -> None:
 
     assert "adminLoadInFlight" in javascript
     assert 'document.activeElement?.closest("form")' in javascript
+
+
+def test_admin_poll_interval_is_bounded(client) -> None:
+    javascript = client.get("/app/app.js").text
+
+    assert 'params.get("poll")' in javascript
+    assert "requestedPollSeconds >= 5" in javascript
+    assert "requestedPollSeconds <= 60" in javascript

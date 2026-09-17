@@ -70,6 +70,9 @@ python -m integrations.local_ai_stack.sync_fecapa --actas-only
 
 El segon mode retorna una llista buida fins que la federació publica les actes.
 
+El polling del panell entrenador és de 8 segons; es pot ajustar entre 5 i 60
+segons amb `?poll=15`.
+
 El contracte funcional, els rols i els endpoints també estan documentats a
 [`docs/api-spec.md`](docs/api-spec.md).
 

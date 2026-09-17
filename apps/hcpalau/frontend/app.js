@@ -6,6 +6,9 @@ const jugador = params.get("jugador") || "";
 const API_BASE = (params.get("api") || window.location.origin).replace(/\/$/, "");
 const whiteboardCandidate = params.get("pissarra") || "";
 const whiteboardUrl = /^https?:\/\//i.test(whiteboardCandidate) ? whiteboardCandidate : "";
+const requestedPollSeconds = Number(params.get("poll"));
+const adminPollMs = Number.isFinite(requestedPollSeconds) && requestedPollSeconds >= 5 && requestedPollSeconds <= 60
+  ? requestedPollSeconds * 1000 : 8000;
 const now = new Date();
 const seasonStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
 const season = params.get("season") || `${seasonStart}-${String(seasonStart + 1).slice(-2)}`;
@@ -302,7 +305,7 @@ async function startAdmin() {
   await loadAdmin();
   window.setInterval(() => {
     if (!document.activeElement?.closest("form")) loadAdmin().catch(() => {});
-  }, 8000);
+  }, adminPollMs);
   document.querySelector("#loading").classList.add("hidden");
   document.querySelector("#admin-portal").classList.remove("hidden");
 }
