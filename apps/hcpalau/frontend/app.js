@@ -120,7 +120,7 @@ function renderAdminEvents(events) {
   document.querySelector("#event-video-form select[name=event_id]").innerHTML = events.map(event => `<option value="${event.id}">${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("");
 }
 
-function renderAdminActivity(items, players, assignmentsByPlayer, exercises, attendanceSummary) {
+function renderAdminActivity(items, players, assignmentsByPlayer, exercises, attendanceSummary, progressByPlayer) {
   const latest = new Map();
   items.filter(item => item.kind === "checkin").forEach(item => latest.set(`${item.player}:${item.label}`, item));
   const exerciseById = new Map(exercises.map(exercise => [exercise.id, exercise]));
@@ -136,7 +136,11 @@ function renderAdminActivity(items, players, assignmentsByPlayer, exercises, att
     const attendance = items.filter(item => item.kind === "attendance" && item.player === player.name).map(item => `<li><span>${escapeHtml(item.label)}</span><strong class="task-status ${item.value ? "done" : "missed"}">${item.value ? "Sí" : "No"}</strong></li>`).join("");
     const summary = attendanceByPlayer.get(player.id);
     const percentage = summary?.percentage == null ? "Sense dades" : `${summary.percentage}%`;
-    return `<article class="card player-activity"><h3>${escapeHtml(player.name)}</h3><p class="meta">Assistència a entrenaments i partits</p>${attendance ? `<ul class="task-list">${attendance}</ul>` : `<p class="note">Encara no ha confirmat cap dia.</p>`}<p class="attendance-percent">Assistència total <strong>${percentage}</strong>${summary?.total ? ` <span>(${summary.attending}/${summary.total})</span>` : ""}</p><details class="activity-exercises"><summary>Exercicis i estiraments${assignments.length ? ` (${assignments.length})` : ""}</summary>${tasks ? `<ul class="task-list">${tasks}</ul>` : `<p class="note">No té exercicis assignats.</p>`}</details></article>`;
+    const progress = progressByPlayer.get(player.id) || [];
+    const latestWeek = progress.reduce((latest, row) => !latest || `${row.iso_year}-${row.iso_week}` > `${latest.iso_year}-${latest.iso_week}` ? row : latest, null);
+    const weekRows = latestWeek ? progress.filter(row => row.iso_year === latestWeek.iso_year && row.iso_week === latestWeek.iso_week) : [];
+    const exercisePercent = assignments.length ? Math.round(weekRows.reduce((sum, row) => sum + row.repetitions, 0) * 100 / (assignments.length * 3)) : null;
+    return `<article class="card player-activity"><h3>${escapeHtml(player.name)}</h3><p class="meta">Assistència a entrenaments i partits</p>${attendance ? `<ul class="task-list">${attendance}</ul>` : `<p class="note">Encara no ha confirmat cap dia.</p>`}<p class="attendance-percent">Assistència total <strong>${percentage}</strong>${summary?.total ? ` <span>(${summary.attending}/${summary.total})</span>` : ""}</p><details class="activity-exercises"><summary>Exercicis i estiraments${assignments.length ? ` (${assignments.length})` : ""}</summary><p class="exercise-percent">Aquesta setmana: <strong>${exercisePercent == null ? "Sense dades" : `${exercisePercent}%`}</strong></p>${tasks ? `<ul class="task-list">${tasks}</ul>` : `<p class="note">No té exercicis assignats.</p>`}</details></article>`;
   }).join("") || empty("Encara no hi ha jugadors.");
 }
 
@@ -192,12 +196,14 @@ async function loadAdmin() {
   adminLoadInFlight = true;
   try {
   const [players, events, exercises, standings, activity, attendanceSummary] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity"), api("/activity/attendance-summary")]);
-  const assignmentsByPlayer = new Map(await Promise.all(players.map(async player => [player.id, await api(`/exercises/player/${player.id}`)])));
+  const playerData = await Promise.all(players.map(async player => [player.id, await api(`/exercises/player/${player.id}`), await api(`/exercise-progress/player/${player.id}`)]));
+  const assignmentsByPlayer = new Map(playerData.map(([id, assignments]) => [id, assignments]));
+  const progressByPlayer = new Map(playerData.map(([id, _assignments, progress]) => [id, progress]));
   const routineGroups = await Promise.all(players.map(player => api(`/routines/player/${player.id}`)));
   const routines = routineGroups.flatMap((items, index) => items.map(item => ({ ...item, player_name: players[index].name })));
   renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); await renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
   renderStandings(standings, "#admin-standings-body");
-  renderAdminActivity(activity, players, assignmentsByPlayer, exercises, attendanceSummary);
+  renderAdminActivity(activity, players, assignmentsByPlayer, exercises, attendanceSummary, progressByPlayer);
   } finally {
     adminLoadInFlight = false;
   }
