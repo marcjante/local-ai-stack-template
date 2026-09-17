@@ -86,6 +86,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .player-card { display: grid; gap: .7rem; }
 .attendance-reason { display: grid; gap: .6rem; margin-top: .8rem; }
 .team-list { margin: 0; padding-left: 1.2rem; }
+.team-roster { margin-top: .8rem; }
+.team-roster summary { cursor: pointer; color: #8b1538; font-weight: 700; }
 .player-card .actions { flex-wrap: wrap; }
 .link { color: var(--wine); font-weight: 750; text-decoration: none; }
 

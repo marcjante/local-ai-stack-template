@@ -13,7 +13,7 @@ const now = new Date();
 const seasonStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
 const season = params.get("season") || `${seasonStart}-${String(seasonStart + 1).slice(-2)}`;
 
-const state = { player: null, attendance: new Map(), progress: new Map(), convocations: new Map() };
+const state = { player: null, attendance: new Map(), progress: new Map(), convocations: new Map(), teamConvocations: new Map() };
 let adminLoadInFlight = false;
 const dateFormat = new Intl.DateTimeFormat("ca-ES", { dateStyle: "medium", timeStyle: "short" });
 
@@ -333,6 +333,7 @@ function renderEvents(events) {
   target.innerHTML = events.length ? events.map(event => {
     const attendance = state.attendance.get(event.id);
     const convocation = state.convocations.get(event.id);
+    const team = state.teamConvocations.get(event.id) || [];
     const type = { training: "Entrenament", match: "Partit", meeting: "Reunió" }[event.event_type];
     const callup = convocation ? { selected: "Convocat", reserve: "Reserva", not_selected: "No convocat" }[convocation.selection_status] : "";
     return `<article class="card">
@@ -340,6 +341,7 @@ function renderEvents(events) {
       <h3>${escapeHtml(event.title)}</h3>
       <p>${escapeHtml(event.location || "Ubicació per confirmar")}</p>
       ${callup ? `<span class="callup">${escapeHtml(callup)}</span>` : ""}
+      ${event.event_type === "match" ? `<details class="team-roster"><summary>Convocatòria i equip (${team.length})</summary>${team.length ? `<ul class="team-list">${team.map(player => `<li>${escapeHtml(player.player_name)}</li>`).join("")}</ul>` : `<p class="note">Encara no hi ha equip seleccionat.</p>`}</details>` : ""}
       <div class="actions">
         <button class="action ${attendance?.attending === true ? "primary" : ""}" data-attendance="${event.id}" data-value="true">Hi aniré</button>
         <button class="action ${attendance?.attending === false ? "primary" : ""}" data-attendance="${event.id}" data-value="false">No hi podré anar</button>
@@ -451,6 +453,9 @@ async function start() {
     attendance.forEach(item => state.attendance.set(item.event_id, item));
     progress.forEach(item => state.progress.set(item.assignment_id, item));
     convocations.forEach(item => state.convocations.set(item.event_id, item));
+    const matches = events.filter(event => event.event_type === "match");
+    const teamLists = await Promise.all(matches.map(event => api(`/convocations/event/${event.id}/team`)));
+    matches.forEach((event, index) => state.teamConvocations.set(event.id, teamLists[index]));
     document.querySelector("#welcome").textContent = `Hola, ${state.player.name}`;
     renderEvents(events); renderGoals(goals); await renderTraining(assignments, routines);
     renderProgress(stats, followUp, exams, mvp);

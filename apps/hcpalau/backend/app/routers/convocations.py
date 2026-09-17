@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from ..auth import Principal, get_current_principal, require_admin, require_player_access
 from ..database import get_session
 from ..models import Convocation, Event, Player, utc_now
-from ..schemas import ConvocationRead, ConvocationUpdate
+from ..schemas import ConvocationRead, ConvocationUpdate, TeamConvocationRead
 
 
 router = APIRouter(prefix="/convocations", tags=["convocations"])
@@ -80,3 +80,20 @@ def list_event_convocations(
         .order_by(Convocation.player_id)
     )
     return list(session.exec(statement))
+
+
+@router.get("/event/{event_id}/team", response_model=list[TeamConvocationRead])
+def list_selected_team(
+    event_id: int,
+    _: Principal = Depends(get_current_principal),
+    session: Session = Depends(get_session),
+) -> list[TeamConvocationRead]:
+    if session.get(Event, event_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    rows = session.exec(
+        select(Convocation, Player)
+        .join(Player, Player.id == Convocation.player_id)
+        .where(Convocation.event_id == event_id, Convocation.selection_status == "selected")
+        .order_by(Player.name)
+    )
+    return [TeamConvocationRead(player_id=convocation.player_id, player_name=player.name) for convocation, player in rows]

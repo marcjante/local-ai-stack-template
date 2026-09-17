@@ -130,6 +130,11 @@ class ConvocationRead(ConvocationUpdate):
     updated_at: datetime
 
 
+class TeamConvocationRead(SQLModel):
+    player_id: int
+    player_name: str
+
+
 class RoutineCreate(SQLModel):
     player_id: int
     title: str = Field(min_length=1, max_length=160)

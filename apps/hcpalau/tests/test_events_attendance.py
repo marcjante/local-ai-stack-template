@@ -69,6 +69,21 @@ def test_player_can_set_and_update_own_attendance(client, admin_headers) -> None
     assert second.json()["absence_reason"] == "Examen de matemàtiques"
 
 
+def test_player_can_see_selected_team_for_a_match(client, admin_headers) -> None:
+    biel = create_player(client, admin_headers, "biel", "biel-player-token")
+    pau = create_player(client, admin_headers, "pau", "pau-player-token-")
+    event = create_event(client, admin_headers)
+    client.patch(f"/events/{event['id']}", json={"title": "Partit",}, headers=admin_headers)
+    # The fixture helper creates a training; create a real match for this roster check.
+    match = client.post("/events", json={"title": "Partit de lliga", "starts_at": event["starts_at"], "event_type": "match"}, headers=admin_headers).json()
+    for player in (biel, pau):
+        response = client.put(f"/convocations/{match['id']}/{player['id']}", json={"selection_status": "selected"}, headers=admin_headers)
+        assert response.status_code == 200
+    roster = client.get(f"/convocations/event/{match['id']}/team", headers={"Authorization": "Bearer biel-player-token"})
+    assert roster.status_code == 200
+    assert [item["player_name"] for item in roster.json()] == ["Biel", "Pau"]
+
+
 def test_player_must_explain_absence(client, admin_headers) -> None:
     player = create_player(client, admin_headers, "biel", "biel-player-token")
     event = create_event(client, admin_headers)
