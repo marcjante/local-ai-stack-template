@@ -72,8 +72,8 @@ cd apps/hcpalau
 pytest -v
 ```
 
-També hi ha dreceres equivalents a `Makefile`: `make test`, `make run`,
-`make migrate` i `make seed`.
+També hi ha dreceres equivalents a `Makefile`: `make install` (crea `.venv` i
+instal·la dependències), `make test`, `make run`, `make migrate` i `make seed`.
 
 No s'hi gestionen pagaments ni dades bancàries, i l'aplicació no inclou
 funcions de xat.

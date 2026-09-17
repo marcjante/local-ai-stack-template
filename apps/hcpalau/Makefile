@@ -3,10 +3,13 @@ ifeq ($(wildcard $(PYTHON)),)
 PYTHON = python3
 endif
 
-.PHONY: install test run migrate seed
+.PHONY: install venv test run migrate seed
 
-install:
-	$(PYTHON) -m pip install -r requirements-dev.txt
+venv:
+	python3 -m venv .venv
+	.venv/bin/python -m pip install -r requirements-dev.txt
+
+install: venv
 
 test:
 	$(PYTHON) -m pytest -q
