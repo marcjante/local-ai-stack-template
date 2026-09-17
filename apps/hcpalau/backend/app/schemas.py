@@ -131,6 +131,18 @@ class ExerciseCheckinRead(ExerciseCheckinUpdate):
     updated_at: datetime
 
 
+class WeeklyExerciseCreate(SQLModel):
+    player_id: int
+    exercise_id: int
+    week_start: date
+    mandatory: bool = False
+
+
+class WeeklyExerciseRead(WeeklyExerciseCreate):
+    id: int
+    created_at: datetime
+
+
 class ConvocationUpdate(SQLModel):
     selection_status: Literal["selected", "reserve", "not_selected"]
     note: Optional[str] = Field(default=None, max_length=500)

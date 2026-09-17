@@ -12,6 +12,10 @@ const adminPollMs = Number.isFinite(requestedPollSeconds) && requestedPollSecond
 const now = new Date();
 const seasonStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
 const season = params.get("season") || `${seasonStart}-${String(seasonStart + 1).slice(-2)}`;
+const weekDate = new Date();
+const weekDay = weekDate.getDay() || 7;
+weekDate.setDate(weekDate.getDate() - weekDay + 1);
+const currentWeekStart = weekDate.toISOString().slice(0, 10);
 
 const state = { player: null, attendance: new Map(), progress: new Map(), checkins: new Map(), convocations: new Map(), teamConvocations: new Map() };
 let adminLoadInFlight = false;
@@ -141,11 +145,12 @@ async function renderAdminCompetition(players, events) {
 
 function renderAdminPlanning(players, exercises, routines) {
   const playerOptions = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
-  ["#routine-form", "#exam-form", "#follow-up-form"].forEach(selector => {
+  ["#routine-form", "#exam-form", "#follow-up-form", "#weekly-plan-form"].forEach(selector => {
     document.querySelector(`${selector} select[name=player_id]`).innerHTML = playerOptions;
   });
   document.querySelector("#routine-exercise-form select[name=routine_id]").innerHTML = routines.map(routine => `<option value="${routine.id}">${escapeHtml(routine.title)} · ${escapeHtml(routine.player_name)}</option>`).join("");
   document.querySelector("#routine-exercise-form select[name=exercise_id]").innerHTML = exercises.map(exercise => `<option value="${exercise.id}">${escapeHtml(exercise.title)}</option>`).join("");
+  document.querySelector("#weekly-plan-form select[name=exercise_ids]").innerHTML = exercises.map(exercise => `<option value="${exercise.id}">${escapeHtml(exercise.title)}</option>`).join("");
 }
 
 function renderStandings(rows, targetSelector = "#standings-body") {
@@ -294,6 +299,19 @@ function setupAdminForms() {
       adminToast(`${exerciseIds.length} exercicis afegits a la rutina`);
     } catch (_) { showAccessDisabled(); }
   });
+  document.querySelector("#weekly-plan-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    const playerId = fields.get("player_id");
+    const weekStart = fields.get("week_start");
+    const exerciseIds = fields.getAll("exercise_ids");
+    const mandatory = fields.has("mandatory");
+    try {
+      await Promise.all(exerciseIds.map(exerciseId => api("/weekly-plan", { method: "POST", body: JSON.stringify({ player_id: Number(playerId), exercise_id: Number(exerciseId), week_start: weekStart, mandatory }) })));
+      event.currentTarget.reset();
+      adminToast("Pla setmanal enviat");
+    } catch (_) { showAccessDisabled(); }
+  });
   document.querySelector("#exam-form").addEventListener("submit", async event => {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget));
@@ -423,7 +441,7 @@ function renderHomeActivities(assignments, checkins, exercises) {
   target.innerHTML = assignments.length ? assignments.map(assignment => {
     const checkin = state.checkins.get(assignment.exercise_id);
     const exercise = exercises.find(item => item.id === assignment.exercise_id);
-    return `<article class="card home-activity"><div><p class="meta">Avui</p><h4>${escapeHtml(exercise?.title || "Exercici")}</h4><p>${escapeHtml(exercise?.description || "")}</p></div><div class="actions"><button class="action ${checkin?.completed === true ? "primary" : ""}" data-checkin="${assignment.exercise_id}" data-completed="true">Fet</button><button class="action ${checkin?.completed === false ? "primary" : ""}" data-checkin="${assignment.exercise_id}" data-completed="false">No fet</button></div></article>`;
+    return `<article class="card home-activity"><div><p class="meta">${assignment.mandatory ? "Obligatori · " : ""}Aquesta setmana</p><h4>${escapeHtml(exercise?.title || "Exercici")}</h4><p>${escapeHtml(exercise?.description || "")}</p></div><div class="actions"><button class="action ${checkin?.completed === true ? "primary" : ""}" data-checkin="${assignment.exercise_id}" data-completed="true">Fet</button><button class="action ${checkin?.completed === false ? "primary" : ""}" data-checkin="${assignment.exercise_id}" data-completed="false">No fet</button></div></article>`;
   }).join("") : empty("No tens treball a casa assignat.");
   target.querySelectorAll("[data-checkin]").forEach(button => button.addEventListener("click", async () => {
     try {
@@ -476,12 +494,12 @@ async function start() {
     if (!jugador || session.role !== "player" || !session.player) return showAccessDisabled();
     state.player = session.player;
     const id = state.player.id;
-    const [events, attendance, goals, assignments, progress, routines, stats, followUp, exams, mvp, convocations, standings, checkins] = await Promise.all([
+    const [events, attendance, goals, assignments, progress, routines, stats, followUp, exams, mvp, convocations, standings, checkins, weeklyPlan] = await Promise.all([
       api("/events"), api(`/attendance/${id}`), api(`/goals/player/${id}`),
       api(`/exercises/player/${id}`), api(`/exercise-progress/player/${id}`),
       api(`/routines/player/${id}`), api(`/player-stats/player/${id}`),
       api(`/seguiment/player/${id}`), api(`/exam-periods/player/${id}`), api(`/mvp/player/${id}`),
-      api(`/convocations/player/${id}`), api(`/standings?season=${encodeURIComponent(season)}`), api(`/exercise-checkins/player/${id}`)
+      api(`/convocations/player/${id}`), api(`/standings?season=${encodeURIComponent(season)}`), api(`/exercise-checkins/player/${id}`), api(`/weekly-plan/player/${id}?week_start=${currentWeekStart}`)
     ]);
     attendance.forEach(item => state.attendance.set(item.event_id, item));
     progress.forEach(item => state.progress.set(item.assignment_id, item));
@@ -491,8 +509,9 @@ async function start() {
     const teamLists = await Promise.all(matches.map(event => api(`/convocations/event/${event.id}/team`)));
     matches.forEach((event, index) => state.teamConvocations.set(event.id, teamLists[index]));
     document.querySelector("#welcome").textContent = `Hola, ${state.player.name}`;
-    const activityExercises = await Promise.all(assignments.map(item => api(`/exercises/${item.exercise_id}`)));
-    renderEvents(events); renderHomeActivities(assignments, checkins, activityExercises); renderGoals(goals); await renderTraining(assignments, routines);
+    const planned = weeklyPlan.length ? weeklyPlan : assignments.map(item => ({ ...item, mandatory: false }));
+    const activityExercises = await Promise.all(planned.map(item => api(`/exercises/${item.exercise_id}`)));
+    renderEvents(events); renderHomeActivities(planned, checkins, activityExercises); renderGoals(goals); await renderTraining(assignments, routines);
     renderProgress(stats, followUp, exams, mvp);
     document.querySelector("#season-label").textContent = `Temporada ${season}`;
     renderStandings(standings);

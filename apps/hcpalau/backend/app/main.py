@@ -22,6 +22,7 @@ from .routers.exam_periods import router as exam_periods_router
 from .routers.events import router as events_router
 from .routers.exercise_progress import router as exercise_progress_router
 from .routers.exercise_checkins import router as exercise_checkins_router
+from .routers.weekly_plan import router as weekly_plan_router
 from .routers.exercises import router as exercises_router
 from .routers.goals import router as goals_router
 from .routers.mvp import router as mvp_router
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     application.include_router(exercises_router)
     application.include_router(exercise_progress_router)
     application.include_router(exercise_checkins_router)
+    application.include_router(weekly_plan_router)
     application.include_router(convocations_router)
     application.include_router(routines_router)
     application.include_router(exam_periods_router)

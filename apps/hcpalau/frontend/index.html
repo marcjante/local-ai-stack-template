@@ -208,6 +208,14 @@
             <label>Repeticions objectiu<input name="target_repetitions" type="number" min="1" value="1" required></label>
             <button class="action primary" type="submit">Afegir a rutina</button>
           </form>
+          <form id="weekly-plan-form" class="card form-grid">
+            <h3 class="wide">Pla setmanal d'exercicis</h3>
+            <label>Jugador<select name="player_id" required></select></label>
+            <label>Setmana (dilluns)<input name="week_start" type="date" required></label>
+            <label class="wide">Exercicis<select name="exercise_ids" multiple size="7" required></select></label>
+            <label class="checkbox"><input name="mandatory" type="checkbox"> Marcar com a obligatori (estiraments)</label>
+            <button class="action primary" type="submit">Enviar pla setmanal</button>
+          </form>
           <form id="exam-form" class="card form-grid">
             <h3 class="wide">Període d'exàmens</h3>
             <label class="wide">Jugador<select name="player_id" required></select></label>

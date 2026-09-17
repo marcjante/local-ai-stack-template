@@ -94,6 +94,17 @@ class ExerciseCheckin(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class WeeklyExercise(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("player_id", "week_start", "exercise_id"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    exercise_id: int = Field(foreign_key="exercise.id", index=True)
+    week_start: date = Field(index=True)
+    mandatory: bool = False
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class Convocation(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("event_id", "player_id"),)
 
