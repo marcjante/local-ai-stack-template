@@ -21,13 +21,24 @@ class Settings:
 
 
 def get_settings() -> Settings:
-    origins = os.getenv(
-        "HCPALAU_CORS_ORIGINS",
-        "http://localhost:8000,http://127.0.0.1:8000",
+    origins = os.getenv("HCPALAU_CORS_ORIGINS") or os.getenv("CORS_ORIGINS") or (
+        "http://localhost:8000,http://127.0.0.1:8000"
     )
     return Settings(
-        database_url=os.getenv("HCPALAU_DATABASE_URL", DEFAULT_DATABASE_URL),
-        admin_token=os.getenv("HCPALAU_ADMIN_TOKEN", "dev-admin-token"),
+        database_url=(
+            os.getenv("HCPALAU_DATABASE_URL")
+            or os.getenv("DATABASE_URL")
+            or DEFAULT_DATABASE_URL
+        ),
+        admin_token=(
+            os.getenv("HCPALAU_ADMIN_TOKEN")
+            or os.getenv("ADMIN_TOKEN")
+            or "dev-admin-token"
+        ),
         cors_origins=tuple(origin.strip() for origin in origins.split(",") if origin.strip()),
-        video_dir=Path(os.getenv("HCPALAU_VIDEO_DIR", str(DEFAULT_VIDEO_DIR))),
+        video_dir=Path(
+            os.getenv("HCPALAU_VIDEO_DIR")
+            or os.getenv("VIDEO_DIR")
+            or str(DEFAULT_VIDEO_DIR)
+        ),
     )

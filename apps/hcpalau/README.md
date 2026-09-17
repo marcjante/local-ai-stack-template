@@ -34,6 +34,9 @@ http://127.0.0.1:8000/app/?token=<HCPALAU_ADMIN_TOKEN>
 El contracte funcional, els rols i els endpoints també estan documentats a
 [`docs/api-spec.md`](docs/api-spec.md).
 
+La preparació de contenidor i els passos de desplegament són a
+[`docs/deploy.md`](docs/deploy.md).
+
 ## Proves
 
 ```bash
