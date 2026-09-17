@@ -107,3 +107,25 @@ class ConvocationRead(ConvocationUpdate):
     event_id: int
     player_id: int
     updated_at: datetime
+
+
+class RoutineCreate(SQLModel):
+    player_id: int
+    title: str = Field(min_length=1, max_length=160)
+
+
+class RoutineRead(RoutineCreate):
+    id: int
+    active: bool
+    created_at: datetime
+
+
+class RoutineExerciseCreate(SQLModel):
+    exercise_id: int
+    position: int = Field(ge=1)
+    target_repetitions: int = Field(default=1, ge=1)
+
+
+class RoutineExerciseRead(RoutineExerciseCreate):
+    id: int
+    routine_id: int

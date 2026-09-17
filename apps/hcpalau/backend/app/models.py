@@ -91,3 +91,26 @@ class Convocation(SQLModel, table=True):
     selection_status: str = Field(max_length=32)
     note: Optional[str] = Field(default=None, max_length=500)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class Routine(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    title: str = Field(max_length=160)
+    active: bool = True
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class RoutineExercise(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("routine_id", "exercise_id"),
+        UniqueConstraint("routine_id", "position"),
+        CheckConstraint("position >= 1"),
+        CheckConstraint("target_repetitions >= 1"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    routine_id: int = Field(foreign_key="routine.id", index=True)
+    exercise_id: int = Field(foreign_key="exercise.id", index=True)
+    position: int = Field(ge=1)
+    target_repetitions: int = Field(default=1, ge=1)
