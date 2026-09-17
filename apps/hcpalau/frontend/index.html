@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#8b1538">
+  <title>HC Palau · Infantil D</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="loading" class="state-screen">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Carregant el teu espai…</p>
+  </div>
+
+  <main id="access-disabled" class="state-screen hidden" aria-live="assertive">
+    <div class="state-card">
+      <span class="state-icon" aria-hidden="true">🔒</span>
+      <h1>Accés desactivat</h1>
+      <p>No podem validar aquest enllaç. Demana al teu entrenador un accés nou.</p>
+    </div>
+  </main>
+
+  <div id="portal" class="hidden">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">HC Palau · Infantil D</p>
+        <h1 id="welcome">Hola</h1>
+      </div>
+      <div class="crest" aria-hidden="true">HCP</div>
+    </header>
+
+    <nav class="tabs" aria-label="Seccions del jugador">
+      <button class="tab active" data-tab="agenda">Agenda</button>
+      <button class="tab" data-tab="goals">Objectius</button>
+      <button class="tab" data-tab="training">Treball</button>
+      <button class="tab" data-tab="progress">Progrés</button>
+    </nav>
+
+    <main class="content">
+      <section id="agenda" class="panel active" aria-labelledby="agenda-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Properes dates</p><h2 id="agenda-title">Agenda</h2></div>
+        </div>
+        <div id="events-list" class="card-list"></div>
+      </section>
+
+      <section id="goals" class="panel" aria-labelledby="goals-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Repte personal</p><h2 id="goals-title">Objectius</h2></div>
+        </div>
+        <div id="goals-list" class="card-list"></div>
+      </section>
+
+      <section id="training" class="panel" aria-labelledby="training-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Pla individual</p><h2 id="training-title">Exercicis i rutines</h2></div>
+        </div>
+        <div id="exercises-list" class="card-list"></div>
+        <h3>Rutines</h3>
+        <div id="routines-list" class="card-list compact"></div>
+      </section>
+
+      <section id="progress" class="panel" aria-labelledby="progress-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">La teva temporada</p><h2 id="progress-title">Progrés</h2></div>
+        </div>
+        <div class="metrics" id="metrics"></div>
+        <h3>Seguiment</h3>
+        <div id="follow-up-list" class="card-list compact"></div>
+        <h3>Períodes d'exàmens</h3>
+        <div id="exam-list" class="card-list compact"></div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </div>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>

@@ -57,6 +57,7 @@ mai s'inclou al perfil retornat a un jugador.
 | `PATCH` | `/goals/{goal_id}/done` | A/P propietari | Marca `done`; P no pot revertir `true` a `false`. |
 | `POST` | `/exercises` | A | Crea un exercici de catàleg. |
 | `GET` | `/exercises` | A | Llista el catàleg. |
+| `GET` | `/exercises/{exercise_id}` | A/P | Retorna el detall d'un exercici assignat o referenciat. |
 | `POST` | `/exercises/{exercise_id}/video` | A | Multipart `video`; només `.mp4`/`.webm`, màxim 30 MB. |
 | `POST` | `/exercises/{exercise_id}/assign/{player_id}` | A | Assignació individual; no existeix assignació massiva. |
 | `GET` | `/exercises/player/{player_id}` | A/P propi | Assignacions individuals. |

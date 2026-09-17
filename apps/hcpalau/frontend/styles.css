@@ -1,0 +1,64 @@
+:root {
+  color-scheme: light;
+  --wine: #8b1538;
+  --wine-dark: #5e0d25;
+  --gold: #e9b949;
+  --ink: #242126;
+  --muted: #6f6872;
+  --paper: #f7f3ef;
+  --card: #ffffff;
+  --line: #e7dfe2;
+  --success: #247a52;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); min-height: 100vh; }
+button { font: inherit; }
+.hidden { display: none !important; }
+
+.state-screen { min-height: 100vh; display: grid; place-items: center; padding: 2rem; text-align: center; }
+.state-card { max-width: 28rem; background: var(--card); border: 1px solid var(--line); border-radius: 1.5rem; padding: 2.5rem; box-shadow: 0 1rem 3rem #4d14231a; }
+.state-icon { font-size: 2.5rem; }
+.spinner { width: 2.5rem; height: 2.5rem; border: .25rem solid #dccbd1; border-top-color: var(--wine); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.topbar { background: linear-gradient(135deg, var(--wine-dark), var(--wine)); color: white; padding: 1.5rem max(1.25rem, calc((100vw - 70rem) / 2)); display: flex; justify-content: space-between; align-items: center; }
+.topbar h1 { margin: .15rem 0 0; font-size: clamp(1.6rem, 4vw, 2.4rem); }
+.eyebrow { margin: 0; text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; font-weight: 800; color: var(--wine); }
+.topbar .eyebrow { color: #f2cbd6; }
+.crest { width: 3.4rem; height: 3.4rem; display: grid; place-items: center; border: 2px solid var(--gold); border-radius: 50%; color: var(--gold); font-weight: 900; }
+
+.tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: .25rem; overflow-x: auto; background: var(--card); border-bottom: 1px solid var(--line); padding: 0 max(1rem, calc((100vw - 70rem) / 2)); }
+.tab { border: 0; background: transparent; padding: 1rem .85rem .8rem; color: var(--muted); white-space: nowrap; border-bottom: .2rem solid transparent; cursor: pointer; }
+.tab.active { color: var(--wine); border-bottom-color: var(--wine); font-weight: 800; }
+
+.content { max-width: 70rem; margin: auto; padding: 1.5rem 1rem 5rem; }
+.panel { display: none; }
+.panel.active { display: block; }
+.section-heading { display: flex; justify-content: space-between; align-items: end; margin-bottom: 1rem; }
+h2 { margin: .2rem 0 0; font-size: 1.8rem; }
+h3 { margin: 2rem 0 .75rem; }
+.card-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: .9rem; }
+.card-list.compact { grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; padding: 1rem; box-shadow: 0 .35rem 1.2rem #4812220a; }
+.card h3, .card h4 { margin: 0 0 .4rem; }
+.card p { color: var(--muted); margin: .3rem 0; line-height: 1.45; }
+.meta { font-size: .82rem; font-weight: 700; color: var(--wine) !important; }
+.actions { display: flex; gap: .5rem; margin-top: .9rem; }
+.action { border: 1px solid var(--wine); border-radius: .65rem; background: white; color: var(--wine); padding: .55rem .75rem; cursor: pointer; font-weight: 750; }
+.action.primary { color: white; background: var(--wine); }
+.action:disabled { opacity: .55; cursor: default; }
+.done { border-left: .35rem solid var(--success); }
+.empty { padding: 1.5rem; color: var(--muted); background: #ffffff99; border: 1px dashed #cdbec3; border-radius: 1rem; }
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .75rem; }
+.metric { background: var(--wine); color: white; border-radius: 1rem; padding: 1rem; }
+.metric strong { display: block; font-size: 1.8rem; }
+.metric span { color: #f2cbd6; font-size: .8rem; }
+.toast { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); background: var(--ink); color: white; padding: .75rem 1rem; border-radius: .75rem; box-shadow: 0 .5rem 2rem #0004; }
+
+@media (min-width: 48rem) {
+  .topbar { padding-top: 2rem; padding-bottom: 2rem; }
+  .content { padding-top: 2rem; }
+}

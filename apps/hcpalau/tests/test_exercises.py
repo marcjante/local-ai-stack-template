@@ -49,6 +49,19 @@ def test_exercise_assignment_is_individual(client, admin_headers) -> None:
     assert pau_response.json() == []
 
 
+def test_active_player_can_read_exercise_details(client, admin_headers) -> None:
+    create_player(client, admin_headers)
+    exercise = create_exercise(client, admin_headers)
+
+    response = client.get(
+        f"/exercises/{exercise['id']}",
+        headers={"Authorization": "Bearer biel-player-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == exercise
+
+
 def test_mov_video_is_rejected(client, admin_headers, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("HCPALAU_VIDEO_DIR", str(tmp_path))
     exercise = create_exercise(client, admin_headers)

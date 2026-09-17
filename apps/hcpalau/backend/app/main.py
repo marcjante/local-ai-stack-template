@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .database import create_db_and_tables
@@ -24,6 +26,9 @@ from .routers.routines import router as routines_router
 from .routers.seguiment import router as seguiment_router
 from .routers.session import router as session_router
 from .routers.standings import router as standings_router
+
+
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 
 
 @asynccontextmanager
@@ -65,6 +70,8 @@ def create_app() -> FastAPI:
     @application.get("/health", tags=["system"])
     def health() -> dict[str, str]:
         return {"status": "ok", "service": "hcpalau"}
+
+    application.mount("/app", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
     return application
 

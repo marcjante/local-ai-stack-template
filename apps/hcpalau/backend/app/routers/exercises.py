@@ -43,6 +43,18 @@ def list_exercises(
     return list(session.exec(select(Exercise).order_by(Exercise.title)))
 
 
+@router.get("/{exercise_id}", response_model=ExerciseRead)
+def get_exercise(
+    exercise_id: int,
+    _: Principal = Depends(get_current_principal),
+    session: Session = Depends(get_session),
+) -> Exercise:
+    exercise = session.get(Exercise, exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercise not found")
+    return exercise
+
+
 @router.post("/{exercise_id}/video", response_model=ExerciseRead)
 async def upload_exercise_video(
     exercise_id: int,
