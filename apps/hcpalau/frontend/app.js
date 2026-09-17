@@ -533,6 +533,8 @@ function renderEvents(events) {
       </div>
     </article>`;
   }).join("") : empty("No hi ha esdeveniments programats.");
+  const absences = events.filter(event => state.attendance.get(event.id)?.attending === false);
+  if (absences.length) target.insertAdjacentHTML("afterbegin", `<div class="absence-alert" role="alert"><strong>Avís d'assistència</strong><span>${absences.map(event => `${escapeHtml(event.title)}: ${escapeHtml(state.attendance.get(event.id).absence_reason || "No assistiré")}`).join(" · ")}</span></div>`);
 
   target.querySelectorAll("[data-attendance]").forEach(button => button.addEventListener("click", async () => {
     if (button.dataset.value === "false") {
@@ -623,11 +625,19 @@ async function renderTraining(assignments, routines) {
   routineTarget.innerHTML = routines.length ? routines.map(routine => `<article class="card"><h4>${escapeHtml(routine.title)}</h4><p>${routine.active ? "Rutina activa" : "Rutina finalitzada"}</p></article>`).join("") : empty("No hi ha rutines actives.");
 }
 
-function renderProgress(stats, followUp, mvp) {
+function renderProgress(stats, followUp, mvp, attendance, goals, assignments, progress) {
   const totals = stats.reduce((sum, row) => ({ games: sum.games + row.games, goals: sum.goals + row.goals, assists: sum.assists + row.assists }), { games: 0, goals: 0, assists: 0 });
+  const attended = attendance.filter(item => item.attending).length;
+  const attendancePercent = attendance.length ? Math.round(attended * 100 / attendance.length) : 0;
+  const latest = progress.reduce((row, item) => !row || `${item.iso_year}-${item.iso_week}` > `${row.iso_year}-${row.iso_week}` ? item : row, null);
+  const latestRows = latest ? progress.filter(item => item.iso_year === latest.iso_year && item.iso_week === latest.iso_week) : [];
+  const exercisePercent = assignments.length ? Math.round(latestRows.reduce((sum, item) => sum + item.repetitions, 0) * 100 / (assignments.length * 3)) : 0;
   document.querySelector("#metrics").innerHTML = [
-    [totals.games, "Partits"], [totals.goals, "Gols"], [totals.assists, "Assistències"], [mvp.length, "MVP"]
+    [attendancePercent + "%", "Assistència"], [exercisePercent + "%", "Exercicis aquesta setmana"], [`${goals.filter(goal => goal.done).length}/${goals.length}`, "Objectius complerts"], [mvp.length, "MVP"], [totals.games, "Partits"]
   ].map(([value, label]) => `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`).join("");
+  const weeks = [...new Set(progress.map(item => `${item.iso_year}-${item.iso_week}`))].sort().slice(-6);
+  const history = weeks.map(key => { const rows = progress.filter(item => `${item.iso_year}-${item.iso_week}` === key); const percent = assignments.length ? Math.round(rows.reduce((sum, item) => sum + item.repetitions, 0) * 100 / (assignments.length * 3)) : 0; return `<div class="history-row"><span>Setmana ${key.split("-")[1]}</span><div class="bar exercise"><i style="width:${percent}%"></i></div><strong>${percent}%</strong></div>`; }).join("");
+  document.querySelector("#follow-up-list").insertAdjacentHTML("beforebegin", `<div class="weekly-history"><h3>Historial setmanal</h3>${history || `<p class="note">Encara no hi ha dades setmanals.</p>`}</div>`);
   document.querySelector("#follow-up-list").innerHTML = followUp.length ? followUp.map(item => `<article class="card"><p class="meta">${escapeHtml(item.observed_on)} · ${escapeHtml(item.category)}</p><p>${escapeHtml(item.note)}</p></article>`).join("") : empty("Encara no hi ha observacions compartides.");
 }
 
@@ -660,7 +670,7 @@ async function start() {
     const planned = weeklyPlan.length ? weeklyPlan : assignments.map(item => ({ ...item, mandatory: false }));
     const activityExercises = await Promise.all(planned.map(item => api(`/exercises/${item.exercise_id}`)));
     renderEvents(events); renderEventVideos(videosByEvent, events); renderHomeActivities(planned, checkins, activityExercises); renderGoals(goals); await renderTraining(assignments, routines);
-    renderProgress(stats, followUp, mvp);
+    renderProgress(stats, followUp, mvp, attendance, goals, assignments, progress);
     document.querySelector("#season-label").textContent = `Temporada ${season}`;
     renderStandings(standings);
     setupTabs();
