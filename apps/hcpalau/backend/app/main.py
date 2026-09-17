@@ -11,6 +11,7 @@ from .config import get_settings
 from .database import create_db_and_tables
 from .routers.attendance import router as attendance_router
 from .routers.events import router as events_router
+from .routers.goals import router as goals_router
 from .routers.players import router as players_router
 
 
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     application.include_router(players_router)
     application.include_router(events_router)
     application.include_router(attendance_router)
+    application.include_router(goals_router)
 
     @application.get("/health", tags=["system"])
     def health() -> dict[str, str]:

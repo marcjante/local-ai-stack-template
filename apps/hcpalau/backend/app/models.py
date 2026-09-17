@@ -39,3 +39,13 @@ class Attendance(SQLModel, table=True):
     player_id: int = Field(foreign_key="player.id", index=True)
     attending: bool
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class Goal(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    title: str = Field(max_length=160)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    done: bool = False
+    created_at: datetime = Field(default_factory=utc_now)
+    done_at: Optional[datetime] = None

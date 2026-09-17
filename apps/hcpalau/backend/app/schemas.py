@@ -51,3 +51,20 @@ class AttendanceRead(AttendanceUpdate):
     event_id: int
     player_id: int
     updated_at: datetime
+
+
+class GoalCreate(SQLModel):
+    player_id: int
+    title: str = Field(min_length=1, max_length=160)
+    description: Optional[str] = Field(default=None, max_length=1000)
+
+
+class GoalRead(GoalCreate):
+    id: int
+    done: bool
+    created_at: datetime
+    done_at: Optional[datetime]
+
+
+class GoalDoneUpdate(SQLModel):
+    done: bool
