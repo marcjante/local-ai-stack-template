@@ -183,3 +183,20 @@ class FollowUpCreate(SQLModel):
 class FollowUpRead(FollowUpCreate):
     id: int
     created_at: datetime
+
+
+class ReinforcementCreate(SQLModel):
+    event_id: int
+    player_name: str = Field(min_length=1, max_length=120)
+    source_team: str = Field(min_length=1, max_length=160)
+    playing_position: Literal["goalkeeper", "field"]
+
+
+class ReinforcementRead(ReinforcementCreate):
+    id: int
+    confirmed: bool
+    created_at: datetime
+
+
+class ReinforcementConfirmationUpdate(SQLModel):
+    confirmed: bool

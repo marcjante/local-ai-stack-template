@@ -171,3 +171,15 @@ class FollowUp(SQLModel, table=True):
     note: str = Field(max_length=2000)
     visible_to_player: bool = False
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class Reinforcement(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("event_id", "player_name", "source_team"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="event.id", index=True)
+    player_name: str = Field(max_length=120)
+    source_team: str = Field(max_length=160)
+    playing_position: str = Field(max_length=32)
+    confirmed: bool = False
+    created_at: datetime = Field(default_factory=utc_now)
