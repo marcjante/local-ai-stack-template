@@ -25,3 +25,4 @@ workers/plugins.backup/
 apps/hcpalau/.venv/
 apps/hcpalau/hcpalau.db
 apps/hcpalau/.pytest_cache/
+apps/hcpalau/uploads/

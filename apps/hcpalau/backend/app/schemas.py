@@ -68,3 +68,30 @@ class GoalRead(GoalCreate):
 
 class GoalDoneUpdate(SQLModel):
     done: bool
+
+
+class ExerciseCreate(SQLModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ExerciseRead(ExerciseCreate):
+    id: int
+    video_filename: Optional[str]
+    created_at: datetime
+
+
+class ExerciseAssignmentRead(SQLModel):
+    id: int
+    exercise_id: int
+    player_id: int
+    assigned_at: datetime
+
+
+class ExerciseProgressRead(SQLModel):
+    id: int
+    assignment_id: int
+    iso_year: int
+    iso_week: int
+    repetitions: int
+    updated_at: datetime

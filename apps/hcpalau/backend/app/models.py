@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import CheckConstraint, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -49,3 +49,34 @@ class Goal(SQLModel, table=True):
     done: bool = False
     created_at: datetime = Field(default_factory=utc_now)
     done_at: Optional[datetime] = None
+
+
+class Exercise(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(max_length=160)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    video_filename: Optional[str] = Field(default=None, max_length=255)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ExerciseAssignment(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("exercise_id", "player_id"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    exercise_id: int = Field(foreign_key="exercise.id", index=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    assigned_at: datetime = Field(default_factory=utc_now)
+
+
+class ExerciseProgress(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("assignment_id", "iso_year", "iso_week"),
+        CheckConstraint("repetitions >= 0 AND repetitions <= 3"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    assignment_id: int = Field(foreign_key="exerciseassignment.id", index=True)
+    iso_year: int
+    iso_week: int
+    repetitions: int = Field(default=0, ge=0, le=3)
+    updated_at: datetime = Field(default_factory=utc_now)
