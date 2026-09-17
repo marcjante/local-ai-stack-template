@@ -17,6 +17,10 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
+from sqlmodel import Session, select
+
+from backend.app.models import Standing as StandingModel, utc_now
+
 
 SOURCE_URL = "https://www.hoqueipatins.fecapa.cat/league/4786"
 DEFAULT_GROUP = "INFANTIL OR 9"
@@ -155,6 +159,31 @@ def fetch_acta_links(url: str = SOURCE_URL) -> list[str]:
     with urlopen(request, timeout=20) as response:
         html = response.read().decode("utf-8", errors="replace")
         return extract_acta_links(html, base_url=url)
+
+
+def upsert_standings(rows: list[Standing], session: Session, *, season: str = "2026-27") -> int:
+    """Persist a parsed group idempotently and return the number of rows saved."""
+    for row in rows:
+        current = session.exec(
+            select(StandingModel).where(
+                StandingModel.season == season,
+                StandingModel.team == row.team,
+            )
+        ).first()
+        if current is None:
+            current = StandingModel(season=season, team=row.team)
+        current.position = row.position
+        current.played = row.played
+        current.won = row.won
+        current.drawn = row.drawn
+        current.lost = row.lost
+        current.goals_for = row.goals_for
+        current.goals_against = row.goals_against
+        current.points = row.points
+        current.updated_at = utc_now()
+        session.add(current)
+    session.commit()
+    return len(rows)
 
 
 def main() -> None:

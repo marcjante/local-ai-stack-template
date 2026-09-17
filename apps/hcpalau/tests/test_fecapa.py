@@ -2,7 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from integrations.local_ai_stack.sync_fecapa import extract_acta_links, fetch_acta_links, parse_standings_html
+from sqlmodel import SQLModel, Session, select
+
+from backend.app.database import build_engine
+from backend.app.models import Standing
+from integrations.local_ai_stack.sync_fecapa import (
+    extract_acta_links,
+    fetch_acta_links,
+    parse_standings_html,
+    upsert_standings,
+)
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fecapa_infantil_or9.html"
@@ -45,3 +54,16 @@ def test_fetch_acta_links_uses_the_competition_page(monkeypatch) -> None:
     assert fetch_acta_links("https://fecapa.example/league/4786") == [
         "https://fecapa.example/acta/77"
     ]
+
+
+def test_upsert_standings_is_idempotent(tmp_path) -> None:
+    engine = build_engine(f"sqlite:///{tmp_path / 'fecapa.db'}")
+    SQLModel.metadata.create_all(engine)
+    rows = parse_standings_html(FIXTURE.read_text())
+
+    with Session(engine) as session:
+        assert upsert_standings(rows, session) == 2
+        assert upsert_standings(rows, session) == 2
+        saved = session.exec(select(Standing)).all()
+
+    assert len(saved) == 2
