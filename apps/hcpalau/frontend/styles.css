@@ -129,12 +129,22 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 .attendance-percent strong { color: var(--gold); font-size: 1.2rem; margin-left: .3rem; }
 .attendance-percent span { color: #ddd; font-size: .8rem; }
 .attendance-events { display: grid; gap: .5rem; margin-bottom: 1rem; }
+.activity-filters { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-bottom: 1rem; }
 .attendance-event { display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap; padding: .7rem .85rem; border-radius: .65rem; background: #111; color: white; }
 .attendance-event span { flex: 1 1 14rem; font-weight: 750; }
 .attendance-event strong { color: var(--gold); font-size: 1.35rem; }
 .attendance-event small { color: #ddd; }
 .exercise-percent { margin: .65rem 0 !important; color: var(--muted); }
 .exercise-percent strong { color: var(--wine); font-size: 1.1rem; }
+.week-calendar { margin-top: 1.25rem; }
+.week-calendar h3 { margin: 0 0 .65rem; }
+.week-grid { display: grid; grid-template-columns: repeat(7, minmax(7rem, 1fr)); gap: .45rem; overflow-x: auto; }
+.week-day { min-height: 7rem; padding: .6rem; border: 1px solid var(--line); border-radius: .65rem; background: #fff; display: grid; align-content: start; gap: .4rem; }
+.week-day > strong { text-transform: capitalize; color: var(--wine); font-size: .8rem; }
+.week-day em { color: #aaa; }
+.week-event { display: grid; gap: .1rem; padding: .4rem; border-radius: .45rem; background: #fff3a6; font-size: .74rem; font-weight: 750; }
+.week-event.match { background: #111; color: #fff; }
+.week-event small { font-weight: 500; opacity: .75; }
 .event-video-card { display: grid; gap: .7rem; min-width: 0; }
 .event-video-card h4 { margin: 0; overflow-wrap: anywhere; }
 .event-video-card .action { justify-self: start; }
@@ -172,6 +182,7 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .wide { grid-column: auto; }
   .form-grid > .action { width: 100%; }
+  .activity-filters { grid-template-columns: 1fr; }
   .whiteboard-card { grid-template-columns: auto 1fr; }
   .whiteboard-action { grid-column: 1 / -1; justify-content: center; }
   .sponsors { gap: .35rem; }

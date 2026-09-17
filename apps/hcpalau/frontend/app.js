@@ -21,6 +21,7 @@ const currentWeekStart = weekDate.toISOString().slice(0, 10);
 
 const state = { player: null, attendance: new Map(), progress: new Map(), checkins: new Map(), convocations: new Map(), teamConvocations: new Map() };
 let adminLoadInFlight = false;
+let adminActivityItems = [];
 const dateFormat = new Intl.DateTimeFormat("ca-ES", { dateStyle: "medium", timeStyle: "short" });
 
 async function api(path, options = {}) {
@@ -132,6 +133,7 @@ function renderAdminEventVideos(videos, events) {
 }
 
 function renderAdminActivity(items, players, assignmentsByPlayer, exercises, attendanceSummary, progressByPlayer) {
+  adminActivityItems = items;
   const latest = new Map();
   items.filter(item => item.kind === "checkin").forEach(item => latest.set(`${item.player}:${item.label}`, item));
   const exerciseById = new Map(exercises.map(exercise => [exercise.id, exercise]));
@@ -153,6 +155,27 @@ function renderAdminActivity(items, players, assignmentsByPlayer, exercises, att
     const exercisePercent = assignments.length ? Math.round(weekRows.reduce((sum, row) => sum + row.repetitions, 0) * 100 / (assignments.length * 3)) : null;
     return `<article class="card player-activity"><h3>${escapeHtml(player.name)}</h3><p class="meta">Assistència a entrenaments i partits</p>${attendance ? `<ul class="task-list">${attendance}</ul>` : `<p class="note">Encara no ha confirmat cap dia.</p>`}<p class="attendance-percent">Assistència total <strong>${percentage}</strong>${summary?.total ? ` <span>(${summary.attending}/${summary.total})</span>` : ""}</p><details class="activity-exercises"><summary>Exercicis i estiraments${assignments.length ? ` (${assignments.length})` : ""}</summary><p class="exercise-percent">Aquesta setmana: <strong>${exercisePercent == null ? "Sense dades" : `${exercisePercent}%`}</strong></p>${tasks ? `<ul class="task-list">${tasks}</ul>` : `<p class="note">No té exercicis assignats.</p>`}</details></article>`;
   }).join("") || empty("Encara no hi ha jugadors.");
+}
+
+function setupActivityFilters(players) {
+  const select = document.querySelector("#activity-player-filter");
+  if (select.dataset.ready) return;
+  select.dataset.ready = "true";
+  select.innerHTML = `<option value="">Tots els jugadors</option>${players.map(player => `<option value="${escapeHtml(player.name)}">${escapeHtml(player.name)}</option>`).join("")}`;
+  const apply = () => {
+    const player = select.value;
+    const date = document.querySelector("#activity-date-filter").value;
+    const filtered = adminActivityItems.filter(item => (!player || item.player === player) && (!date || String(item.event_date || item.updated_at).slice(0, 10) === date));
+    document.querySelectorAll("#admin-activity .player-activity").forEach(card => { card.classList.toggle("hidden", player && card.querySelector("h3")?.textContent !== player); });
+    if (date) document.querySelectorAll("#admin-activity .player-activity").forEach(card => { if (!filtered.some(item => item.player === card.querySelector("h3")?.textContent)) card.classList.add("hidden"); });
+  };
+  select.addEventListener("change", apply); document.querySelector("#activity-date-filter").addEventListener("change", apply);
+}
+
+function renderAdminWeekCalendar(events) {
+  const start = new Date(); const day = start.getDay() || 7; start.setDate(start.getDate() - day + 1); start.setHours(0, 0, 0, 0);
+  const days = [...Array(7)].map((_, index) => { const date = new Date(start); date.setDate(start.getDate() + index); const key = date.toISOString().slice(0, 10); const rows = events.filter(event => event.starts_at.slice(0, 10) === key); return `<div class="week-day"><strong>${new Intl.DateTimeFormat("ca-ES", { weekday: "short", day: "numeric" }).format(date)}</strong>${rows.map(event => `<span class="week-event ${event.event_type}">${escapeHtml(event.title)}<small>${new Intl.DateTimeFormat("ca-ES", { timeStyle: "short" }).format(new Date(event.starts_at))}</small></span>`).join("") || `<em>—</em>`}</div>`; }).join("");
+  document.querySelector("#admin-week-calendar").innerHTML = `<h3>Calendari d'aquesta setmana</h3><div class="week-grid">${days}</div>`;
 }
 
 function renderEventAttendanceSummary(rows) {
@@ -220,6 +243,8 @@ async function loadAdmin() {
   renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); await renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
   renderStandings(standings, "#admin-standings-body");
   renderAdminActivity(activity, players, assignmentsByPlayer, exercises, attendanceSummary, progressByPlayer);
+  setupActivityFilters(players);
+  renderAdminWeekCalendar(events);
   renderEventAttendanceSummary(eventAttendanceSummary);
   renderAdminEventVideos(eventVideos, events);
   renderAdminGoals(goalsByPlayer, players);
