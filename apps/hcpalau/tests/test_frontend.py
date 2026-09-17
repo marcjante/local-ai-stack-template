@@ -105,3 +105,9 @@ def test_unconfigured_whiteboard_link_is_visually_disabled(client) -> None:
 
     assert ".action.disabled" in styles
     assert "pointer-events: none" in styles
+
+
+def test_whiteboard_uses_the_deployed_default_url(client) -> None:
+    javascript = client.get("/app/app.js").text
+
+    assert "https://marcjante.github.io/Pizarra-hoquei/" in javascript

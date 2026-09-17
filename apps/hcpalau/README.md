@@ -34,8 +34,9 @@ jugador:
 http://127.0.0.1:8000/app/?token=<HCPALAU_ADMIN_TOKEN>
 ```
 
-La integració Opció A amb la pissarra tàctica externa es configura afegint la
-URL desplegada a l'enllaç de l'entrenador:
+La integració Opció A amb la pissarra tàctica externa apunta per defecte a
+`https://marcjante.github.io/Pizarra-hoquei/`. També es pot substituir afegint
+la URL desplegada a l'enllaç de l'entrenador:
 
 ```text
 http://127.0.0.1:8000/app/?token=<HCPALAU_ADMIN_TOKEN>&pissarra=https%3A%2F%2Fpissarra.example

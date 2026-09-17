@@ -4,7 +4,7 @@ const params = new URLSearchParams(window.location.search);
 const token = params.get("token") || "";
 const jugador = params.get("jugador") || "";
 const API_BASE = (params.get("api") || window.location.origin).replace(/\/$/, "");
-const whiteboardCandidate = params.get("pissarra") || "";
+const whiteboardCandidate = params.get("pissarra") || "https://marcjante.github.io/Pizarra-hoquei/";
 const whiteboardUrl = /^https?:\/\//i.test(whiteboardCandidate) ? whiteboardCandidate : "";
 const requestedPollSeconds = Number(params.get("poll"));
 const adminPollMs = Number.isFinite(requestedPollSeconds) && requestedPollSeconds >= 5 && requestedPollSeconds <= 60
