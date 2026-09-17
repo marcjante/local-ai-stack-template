@@ -133,7 +133,7 @@ function renderAdminActivity(items, players, assignmentsByPlayer, exercises) {
       return `<li><span>${escapeHtml(exercise?.title || "Exercici")}</span><strong class="task-status ${status === "Fet" ? "done" : status === "No fet" ? "missed" : "pending"}">${status}</strong></li>`;
     }).join("");
     const attendance = items.filter(item => item.kind === "attendance" && item.player === player.name).map(item => `<li><span>${escapeHtml(item.label)}</span><strong class="task-status ${item.value ? "done" : "missed"}">${item.value ? "Sí" : "No"}</strong></li>`).join("");
-    return `<article class="card player-activity"><h3>${escapeHtml(player.name)}</h3><p class="meta">Assistència a entrenaments i partits</p>${attendance ? `<ul class="task-list">${attendance}</ul>` : `<p class="note">Encara no ha confirmat cap dia.</p>`}<p class="meta activity-subtitle">Exercicis i estiraments</p>${tasks ? `<ul class="task-list">${tasks}</ul>` : `<p class="note">No té exercicis assignats.</p>`}</article>`;
+    return `<article class="card player-activity"><h3>${escapeHtml(player.name)}</h3><p class="meta">Assistència a entrenaments i partits</p>${attendance ? `<ul class="task-list">${attendance}</ul>` : `<p class="note">Encara no ha confirmat cap dia.</p>`}<details class="activity-exercises"><summary>Exercicis i estiraments${assignments.length ? ` (${assignments.length})` : ""}</summary>${tasks ? `<ul class="task-list">${tasks}</ul>` : `<p class="note">No té exercicis assignats.</p>`}</details></article>`;
   }).join("") || empty("Encara no hi ha jugadors.");
 }
 
