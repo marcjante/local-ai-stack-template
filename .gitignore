@@ -20,3 +20,8 @@ workers/plugins.backup/
 
 .runtime/
 *.bak
+
+# Isolated HC Palau app runtime data
+apps/hcpalau/.venv/
+apps/hcpalau/hcpalau.db
+apps/hcpalau/.pytest_cache/
