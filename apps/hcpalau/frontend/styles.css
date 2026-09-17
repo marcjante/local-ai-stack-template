@@ -34,14 +34,14 @@ label.checkbox input { width: auto; }
 .topbar .eyebrow { color: var(--gold); }
 .crest { width: 4rem; height: 4rem; display: grid; place-items: center; border: 2px solid var(--gold); border-radius: 50%; background: white; overflow: hidden; }
 .crest img { width: 100%; height: 100%; object-fit: contain; }
-.sponsors { display: flex; align-items: center; gap: .65rem; }
+.sponsors { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: .7rem; }
 .sponsor { display: inline-flex; align-items: center; justify-content: center; min-height: 3.15rem; padding: .4rem .7rem; border-radius: .65rem; font-size: .88rem; font-weight: 850; letter-spacing: -.02em; white-space: nowrap; box-shadow: 0 .25rem .7rem #0003; }
 .ok-valles { color: #111; background: var(--gold); }
-.ok-valles img { display: block; width: 7.2rem; height: 2.55rem; object-fit: contain; border-radius: .3rem; }
+.ok-valles img { display: block; width: 9rem; height: 3.4rem; object-fit: contain; border-radius: .3rem; }
 .bar-vidal { color: #fff; background: #8b1e3f; font-family: Georgia, serif; font-style: italic; }
-.bar-vidal img { display: block; width: 7.2rem; height: 2.55rem; object-fit: contain; border-radius: .3rem; }
+.bar-vidal img { display: block; width: 9rem; height: 3.4rem; object-fit: contain; border-radius: .3rem; }
 .fleca-luron { background: #f7f5ed; }
-.fleca-luron img { display: block; width: 7.2rem; height: 2.55rem; object-fit: contain; border-radius: .3rem; }
+.fleca-luron img { display: block; width: 9rem; height: 3.4rem; object-fit: contain; border-radius: .3rem; }
 
 .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: .25rem; overflow-x: auto; background: var(--card); border-bottom: 1px solid var(--line); padding: 0 max(1rem, calc((100vw - 70rem) / 2)); }
 .tab { border: 0; background: transparent; padding: 1rem .85rem .8rem; color: var(--muted); white-space: nowrap; border-bottom: .2rem solid transparent; cursor: pointer; }
@@ -149,6 +149,6 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
   .whiteboard-action { grid-column: 1 / -1; justify-content: center; }
   .sponsors { gap: .35rem; }
   .sponsor { min-height: 2.5rem; font-size: .68rem; padding: .3rem .4rem; }
-  .bar-vidal img, .ok-valles img, .fleca-luron img { width: 5rem; height: 1.9rem; }
+  .bar-vidal img, .ok-valles img, .fleca-luron img { width: 6rem; height: 2.25rem; }
   .crest { width: 3.25rem; height: 3.25rem; }
 }
