@@ -101,6 +101,7 @@ function renderAdminPlayers(players) {
     <div><p class="meta">${player.access_active ? "Accés actiu" : "Accés desactivat"}</p><h3>${escapeHtml(player.name)}</h3><p>@${escapeHtml(player.slug)}</p></div>
     <div class="actions">
       <a class="action link" href="${escapeHtml(playerLink(player))}" target="_blank" rel="noopener">Obrir enllaç</a>
+      <button class="action" type="button" data-copy-link="${escapeHtml(playerLink(player))}">Copiar enllaç</button>
       <button class="action" data-access="${player.id}" data-active="${!player.access_active}">${player.access_active ? "Desactivar" : "Activar"}</button>
     </div>
   </article>`).join("") : empty("Encara no hi ha jugadors.");
@@ -109,6 +110,10 @@ function renderAdminPlayers(players) {
       await api(`/players/${button.dataset.access}/access`, { method: "PATCH", body: JSON.stringify({ access_active: button.dataset.active === "true" }) });
       await loadAdmin(); adminToast("Accés actualitzat");
     } catch (_) { showAccessDisabled(); }
+  }));
+  target.querySelectorAll("[data-copy-link]").forEach(button => button.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(button.dataset.copyLink); adminToast("Enllaç copiat"); }
+    catch (_) { adminToast("No s'ha pogut copiar l'enllaç"); }
   }));
   const options = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
   document.querySelector("#goal-form select[name=player_id]").innerHTML = options;
@@ -207,7 +212,7 @@ async function renderAdminCompetition(players, events) {
   const convocations = await Promise.all(matches.map(async match => ({ match, rows: await api(`/convocations/event/${match.id}`) })));
   teamTarget.innerHTML = convocations.length ? convocations.map(({ match, rows }) => {
     const selected = rows.filter(row => row.selection_status === "selected");
-    return `<article class="card"><p class="meta">${escapeHtml(dateFormat.format(new Date(match.starts_at)))}</p><h4>${escapeHtml(match.title)}</h4>${selected.length ? `<ul class="team-list">${selected.map(row => `<li>${escapeHtml(players.find(player => player.id === row.player_id)?.name || "Jugador")}</li>`).join("")}</ul>` : `<p class="note">Encara no hi ha jugadors convocats.</p>`}</article>`;
+    return `<article class="card"><p class="meta">${escapeHtml(dateFormat.format(new Date(match.starts_at)))}</p><h4>${escapeHtml(match.title)} · ${selected.length} convocats</h4>${selected.length ? `<ul class="team-list">${selected.map(row => `<li>${escapeHtml(players.find(player => player.id === row.player_id)?.name || "Jugador")}</li>`).join("")}</ul>` : `<p class="note">Encara no hi ha jugadors convocats.</p>`}</article>`;
   }).join("") : empty("No hi ha partits per convocar.");
 }
 
