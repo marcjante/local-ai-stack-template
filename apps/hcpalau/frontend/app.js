@@ -194,6 +194,10 @@ function renderEventAttendanceSummary(rows) {
   document.querySelector("#event-attendance-summary").innerHTML = rows.length ? rows.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)).map(row => `<div class="attendance-event"><span>${escapeHtml(dateFormat.format(new Date(row.starts_at)))} · ${escapeHtml(row.title)}</span><strong>${row.attending}</strong><small> disponibles de ${row.total} confirmats</small></div>`).join("") : "";
 }
 
+function renderAdminCharts() {
+  document.querySelector("#admin-charts").innerHTML = `<h3>Resum setmanal</h3>${adminExportRows.map(row => { const attendance = parseInt(row.asistencia, 10) || 0; const exercise = parseInt(row.exercicis_setmana, 10) || 0; return `<div class="chart-row"><strong>${escapeHtml(row.jugador)}</strong><span class="chart-label">Assistència</span><div class="bar"><i style="width:${attendance}%"></i></div><b>${attendance}%</b><span class="chart-label">Exercicis</span><div class="bar exercise"><i style="width:${exercise}%"></i></div><b>${exercise}%</b></div>`; }).join("")}`;
+}
+
 function renderAdminExercises(exercises, players) {
   document.querySelector("#admin-exercises").innerHTML = exercises.length ? exercises.map(exercise => `<article class="card deletable-card">
     <button class="delete-x" type="button" data-delete="/exercises/${exercise.id}" data-label="${escapeHtml(exercise.title)}" aria-label="Esborrar ${escapeHtml(exercise.title)}">×</button><p class="meta">${exercise.video_filename ? "Vídeo disponible" : "Sense vídeo"}</p>
@@ -259,6 +263,7 @@ async function loadAdmin() {
   setupExports();
   renderAdminWeekCalendar(events);
   renderEventAttendanceSummary(eventAttendanceSummary);
+  renderAdminCharts();
   renderAdminEventVideos(eventVideos, events);
   renderAdminGoals(goalsByPlayer, players);
   } finally {

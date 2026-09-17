@@ -135,6 +135,13 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 .attendance-event span { flex: 1 1 14rem; font-weight: 750; }
 .attendance-event strong { color: var(--gold); font-size: 1.35rem; }
 .attendance-event small { color: #ddd; }
+.admin-charts { margin: 1rem 0 1.25rem; padding: 1rem; border: 1px solid var(--line); border-radius: .8rem; background: #fff; }
+.admin-charts h3 { margin: 0 0 .75rem; }
+.chart-row { display: grid; grid-template-columns: 6rem 4.5rem minmax(5rem, 1fr) 2.5rem 4rem minmax(5rem, 1fr) 2.5rem; align-items: center; gap: .45rem; margin: .55rem 0; font-size: .78rem; }
+.chart-label { color: var(--muted); }
+.bar { height: .65rem; border-radius: 99px; background: #eee8c9; overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: inherit; background: var(--wine); }
+.bar.exercise i { background: var(--gold); }
 .exercise-percent { margin: .65rem 0 !important; color: var(--muted); }
 .exercise-percent strong { color: var(--wine); font-size: 1.1rem; }
 .week-calendar { margin-top: 1.25rem; }
@@ -184,6 +191,8 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
   .form-grid .wide { grid-column: auto; }
   .form-grid > .action { width: 100%; }
   .activity-filters { grid-template-columns: 1fr; }
+  .chart-row { grid-template-columns: 5rem 4rem minmax(4rem, 1fr) 2.2rem; }
+  .chart-row .chart-label:nth-of-type(2), .chart-row .chart-label:nth-of-type(2) ~ .bar, .chart-row .chart-label:nth-of-type(2) ~ b { display: none; }
   .whiteboard-card { grid-template-columns: auto 1fr; }
   .whiteboard-action { grid-column: 1 / -1; justify-content: center; }
   .sponsors { gap: .35rem; }
