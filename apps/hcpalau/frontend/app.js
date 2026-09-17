@@ -403,7 +403,6 @@ function setupAdminSections() {
 }
 
 async function startAdmin() {
-  setupAdminSections();
   setupAdminForms();
   setupWhiteboard();
   try {
