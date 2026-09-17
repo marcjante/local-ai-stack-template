@@ -247,8 +247,8 @@ function setupAdminForms() {
     try {
       await api("/event-videos", { method: "POST", body: fields });
       event.currentTarget.reset();
-      await loadAdmin();
       adminToast("Vídeo publicat");
+      try { await loadAdmin(); } catch (_) { /* el vídeo ya s'ha desat */ }
     } catch (_) { adminToast("No s'ha pogut pujar el vídeo"); }
   });
   document.querySelector("#goal-form").addEventListener("submit", async event => {
