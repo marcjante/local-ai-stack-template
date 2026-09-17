@@ -178,6 +178,7 @@
             <button class="action primary" type="submit">Afegir reforç</button>
           </form>
         </div>
+        <div id="convocation-team" class="card-list compact" aria-live="polite"></div>
       </section>
 
       <section>
@@ -192,7 +193,7 @@
           <form id="routine-exercise-form" class="card form-grid">
             <h3 class="wide">Afegir exercici a rutina</h3>
             <label class="wide">Rutina<select name="routine_id" required></select></label>
-            <label>Exercici<select name="exercise_id" required></select></label>
+            <label>Exercicis (pots triar-ne més d'un)<select name="exercise_id" multiple size="7" required></select></label>
             <label>Posició<input name="position" type="number" min="1" value="1" required></label>
             <label>Repeticions objectiu<input name="target_repetitions" type="number" min="1" value="1" required></label>
             <button class="action primary" type="submit">Afegir a rutina</button>

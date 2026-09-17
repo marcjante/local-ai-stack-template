@@ -121,7 +121,7 @@ function renderAdminExercises(exercises, players) {
   document.querySelector("#assignment-form select[name=player_id]").innerHTML = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
 }
 
-function renderAdminCompetition(players, events) {
+async function renderAdminCompetition(players, events) {
   const matches = events.filter(event => event.event_type === "match");
   const matchOptions = matches.map(event => `<option value="${event.id}">${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("");
   const playerOptions = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
@@ -130,6 +130,12 @@ function renderAdminCompetition(players, events) {
     document.querySelector(`${selector} select[name=player_id]`).innerHTML = playerOptions;
   });
   document.querySelector("#reinforcement-form select[name=event_id]").innerHTML = matchOptions;
+  const teamTarget = document.querySelector("#convocation-team");
+  const convocations = await Promise.all(matches.map(async match => ({ match, rows: await api(`/convocations/event/${match.id}`) })));
+  teamTarget.innerHTML = convocations.length ? convocations.map(({ match, rows }) => {
+    const selected = rows.filter(row => row.selection_status === "selected");
+    return `<article class="card"><p class="meta">${escapeHtml(dateFormat.format(new Date(match.starts_at)))}</p><h4>${escapeHtml(match.title)}</h4>${selected.length ? `<ul class="team-list">${selected.map(row => `<li>${escapeHtml(players.find(player => player.id === row.player_id)?.name || "Jugador")}</li>`).join("")}</ul>` : `<p class="note">Encara no hi ha jugadors convocats.</p>`}</article>`;
+  }).join("") : empty("No hi ha partits per convocar.");
 }
 
 function renderAdminPlanning(players, exercises, routines) {
@@ -154,7 +160,7 @@ async function loadAdmin() {
   const [players, events, exercises, standings, activity] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity")]);
   const routineGroups = await Promise.all(players.map(player => api(`/routines/player/${player.id}`)));
   const routines = routineGroups.flatMap((items, index) => items.map(item => ({ ...item, player_name: players[index].name })));
-  renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
+  renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); await renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
   renderStandings(standings, "#admin-standings-body");
   renderAdminActivity(activity);
   } finally {
@@ -224,6 +230,7 @@ function setupAdminForms() {
     delete form.event_id; delete form.player_id;
     try {
       await api(path, { method: "PUT", body: JSON.stringify(form) });
+      await loadAdmin();
       adminToast("Convocatòria desada");
     } catch (_) { showAccessDisabled(); }
   });
@@ -257,15 +264,18 @@ function setupAdminForms() {
   });
   document.querySelector("#routine-exercise-form").addEventListener("submit", async event => {
     event.preventDefault();
-    const form = Object.fromEntries(new FormData(event.currentTarget));
-    const routineId = form.routine_id;
-    delete form.routine_id;
-    form.exercise_id = Number(form.exercise_id);
-    form.position = Number(form.position);
-    form.target_repetitions = Number(form.target_repetitions);
+    const fields = new FormData(event.currentTarget);
+    const routineId = fields.get("routine_id");
+    const exerciseIds = fields.getAll("exercise_id").map(Number);
+    const targetRepetitions = Number(fields.get("target_repetitions"));
+    const startPosition = Number(fields.get("position"));
     try {
-      await api(`/routines/${routineId}/exercises`, { method: "POST", body: JSON.stringify(form) });
-      adminToast("Exercici afegit a la rutina");
+      await Promise.all(exerciseIds.map((exerciseId, index) => api(`/routines/${routineId}/exercises`, {
+        method: "POST",
+        body: JSON.stringify({ exercise_id: exerciseId, position: startPosition + index, target_repetitions: targetRepetitions })
+      })));
+      event.currentTarget.reset();
+      adminToast(`${exerciseIds.length} exercicis afegits a la rutina`);
     } catch (_) { showAccessDisabled(); }
   });
   document.querySelector("#exam-form").addEventListener("submit", async event => {
