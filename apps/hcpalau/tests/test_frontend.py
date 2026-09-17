@@ -49,3 +49,17 @@ def test_admin_frontend_manages_matchday_data(client) -> None:
     assert "`/convocations/${form.event_id}/${form.player_id}`" in javascript.text
     assert "`/mvp/${form.event_id}/${form.player_id}`" in javascript.text
     assert 'api("/reinforcements"' in javascript.text
+
+
+def test_admin_frontend_manages_individual_planning(client) -> None:
+    html = client.get("/app/")
+    javascript = client.get("/app/app.js")
+
+    assert 'id="routine-form"' in html.text
+    assert 'id="routine-exercise-form"' in html.text
+    assert 'id="exam-form"' in html.text
+    assert 'id="follow-up-form"' in html.text
+    assert 'api("/routines"' in javascript.text
+    assert "`/routines/${routineId}/exercises`" in javascript.text
+    assert 'api("/exam-periods"' in javascript.text
+    assert 'api("/seguiment"' in javascript.text

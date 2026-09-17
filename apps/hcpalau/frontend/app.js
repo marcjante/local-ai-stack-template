@@ -105,9 +105,20 @@ function renderAdminCompetition(players, events) {
   document.querySelector("#reinforcement-form select[name=event_id]").innerHTML = matchOptions;
 }
 
+function renderAdminPlanning(players, exercises, routines) {
+  const playerOptions = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
+  ["#routine-form", "#exam-form", "#follow-up-form"].forEach(selector => {
+    document.querySelector(`${selector} select[name=player_id]`).innerHTML = playerOptions;
+  });
+  document.querySelector("#routine-exercise-form select[name=routine_id]").innerHTML = routines.map(routine => `<option value="${routine.id}">${escapeHtml(routine.title)} · ${escapeHtml(routine.player_name)}</option>`).join("");
+  document.querySelector("#routine-exercise-form select[name=exercise_id]").innerHTML = exercises.map(exercise => `<option value="${exercise.id}">${escapeHtml(exercise.title)}</option>`).join("");
+}
+
 async function loadAdmin() {
   const [players, events, exercises] = await Promise.all([api("/players"), api("/events"), api("/exercises")]);
-  renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); renderAdminCompetition(players, events);
+  const routineGroups = await Promise.all(players.map(player => api(`/routines/player/${player.id}`)));
+  const routines = routineGroups.flatMap((items, index) => items.map(item => ({ ...item, player_name: players[index].name })));
+  renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
 }
 
 function setupAdminForms() {
@@ -191,6 +202,48 @@ function setupAdminForms() {
     try {
       await api("/reinforcements", { method: "POST", body: JSON.stringify(form) });
       event.currentTarget.reset(); await loadAdmin(); adminToast("Reforç afegit");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#routine-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    form.player_id = Number(form.player_id);
+    try {
+      await api("/routines", { method: "POST", body: JSON.stringify(form) });
+      event.currentTarget.reset(); await loadAdmin(); adminToast("Rutina creada");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#routine-exercise-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const routineId = form.routine_id;
+    delete form.routine_id;
+    form.exercise_id = Number(form.exercise_id);
+    form.position = Number(form.position);
+    form.target_repetitions = Number(form.target_repetitions);
+    try {
+      await api(`/routines/${routineId}/exercises`, { method: "POST", body: JSON.stringify(form) });
+      adminToast("Exercici afegit a la rutina");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#exam-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    form.player_id = Number(form.player_id);
+    try {
+      await api("/exam-periods", { method: "POST", body: JSON.stringify(form) });
+      event.currentTarget.reset(); await loadAdmin(); adminToast("Període registrat");
+    } catch (_) { showAccessDisabled(); }
+  });
+  document.querySelector("#follow-up-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    const form = Object.fromEntries(fields);
+    form.player_id = Number(form.player_id);
+    form.visible_to_player = fields.has("visible_to_player");
+    try {
+      await api("/seguiment", { method: "POST", body: JSON.stringify(form) });
+      event.currentTarget.reset(); await loadAdmin(); adminToast("Seguiment desat");
     } catch (_) { showAccessDisabled(); }
   });
 }

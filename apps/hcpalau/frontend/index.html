@@ -167,6 +167,43 @@
           </form>
         </div>
       </section>
+
+      <section>
+        <div class="section-heading"><div><p class="eyebrow">Planificació personal</p><h2>Rutines i càrrega</h2></div></div>
+        <div class="split-forms">
+          <form id="routine-form" class="card form-grid">
+            <h3 class="wide">Nova rutina</h3>
+            <label>Jugador<select name="player_id" required></select></label>
+            <label>Títol<input name="title" required maxlength="160"></label>
+            <button class="action primary" type="submit">Crear rutina</button>
+          </form>
+          <form id="routine-exercise-form" class="card form-grid">
+            <h3 class="wide">Afegir exercici a rutina</h3>
+            <label class="wide">Rutina<select name="routine_id" required></select></label>
+            <label>Exercici<select name="exercise_id" required></select></label>
+            <label>Posició<input name="position" type="number" min="1" value="1" required></label>
+            <label>Repeticions objectiu<input name="target_repetitions" type="number" min="1" value="1" required></label>
+            <button class="action primary" type="submit">Afegir a rutina</button>
+          </form>
+          <form id="exam-form" class="card form-grid">
+            <h3 class="wide">Període d'exàmens</h3>
+            <label class="wide">Jugador<select name="player_id" required></select></label>
+            <label>Inici<input name="start_date" type="date" required></label>
+            <label>Final<input name="end_date" type="date" required></label>
+            <label class="wide">Nota<input name="note" maxlength="500"></label>
+            <button class="action primary" type="submit">Registrar període</button>
+          </form>
+          <form id="follow-up-form" class="card form-grid">
+            <h3 class="wide">Nota de seguiment</h3>
+            <label>Jugador<select name="player_id" required></select></label>
+            <label>Data<input name="observed_on" type="date" required></label>
+            <label>Àrea<select name="category"><option value="technical">Tècnica</option><option value="tactical">Tàctica</option><option value="physical">Física</option><option value="attitude">Actitud</option></select></label>
+            <label class="checkbox"><input name="visible_to_player" type="checkbox"> Visible per al jugador</label>
+            <label class="wide">Observació<textarea name="note" required maxlength="2000"></textarea></label>
+            <button class="action primary" type="submit">Desar seguiment</button>
+          </form>
+        </div>
+      </section>
     </main>
     <div id="admin-toast" class="toast hidden" role="status" aria-live="polite"></div>
   </div>
