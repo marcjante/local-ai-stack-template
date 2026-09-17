@@ -40,6 +40,12 @@ python -m backend.seed
 
 La comanda és idempotent i rebutja bases de dades no SQLite per defecte.
 
+Per aplicar les migracions explícitament:
+
+```bash
+alembic upgrade head
+```
+
 El contracte funcional, els rols i els endpoints també estan documentats a
 [`docs/api-spec.md`](docs/api-spec.md).
 
