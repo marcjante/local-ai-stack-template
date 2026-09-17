@@ -18,6 +18,9 @@ Per defecte crea `hcpalau.db` dins d'aquest directori. Es pot canviar amb
 `HCPALAU_DATABASE_URL`. La documentació OpenAPI queda disponible a
 `http://127.0.0.1:8000/docs`.
 
+Pots copiar `.env.example` com a referència de les variables disponibles; no
+hi posis mai tokens reals al repositori.
+
 El portal del jugador queda servit pel mateix backend a:
 
 ```text
