@@ -59,6 +59,16 @@ Per aplicar les migracions explícitament:
 alembic upgrade head
 ```
 
+El worker FECAPA de la temporada 2026/27 usa per defecte el grup Infantil OR
+9 i es pot executar així:
+
+```bash
+python -m integrations.local_ai_stack.sync_fecapa
+python -m integrations.local_ai_stack.sync_fecapa --actas-only
+```
+
+El segon mode retorna una llista buida fins que la federació publica les actes.
+
 El contracte funcional, els rols i els endpoints també estan documentats a
 [`docs/api-spec.md`](docs/api-spec.md).
 
