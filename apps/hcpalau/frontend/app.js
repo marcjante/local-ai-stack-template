@@ -382,7 +382,23 @@ function setupAdminForms() {
   });
 }
 
+function setupAdminSections() {
+  document.querySelectorAll("#admin-portal .admin-grid > section").forEach(section => {
+    if (section.closest("details")) return;
+    const heading = section.querySelector(":scope > .section-heading");
+    if (!heading) return;
+    const details = document.createElement("details");
+    details.className = "admin-section";
+    const summary = document.createElement("summary");
+    summary.innerHTML = heading.innerHTML;
+    details.appendChild(summary);
+    [...section.children].filter(child => child !== heading).forEach(child => details.appendChild(child));
+    section.replaceWith(details);
+  });
+}
+
 async function startAdmin() {
+  setupAdminSections();
   setupAdminForms();
   setupWhiteboard();
   try {
