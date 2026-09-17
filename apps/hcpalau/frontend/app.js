@@ -120,10 +120,11 @@ function renderAdminEvents(events) {
   document.querySelector("#event-video-form select[name=event_id]").innerHTML = events.map(event => `<option value="${event.id}">${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("");
 }
 
-function renderAdminActivity(items, players, assignmentsByPlayer, exercises) {
+function renderAdminActivity(items, players, assignmentsByPlayer, exercises, attendanceSummary) {
   const latest = new Map();
   items.filter(item => item.kind === "checkin").forEach(item => latest.set(`${item.player}:${item.label}`, item));
   const exerciseById = new Map(exercises.map(exercise => [exercise.id, exercise]));
+  const attendanceByPlayer = new Map(attendanceSummary.map(row => [row.player_id, row]));
   document.querySelector("#admin-activity").innerHTML = players.map(player => {
     const assignments = assignmentsByPlayer.get(player.id) || [];
     const tasks = assignments.map(assignment => {
@@ -133,7 +134,9 @@ function renderAdminActivity(items, players, assignmentsByPlayer, exercises) {
       return `<li><span>${escapeHtml(exercise?.title || "Exercici")}</span><strong class="task-status ${status === "Fet" ? "done" : status === "No fet" ? "missed" : "pending"}">${status}</strong></li>`;
     }).join("");
     const attendance = items.filter(item => item.kind === "attendance" && item.player === player.name).map(item => `<li><span>${escapeHtml(item.label)}</span><strong class="task-status ${item.value ? "done" : "missed"}">${item.value ? "Sí" : "No"}</strong></li>`).join("");
-    return `<article class="card player-activity"><h3>${escapeHtml(player.name)}</h3><p class="meta">Assistència a entrenaments i partits</p>${attendance ? `<ul class="task-list">${attendance}</ul>` : `<p class="note">Encara no ha confirmat cap dia.</p>`}<details class="activity-exercises"><summary>Exercicis i estiraments${assignments.length ? ` (${assignments.length})` : ""}</summary>${tasks ? `<ul class="task-list">${tasks}</ul>` : `<p class="note">No té exercicis assignats.</p>`}</details></article>`;
+    const summary = attendanceByPlayer.get(player.id);
+    const percentage = summary?.percentage == null ? "Sense dades" : `${summary.percentage}%`;
+    return `<article class="card player-activity"><h3>${escapeHtml(player.name)}</h3><p class="meta">Assistència a entrenaments i partits</p>${attendance ? `<ul class="task-list">${attendance}</ul>` : `<p class="note">Encara no ha confirmat cap dia.</p>`}<p class="attendance-percent">Assistència total <strong>${percentage}</strong>${summary?.total ? ` <span>(${summary.attending}/${summary.total})</span>` : ""}</p><details class="activity-exercises"><summary>Exercicis i estiraments${assignments.length ? ` (${assignments.length})` : ""}</summary>${tasks ? `<ul class="task-list">${tasks}</ul>` : `<p class="note">No té exercicis assignats.</p>`}</details></article>`;
   }).join("") || empty("Encara no hi ha jugadors.");
 }
 
@@ -188,13 +191,13 @@ async function loadAdmin() {
   if (adminLoadInFlight) return;
   adminLoadInFlight = true;
   try {
-  const [players, events, exercises, standings, activity] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity")]);
+  const [players, events, exercises, standings, activity, attendanceSummary] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity"), api("/activity/attendance-summary")]);
   const assignmentsByPlayer = new Map(await Promise.all(players.map(async player => [player.id, await api(`/exercises/player/${player.id}`)])));
   const routineGroups = await Promise.all(players.map(player => api(`/routines/player/${player.id}`)));
   const routines = routineGroups.flatMap((items, index) => items.map(item => ({ ...item, player_name: players[index].name })));
   renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); await renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
   renderStandings(standings, "#admin-standings-body");
-  renderAdminActivity(activity, players, assignmentsByPlayer, exercises);
+  renderAdminActivity(activity, players, assignmentsByPlayer, exercises, attendanceSummary);
   } finally {
     adminLoadInFlight = false;
   }
