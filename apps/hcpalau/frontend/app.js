@@ -379,7 +379,7 @@ function setupTabs() {
 
 function renderEventVideos(videosByEvent) {
   const rows = [...videosByEvent.values()].flat();
-  document.querySelector("#event-videos-list").innerHTML = rows.length ? rows.map(video => `<article class="card"><a class="action primary" href="${escapeHtml(video.filename)}" target="_blank" rel="noopener noreferrer">Veure vídeo</a>${video.comment ? `<p>${escapeHtml(video.comment)}</p>` : ""}</article>`).join("") : empty("Encara no hi ha vídeos publicats.");
+  document.querySelector("#event-videos-list").innerHTML = rows.length ? rows.map(video => { const source = /^https?:\/\//i.test(video.filename) ? video.filename : `${API_BASE}/uploads/${encodeURIComponent(video.filename)}`; return `<article class="card"><a class="action primary" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">Veure vídeo</a>${video.comment ? `<p>${escapeHtml(video.comment)}</p>` : ""}</article>`; }).join("") : empty("Encara no hi ha vídeos publicats.");
 }
 
 function renderEvents(events) {
