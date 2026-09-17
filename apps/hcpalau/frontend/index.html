@@ -194,26 +194,12 @@
       <section>
         <div class="section-heading"><div><p class="eyebrow">Planificació personal</p><h2>Rutines i càrrega</h2></div></div>
         <div class="split-forms">
-          <form id="routine-form" class="card form-grid">
-            <h3 class="wide">Nova rutina</h3>
-            <label>Jugador<select name="player_id" required></select></label>
-            <label>Títol<input name="title" required maxlength="160"></label>
-            <button class="action primary" type="submit">Crear rutina</button>
-          </form>
-          <form id="routine-exercise-form" class="card form-grid">
-            <h3 class="wide">Afegir exercici a rutina</h3>
-            <label class="wide">Rutina<select name="routine_id" required></select></label>
-            <label>Exercicis (pots triar-ne més d'un)<select name="exercise_id" multiple size="7" required></select></label>
-            <label>Posició<input name="position" type="number" min="1" value="1" required></label>
-            <label>Repeticions objectiu<input name="target_repetitions" type="number" min="1" value="1" required></label>
-            <button class="action primary" type="submit">Afegir a rutina</button>
-          </form>
-          <form id="weekly-plan-form" class="card form-grid">
+          <form id="weekly-plan-form" class="card form-grid simple-plan-form">
             <h3 class="wide">Pla setmanal d'exercicis</h3>
             <label>Jugador<select name="player_id" required></select></label>
             <label>Setmana (dilluns)<input name="week_start" type="date" required></label>
-            <label class="wide">Exercicis<select name="exercise_ids" multiple size="7" required></select></label>
-            <label class="checkbox"><input name="mandatory" type="checkbox"> Marcar com a obligatori (estiraments)</label>
+            <fieldset class="wide exercise-picker"><legend>Tria els exercicis</legend><div id="weekly-exercise-options"></div></fieldset>
+            <label class="checkbox"><input name="mandatory" type="checkbox"> Els exercicis seleccionats són obligatoris</label>
             <button class="action primary" type="submit">Enviar pla setmanal</button>
           </form>
           <form id="exam-form" class="card form-grid">

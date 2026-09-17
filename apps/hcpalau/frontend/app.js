@@ -152,12 +152,14 @@ async function renderAdminCompetition(players, events) {
 
 function renderAdminPlanning(players, exercises, routines) {
   const playerOptions = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
-  ["#routine-form", "#exam-form", "#follow-up-form", "#weekly-plan-form"].forEach(selector => {
+  ["#exam-form", "#follow-up-form", "#weekly-plan-form"].forEach(selector => {
     document.querySelector(`${selector} select[name=player_id]`).innerHTML = playerOptions;
   });
-  document.querySelector("#routine-exercise-form select[name=routine_id]").innerHTML = routines.map(routine => `<option value="${routine.id}">${escapeHtml(routine.title)} · ${escapeHtml(routine.player_name)}</option>`).join("");
-  document.querySelector("#routine-exercise-form select[name=exercise_id]").innerHTML = exercises.map(exercise => `<option value="${exercise.id}">${escapeHtml(exercise.title)}</option>`).join("");
-  document.querySelector("#weekly-plan-form select[name=exercise_ids]").innerHTML = exercises.map(exercise => `<option value="${exercise.id}">${escapeHtml(exercise.title)}</option>`).join("");
+  const categories = [
+    ["Força i casa", exercises.filter(exercise => !exercise.title.toLowerCase().startsWith("estirament") && !["Rotació toràcica", "Mobilitat de turmell", "Postura del nen"].includes(exercise.title))],
+    ["Estiraments i mobilitat", exercises.filter(exercise => exercise.title.toLowerCase().startsWith("estirament") || ["Rotació toràcica", "Mobilitat de turmell", "Postura del nen"].includes(exercise.title))]
+  ];
+  document.querySelector("#weekly-exercise-options").innerHTML = categories.map(([label, rows]) => `<div class="exercise-group"><strong>${label}</strong>${rows.map(exercise => `<label class="exercise-option"><input type="checkbox" name="exercise_ids" value="${exercise.id}"><span>${escapeHtml(exercise.title)}</span></label>`).join("")}</div>`).join("");
 }
 
 function renderStandings(rows, targetSelector = "#standings-body") {
@@ -281,37 +283,13 @@ function setupAdminForms() {
       event.currentTarget.reset(); await loadAdmin(); adminToast("Reforç afegit");
     } catch (_) { showAccessDisabled(); }
   });
-  document.querySelector("#routine-form").addEventListener("submit", async event => {
-    event.preventDefault();
-    const form = Object.fromEntries(new FormData(event.currentTarget));
-    form.player_id = Number(form.player_id);
-    try {
-      await api("/routines", { method: "POST", body: JSON.stringify(form) });
-      event.currentTarget.reset(); await loadAdmin(); adminToast("Rutina creada");
-    } catch (_) { showAccessDisabled(); }
-  });
-  document.querySelector("#routine-exercise-form").addEventListener("submit", async event => {
-    event.preventDefault();
-    const fields = new FormData(event.currentTarget);
-    const routineId = fields.get("routine_id");
-    const exerciseIds = fields.getAll("exercise_id").map(Number);
-    const targetRepetitions = Number(fields.get("target_repetitions"));
-    const startPosition = Number(fields.get("position"));
-    try {
-      await Promise.all(exerciseIds.map((exerciseId, index) => api(`/routines/${routineId}/exercises`, {
-        method: "POST",
-        body: JSON.stringify({ exercise_id: exerciseId, position: startPosition + index, target_repetitions: targetRepetitions })
-      })));
-      event.currentTarget.reset();
-      adminToast(`${exerciseIds.length} exercicis afegits a la rutina`);
-    } catch (_) { showAccessDisabled(); }
-  });
   document.querySelector("#weekly-plan-form").addEventListener("submit", async event => {
     event.preventDefault();
     const fields = new FormData(event.currentTarget);
     const playerId = fields.get("player_id");
     const weekStart = fields.get("week_start");
     const exerciseIds = fields.getAll("exercise_ids");
+    if (!exerciseIds.length) { adminToast("Tria almenys un exercici"); return; }
     const mandatory = fields.has("mandatory");
     try {
       await Promise.all(exerciseIds.map(exerciseId => api("/weekly-plan", { method: "POST", body: JSON.stringify({ player_id: Number(playerId), exercise_id: Number(exerciseId), week_start: weekStart, mandatory }) })));
