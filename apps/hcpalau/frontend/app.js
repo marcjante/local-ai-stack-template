@@ -23,6 +23,7 @@ const state = { player: null, attendance: new Map(), progress: new Map(), checki
 let adminLoadInFlight = false;
 let adminActivityItems = [];
 let adminExportRows = [];
+let calendarWeekOffset = 0;
 const dateFormat = new Intl.DateTimeFormat("ca-ES", { dateStyle: "medium", timeStyle: "short" });
 
 async function api(path, options = {}) {
@@ -185,9 +186,13 @@ function setupActivityFilters(players) {
 }
 
 function renderAdminWeekCalendar(events) {
-  const start = new Date(); const day = start.getDay() || 7; start.setDate(start.getDate() - day + 1); start.setHours(0, 0, 0, 0);
+  const start = new Date(); const day = start.getDay() || 7; start.setDate(start.getDate() - day + 1 + calendarWeekOffset * 7); start.setHours(0, 0, 0, 0);
   const days = [...Array(7)].map((_, index) => { const date = new Date(start); date.setDate(start.getDate() + index); const key = date.toISOString().slice(0, 10); const rows = events.filter(event => event.starts_at.slice(0, 10) === key); return `<div class="week-day"><strong>${new Intl.DateTimeFormat("ca-ES", { weekday: "short", day: "numeric" }).format(date)}</strong>${rows.map(event => `<span class="week-event ${event.event_type}">${escapeHtml(event.title)}<small>${new Intl.DateTimeFormat("ca-ES", { timeStyle: "short" }).format(new Date(event.starts_at))}</small></span>`).join("") || `<em>—</em>`}</div>`; }).join("");
-  document.querySelector("#admin-week-calendar").innerHTML = `<h3>Calendari d'aquesta setmana</h3><div class="week-grid">${days}</div>`;
+  const end = new Date(start); end.setDate(start.getDate() + 6);
+  const range = `${new Intl.DateTimeFormat("ca-ES", { day: "numeric", month: "short" }).format(start)} – ${new Intl.DateTimeFormat("ca-ES", { day: "numeric", month: "short", year: "numeric" }).format(end)}`;
+  document.querySelector("#admin-week-calendar").innerHTML = `<div class="calendar-heading"><div><h3>Calendari setmanal</h3><small>${range}</small></div><div class="actions"><button class="action" id="calendar-prev" type="button">← Anterior</button><button class="action" id="calendar-next" type="button">Següent →</button></div></div><div class="week-grid">${days}</div>`;
+  document.querySelector("#calendar-prev").onclick = () => { calendarWeekOffset -= 1; renderAdminWeekCalendar(events); };
+  document.querySelector("#calendar-next").onclick = () => { calendarWeekOffset += 1; renderAdminWeekCalendar(events); };
 }
 
 function renderEventAttendanceSummary(rows) {

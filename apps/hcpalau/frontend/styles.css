@@ -146,6 +146,10 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 .exercise-percent strong { color: var(--wine); font-size: 1.1rem; }
 .week-calendar { margin-top: 1.25rem; }
 .week-calendar h3 { margin: 0 0 .65rem; }
+.calendar-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .65rem; }
+.calendar-heading h3 { margin: 0; }
+.calendar-heading small { color: var(--muted); }
+.calendar-heading .actions { margin-top: 0; }
 .week-grid { display: grid; grid-template-columns: repeat(7, minmax(7rem, 1fr)); gap: .45rem; overflow-x: auto; }
 .week-day { min-height: 7rem; padding: .6rem; border: 1px solid var(--line); border-radius: .65rem; background: #fff; display: grid; align-content: start; gap: .4rem; }
 .week-day > strong { text-transform: capitalize; color: var(--wine); font-size: .8rem; }
@@ -184,6 +188,7 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 }
 
 @media (max-width: 34rem) {
+  .calendar-heading { align-items: flex-start; flex-direction: column; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .topbar .sponsors { width: 100%; justify-content: flex-start; }
   .section-heading { align-items: flex-start; }
