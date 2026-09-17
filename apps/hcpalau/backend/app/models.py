@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from sqlalchemy import CheckConstraint, UniqueConstraint
@@ -114,3 +114,17 @@ class RoutineExercise(SQLModel, table=True):
     exercise_id: int = Field(foreign_key="exercise.id", index=True)
     position: int = Field(ge=1)
     target_repetitions: int = Field(default=1, ge=1)
+
+
+class ExamPeriod(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("player_id", "start_date", "end_date"),
+        CheckConstraint("end_date >= start_date"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    start_date: date = Field(index=True)
+    end_date: date
+    note: Optional[str] = Field(default=None, max_length=500)
+    created_at: datetime = Field(default_factory=utc_now)

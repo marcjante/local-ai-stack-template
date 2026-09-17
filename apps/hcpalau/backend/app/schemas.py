@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal, Optional
 
 from sqlmodel import Field, SQLModel
@@ -129,3 +129,15 @@ class RoutineExerciseCreate(SQLModel):
 class RoutineExerciseRead(RoutineExerciseCreate):
     id: int
     routine_id: int
+
+
+class ExamPeriodCreate(SQLModel):
+    player_id: int
+    start_date: date
+    end_date: date
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class ExamPeriodRead(ExamPeriodCreate):
+    id: int
+    created_at: datetime
