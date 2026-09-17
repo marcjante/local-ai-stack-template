@@ -4,6 +4,8 @@ const params = new URLSearchParams(window.location.search);
 const token = params.get("token") || "";
 const jugador = params.get("jugador") || "";
 const API_BASE = (params.get("api") || window.location.origin).replace(/\/$/, "");
+const whiteboardCandidate = params.get("pissarra") || "";
+const whiteboardUrl = /^https?:\/\//i.test(whiteboardCandidate) ? whiteboardCandidate : "";
 const now = new Date();
 const seasonStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
 const season = params.get("season") || `${seasonStart}-${String(seasonStart + 1).slice(-2)}`;
@@ -53,6 +55,20 @@ function adminToast(message) {
   toast.textContent = message;
   toast.classList.remove("hidden");
   window.setTimeout(() => toast.classList.add("hidden"), 2200);
+}
+
+function setupWhiteboard() {
+  const link = document.querySelector("#whiteboard-link");
+  const help = document.querySelector("#whiteboard-help");
+  if (whiteboardUrl) {
+    link.href = whiteboardUrl;
+    link.removeAttribute("aria-disabled");
+    help.textContent = "Pissarra configurada. S'obre en una pestanya nova i no comparteix el token d'HC Palau.";
+    return;
+  }
+  link.classList.add("disabled");
+  link.addEventListener("click", event => event.preventDefault());
+  help.textContent = "Configura ?pissarra=https://... a l'enllaç de l'entrenador per obrir la pissarra desplegada.";
 }
 
 function playerLink(player) {
@@ -270,6 +286,7 @@ function setupAdminForms() {
 
 async function startAdmin() {
   setupAdminForms();
+  setupWhiteboard();
   await loadAdmin();
   document.querySelector("#loading").classList.add("hidden");
   document.querySelector("#admin-portal").classList.remove("hidden");

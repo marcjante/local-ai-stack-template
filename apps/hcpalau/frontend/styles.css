@@ -54,6 +54,7 @@ h3 { margin: 2rem 0 .75rem; }
 .action { border: 1px solid var(--wine); border-radius: .65rem; background: white; color: var(--wine); padding: .55rem .75rem; cursor: pointer; font-weight: 750; }
 .action.primary { color: white; background: var(--wine); }
 .action:disabled { opacity: .55; cursor: default; }
+.action.disabled { opacity: .55; cursor: not-allowed; }
 .done { border-left: .35rem solid var(--success); }
 .empty { padding: 1.5rem; color: var(--muted); background: #ffffff99; border: 1px dashed #cdbec3; border-radius: 1rem; }
 

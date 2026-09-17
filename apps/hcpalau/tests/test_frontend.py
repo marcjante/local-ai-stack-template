@@ -74,3 +74,12 @@ def test_frontend_renders_convocations_and_standings(client) -> None:
     assert "api(`/convocations/player/${id}`)" in javascript.text
     assert "api(`/standings?season=${encodeURIComponent(season)}`)" in javascript.text
     assert 'api("/standings"' in javascript.text
+
+
+def test_admin_frontend_exposes_configurable_whiteboard_link(client) -> None:
+    html = client.get("/app/")
+    javascript = client.get("/app/app.js")
+
+    assert 'id="whiteboard-link"' in html.text
+    assert 'params.get("pissarra")' in javascript.text
+    assert "setupWhiteboard()" in javascript.text

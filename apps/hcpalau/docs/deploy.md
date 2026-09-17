@@ -42,6 +42,10 @@ vídeos.
 8. Si s'utilitzen vídeos, afegeix un volum persistent, munta'l a `/data` i
    configura `VIDEO_DIR=/data/exercise-videos`.
 
+Per habilitar el botó de Pizarra-hoquei al portal entrenador, afegeix el
+paràmetre URL-encoded `pissarra=https%3A%2F%2F...` a l'enllaç del portal. La
+URL s'obre en una pestanya nova i no rep el token d'HC Palau.
+
 Abans del primer trànsit, aplica l'esquema amb `alembic upgrade head` des del
 directori arrel del servei. Les migracions són reversibles amb
 `alembic downgrade -1`; no s'ha d'editar una migració ja aplicada.

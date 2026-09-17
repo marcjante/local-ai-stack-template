@@ -31,6 +31,16 @@ jugador:
 http://127.0.0.1:8000/app/?token=<HCPALAU_ADMIN_TOKEN>
 ```
 
+La integració Opció A amb la pissarra tàctica externa es configura afegint la
+URL desplegada a l'enllaç de l'entrenador:
+
+```text
+http://127.0.0.1:8000/app/?token=<HCPALAU_ADMIN_TOKEN>&pissarra=https%3A%2F%2Fpissarra.example
+```
+
+Només s'accepten URLs `http` o `https`; el token d'HC Palau no es reenvia a
+la pissarra.
+
 Per tenir dades de prova locals (sis jugadors, calendari, exercicis, rutina i
 classificació):
 
