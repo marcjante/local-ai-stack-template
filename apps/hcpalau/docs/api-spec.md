@@ -6,7 +6,8 @@ La documentació OpenAPI executable està disponible a `/docs`, `/redoc` i
 
 ## Autenticació i rols
 
-Totes les rutes, excepte `GET /health` i la documentació OpenAPI, exigeixen:
+Totes les rutes, excepte `GET /health`, `GET /ready` i la documentació OpenAPI,
+exigeixen:
 
 ```http
 Authorization: Bearer <token>
