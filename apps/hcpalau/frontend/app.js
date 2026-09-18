@@ -66,8 +66,8 @@ async function api(path, options = {}) {
     if (fetchOptions.body && !(fetchOptions.body instanceof FormData)) headers.set("Content-Type", "application/json");
     let response;
     try { response = await fetch(`${API_BASE}${path}`, { ...fetchOptions, headers }); }
-    catch (_) { throw new Error("access"); }
-    if (!response.ok) throw new Error("access");
+    catch (_) { const error = new Error("network"); error.status = 0; throw error; }
+    if (!response.ok) { const error = new Error(response.status === 401 || response.status === 403 ? "access" : "request"); error.status = response.status; throw error; }
     if (response.status === 204) return null;
     return response.json();
   } finally {
@@ -796,8 +796,10 @@ async function start() {
     convocations.forEach(item => state.convocations.set(item.event_id, item));
     checkins.forEach(item => state.checkins.set(item.exercise_id, item));
     const matches = events.filter(event => event.event_type === "match");
-    const teamLists = await Promise.all(matches.map(event => api(`/convocations/event/${event.id}/team`)));
-    const eventVideos = await Promise.all(events.filter(event => event.event_type !== "meeting").map(async event => [event.id, await api(`/event-videos/event/${event.id}`)]));
+    const teamListResults = await Promise.allSettled(matches.map(event => api(`/convocations/event/${event.id}/team`)));
+    const teamLists = teamListResults.map(result => result.status === "fulfilled" ? result.value : []);
+    const eventVideoResults = await Promise.allSettled(events.filter(event => event.event_type !== "meeting").map(async event => [event.id, await api(`/event-videos/event/${event.id}`)]));
+    const eventVideos = eventVideoResults.filter(result => result.status === "fulfilled").map(result => result.value);
     const videosByEvent = new Map(eventVideos);
     matches.forEach((event, index) => state.teamConvocations.set(event.id, teamLists[index]));
     document.querySelector("#welcome").textContent = `Hola, ${state.player.name}`;
@@ -810,7 +812,7 @@ async function start() {
     setupTabs();
     document.querySelector("#loading").classList.add("hidden");
     document.querySelector("#portal").classList.remove("hidden");
-  } catch (_) {
+  } catch (error) {
     // El enlace de entrenador ya lleva un token; no ocultamos el panel por
     // un error puntual de inicialización de una sección secundaria.
     if (token && !jugador) {
@@ -820,7 +822,16 @@ async function start() {
       adminToast("Panell obert. Algunes dades es poden carregar en uns segons.");
       return;
     }
-    showAccessDisabled();
+    if (error?.status === 401 || error?.status === 403 || !token) {
+      showAccessDisabled();
+    } else {
+      document.querySelector("#loading").classList.add("hidden");
+      document.querySelector("#portal").classList.add("hidden");
+      document.querySelector("#access-disabled").classList.remove("hidden");
+      document.querySelector("#access-disabled h1").textContent = "Error temporal";
+      document.querySelector("#access-disabled p").textContent = "No s'han pogut carregar totes les dades. Torna-ho a provar en uns segons.";
+      document.querySelector("#access-disabled .state-icon").textContent = "⚠️";
+    }
   }
 }
 

@@ -11,10 +11,36 @@ from sqlmodel import Session, select
 from ..auth import Principal, get_current_principal, require_admin
 from ..database import get_session
 from ..models import Player, Team, TeamPlayer
-from ..schemas import PlayerRead, TeamAdminRead, TeamAdminTokenUpdate, TeamCreate, TeamPlayerRead, TeamRead
+from ..schemas import PlayerRead, TeamAdminRead, TeamAdminTokenUpdate, TeamCreate, TeamPlayerRead, TeamRead, TeamUpdate
 
 
 router = APIRouter(prefix="/teams", tags=["teams"])
+
+
+@router.patch("/{team_id}", response_model=TeamRead)
+def update_team(
+    team_id: int,
+    body: TeamUpdate,
+    principal: Principal = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Team:
+    if principal.team_id is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the global administrator can edit teams")
+    team = session.get(Team, team_id)
+    if team is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    if body.name is not None:
+        team.name = body.name.strip()
+    if body.slug is not None:
+        team.slug = body.slug
+    session.add(team)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Team slug already exists") from None
+    session.refresh(team)
+    return team
 
 
 @router.post("", response_model=TeamAdminRead, status_code=status.HTTP_201_CREATED)
