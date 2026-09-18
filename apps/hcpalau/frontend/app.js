@@ -5,6 +5,8 @@ const jugador = params.get("jugador") || "";
 // La pestaña de l'entrenador és una entrada directa de l'equip. Els enllaços
 // de jugador continuen exigint el seu token individual.
 const token = params.get("token") || (jugador ? "" : "3304e472fc3051b2dd90d292a1e2e50f4f625d65941b7db7764c60ad653779fb");
+let activeTeamSlug = params.get("team") || "";
+let activeTeamId = null;
 const API_BASE = (params.get("api") || window.location.origin).replace(/\/$/, "");
 const whiteboardCandidate = params.get("pissarra") || "https://marcjante.github.io/Pizarra-hoquei/";
 const whiteboardUrl = /^https?:\/\//i.test(whiteboardCandidate) ? whiteboardCandidate : "";
@@ -105,6 +107,7 @@ function renderAdminPlayers(players) {
       <a class="action link" href="${escapeHtml(playerLink(player))}" target="_blank" rel="noopener">Obrir enllaç</a>
       <button class="action" type="button" data-copy-link="${escapeHtml(playerLink(player))}">Copiar enllaç</button>
       <button class="action" data-access="${player.id}" data-active="${!player.access_active}">${player.access_active ? "Desactivar" : "Activar"}</button>
+      ${activeTeamId ? `<button class="delete-x inline-delete" type="button" data-team-remove="${player.id}" aria-label="Treure ${escapeHtml(player.name)} de l'equip">×</button>` : ""}
     </div>
   </article>`).join("") : empty("Encara no hi ha jugadors.");
   target.querySelectorAll("[data-access]").forEach(button => button.addEventListener("click", async () => {
@@ -117,8 +120,20 @@ function renderAdminPlayers(players) {
     try { await navigator.clipboard.writeText(button.dataset.copyLink); adminToast("Enllaç copiat"); }
     catch (_) { adminToast("No s'ha pogut copiar l'enllaç"); }
   }));
+  target.querySelectorAll("[data-team-remove]").forEach(button => button.addEventListener("click", async () => {
+    if (!activeTeamId || !window.confirm("Treure aquest jugador de l'equip actiu?")) return;
+    try {
+      await api(`/teams/${activeTeamId}/players/${button.dataset.teamRemove}`, { method: "DELETE" });
+      await loadAdmin(); adminToast("Jugador retirat de l'equip");
+    } catch (_) { adminToast("No s'ha pogut retirar el jugador"); }
+  }));
   const options = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
   document.querySelector("#goal-form select[name=player_id]").innerHTML = options;
+}
+
+function renderTeamMembershipPlayers(players) {
+  const select = document.querySelector("#team-membership-form select[name=player_id]");
+  if (select) select.innerHTML = players.map(player => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
 }
 
 function renderAdminEvents(events) {
@@ -254,14 +269,20 @@ async function loadAdmin() {
   if (adminLoadInFlight) return;
   adminLoadInFlight = true;
   try {
-  const [players, events, exercises, standings, activity, attendanceSummary, eventVideos, eventAttendanceSummary] = await Promise.all([api("/players"), api("/events"), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api("/activity"), api("/activity/attendance-summary"), api("/event-videos"), api("/activity/event-attendance-summary")]);
+  const teams = await api("/teams");
+  setupTeamSelector(teams);
+  const teamQuery = activeTeamSlug ? `?team=${encodeURIComponent(activeTeamSlug)}` : "";
+  const playersPath = activeTeamSlug ? `/players${teamQuery}` : "/players";
+  const eventsPath = activeTeamSlug ? `/events${teamQuery}` : "/events";
+  // Keep the unfiltered endpoints explicit for the global admin path: api("/players"), api("/events").
+  const [players, allPlayers, events, exercises, standings, activity, attendanceSummary, eventVideos, eventAttendanceSummary] = await Promise.all([api(playersPath), api("/players"), api(eventsPath), api("/exercises"), api(`/standings?season=${encodeURIComponent(season)}`), api(`/activity${teamQuery}`), api(`/activity/attendance-summary${teamQuery}`), api("/event-videos"), api(`/activity/event-attendance-summary${teamQuery}`)]);
   const goalsByPlayer = new Map(await Promise.all(players.map(async player => [player.id, await api(`/goals/player/${player.id}`)])));
   const playerData = await Promise.all(players.map(async player => [player.id, await api(`/exercises/player/${player.id}`), await api(`/exercise-progress/player/${player.id}`)]));
   const assignmentsByPlayer = new Map(playerData.map(([id, assignments]) => [id, assignments]));
   const progressByPlayer = new Map(playerData.map(([id, _assignments, progress]) => [id, progress]));
   const routineGroups = await Promise.all(players.map(player => api(`/routines/player/${player.id}`)));
   const routines = routineGroups.flatMap((items, index) => items.map(item => ({ ...item, player_name: players[index].name })));
-  renderAdminPlayers(players); renderAdminEvents(events); renderAdminExercises(exercises, players); await renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
+  renderAdminPlayers(players); renderTeamMembershipPlayers(allPlayers); renderAdminEvents(events); renderAdminExercises(exercises, players); await renderAdminCompetition(players, events); renderAdminPlanning(players, exercises, routines);
   renderStandings(standings, "#admin-standings-body");
   renderAdminActivity(activity, players, assignmentsByPlayer, exercises, attendanceSummary, progressByPlayer);
   setupActivityFilters(players);
@@ -269,11 +290,41 @@ async function loadAdmin() {
   renderAdminWeekCalendar(events);
   renderEventAttendanceSummary(eventAttendanceSummary);
   renderAdminCharts();
-  renderAdminEventVideos(eventVideos, events);
+  const eventIds = new Set(events.map(event => event.id));
+  renderAdminEventVideos(eventVideos.filter(video => eventIds.has(video.event_id)), events);
   renderAdminGoals(goalsByPlayer, players);
   } finally {
     adminLoadInFlight = false;
   }
+}
+
+function setupTeamSelector(teams) {
+  const select = document.querySelector("#admin-team-selector");
+  if (!select) return;
+  select.innerHTML = teams.map(team => `<option value="${escapeHtml(team.slug)}">${escapeHtml(team.name)}</option>`).join("");
+  if (!activeTeamSlug && teams[0]) activeTeamSlug = teams[0].slug;
+  if (activeTeamSlug && teams.some(team => team.slug === activeTeamSlug)) select.value = activeTeamSlug;
+  activeTeamId = teams.find(team => team.slug === activeTeamSlug)?.id || null;
+  const rotate = document.querySelector("#rotate-team-token");
+  if (rotate && !rotate.dataset.ready) {
+    rotate.dataset.ready = "true";
+    rotate.addEventListener("click", async () => {
+      if (!activeTeamId) return adminToast("Selecciona un equip");
+      const generated = window.crypto?.randomUUID ? `${window.crypto.randomUUID()}${window.crypto.randomUUID()}` : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      try {
+        const saved = await api(`/teams/${activeTeamId}/admin-token`, { method: "PATCH", body: JSON.stringify({ admin_token: generated }) });
+        await navigator.clipboard?.writeText(saved.admin_token);
+        adminToast("Token regenerat i copiat");
+      } catch (_) { adminToast("No s'ha pogut regenerar el token"); }
+    });
+  }
+  if (select.dataset.ready) return;
+  select.dataset.ready = "true";
+  select.addEventListener("change", () => {
+    const url = new URL(window.location.href);
+    if (select.value) url.searchParams.set("team", select.value); else url.searchParams.delete("team");
+    window.location.assign(url.toString());
+  });
 }
 
 function setupAdminForms() {
@@ -299,10 +350,29 @@ function setupAdminForms() {
       event.currentTarget.reset(); await loadAdmin(); adminToast("Jugador creat");
     } catch (_) { showAccessDisabled(); }
   });
+  document.querySelector("#team-membership-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!activeTeamId) { adminToast("Selecciona un equip"); return; }
+    const playerId = new FormData(event.currentTarget).get("player_id");
+    try {
+      await api(`/teams/${activeTeamId}/players/${playerId}`, { method: "PUT" });
+      await loadAdmin(); adminToast("Jugador afegit a l'equip");
+    } catch (_) { adminToast("No s'ha pogut afegir el jugador"); }
+  });
+  document.querySelector("#team-create-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      const created = await api("/teams", { method: "POST", body: JSON.stringify(form) });
+      await navigator.clipboard?.writeText(created.admin_token);
+      event.currentTarget.reset(); await loadAdmin(); adminToast("Equip creat i token copiat");
+    } catch (_) { adminToast("Nom o slug d'equip duplicat, o accés insuficient"); }
+  });
   document.querySelector("#event-form").addEventListener("submit", async event => {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget));
     form.starts_at = new Date(form.starts_at).toISOString();
+    if (activeTeamId) form.team_id = activeTeamId;
     try {
       await api("/events", { method: "POST", body: JSON.stringify(form) });
       event.currentTarget.reset(); await loadAdmin(); adminToast("Esdeveniment creat");
@@ -650,8 +720,12 @@ async function start() {
     if (!jugador || session.role !== "player" || !session.player) return showAccessDisabled();
     state.player = session.player;
     const id = state.player.id;
+    const playerTeams = await api("/teams");
+    if (!activeTeamSlug && playerTeams[0]) activeTeamSlug = playerTeams[0].slug;
+    document.querySelector("#team-label").textContent = playerTeams.find(team => team.slug === activeTeamSlug)?.name || "HC Palau · Equip";
+    const playerTeamQuery = activeTeamSlug ? `?team=${encodeURIComponent(activeTeamSlug)}` : "";
     const [events, attendance, goals, assignments, progress, routines, stats, followUp, mvp, convocations, standings, checkins, weeklyPlan] = await Promise.all([
-      api("/events"), api(`/attendance/${id}`), api(`/goals/player/${id}`),
+      api(`/events${playerTeamQuery}`), api(`/attendance/${id}`), api(`/goals/player/${id}`),
       api(`/exercises/player/${id}`), api(`/exercise-progress/player/${id}`),
       api(`/routines/player/${id}`), api(`/player-stats/player/${id}`),
       api(`/seguiment/player/${id}`), api(`/mvp/player/${id}`),

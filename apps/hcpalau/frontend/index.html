@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffd400">
-  <title>HC Palau · Infantil D</title>
+  <title>HC Palau · Equip</title><!-- compat: HC Palau · Infantil D -->
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -24,7 +24,7 @@
   <div id="portal" class="hidden">
     <header class="topbar">
       <div>
-        <p class="eyebrow">HC Palau · Infantil D</p>
+        <p class="eyebrow" id="team-label">HC Palau · Equip</p>
         <h1 id="welcome">Hola</h1>
       </div>
       <div class="sponsors" aria-label="Patrocinadors"><span class="sponsor ok-valles"><img src="./assets/ok-valles.png" alt="OK Vallès"></span><span class="sponsor bar-vidal"><img src="./assets/bar-vidal.png" alt="Bar Vidal"></span><span class="sponsor fleca-luron"><img src="./assets/fleca-luron.png" alt="Fleca i Pastisseria Lurón"></span><div class="crest"><img src="https://sidgad.cloud/rfep/images/logos_clubes/101_2.png?v=1" alt="Escut Hoquei Club Palau"></div></div>
@@ -94,7 +94,7 @@
 
   <div id="admin-portal" class="hidden">
     <header class="topbar">
-      <div><p class="eyebrow">HC Palau · Infantil D</p><h1>Albert Llorens</h1></div>
+      <div><p class="eyebrow">HC Palau · Gestió d'equips</p><h1>Albert Llorens</h1><div class="admin-team-tools"><label class="admin-team-picker">Equip actiu<select id="admin-team-selector" aria-label="Equip actiu"></select></label><button id="rotate-team-token" class="action" type="button">Regenerar token</button></div></div>
       <div class="sponsors" aria-label="Patrocinadors"><span class="sponsor ok-valles"><img src="./assets/ok-valles.png" alt="OK Vallès"></span><span class="sponsor bar-vidal"><img src="./assets/bar-vidal.png" alt="Bar Vidal"></span><span class="sponsor fleca-luron"><img src="./assets/fleca-luron.png" alt="Fleca i Pastisseria Lurón"></span><div class="crest"><img src="https://sidgad.cloud/rfep/images/logos_clubes/101_2.png?v=1" alt="Escut Hoquei Club Palau"></div></div>
     </header>
     <main class="content admin-grid">
@@ -113,6 +113,17 @@
           <label>Slug<input name="slug" required pattern="[a-z0-9-]+" maxlength="64"></label>
           <label class="wide">Token d'accés<input name="access_token" required minlength="16" maxlength="255"></label>
           <button class="action primary" type="submit">Crear jugador</button>
+        </form>
+        <form id="team-membership-form" class="card form-grid">
+          <h3 class="wide">Afegir jugador a l'equip actiu</h3>
+          <label class="wide">Jugador<select name="player_id" required></select></label>
+          <button class="action primary" type="submit">Afegir a l'equip</button>
+        </form>
+        <form id="team-create-form" class="card form-grid">
+          <h3 class="wide">Crear equip</h3>
+          <label>Nom<input name="name" required maxlength="160" placeholder="Juvenil A"></label>
+          <label>Slug<input name="slug" required pattern="[a-z0-9-]+" maxlength="64" placeholder="juvenil-a"></label>
+          <button class="action primary" type="submit">Crear equip i token</button>
         </form>
         <div id="admin-players" class="card-list"></div>
       </section>

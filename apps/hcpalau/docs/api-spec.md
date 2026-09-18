@@ -19,6 +19,11 @@ Hi ha dos tipus de credencial:
 - **P — jugador**: el `access_token` individual del jugador, sempre que
   `access_active=true`.
 
+També hi ha tokens d'administrador per equip, desats a `team.admin_token`.
+Un token d'equip té rol administrador però només pot consultar la seva
+plantilla i els seus esdeveniments. El token global continua sent el de
+`HCPALAU_ADMIN_TOKEN`.
+
 Un token absent o desconegut retorna `401`. Un token vàlid sense permisos,
 un slug que no li correspon o un jugador amb accés revocat retorna `403`.
 Les comprovacions d'identitat es fan al backend a cada petició.
@@ -35,6 +40,23 @@ mai s'inclou al perfil retornat a un jugador.
 | `GET` | `/players` | A | Llista jugadors, inclosos els tokens necessaris per administrar els enllaços. |
 | `GET` | `/players/{player_id}` | A/P propi | Perfil sense token. |
 | `PATCH` | `/players/{player_id}/access` | A | Activa o revoca l'accés amb `{ "access_active": bool }`. |
+
+## Equips i plantilles
+
+La semilla d'importació segueix l'estructura de
+`docs/multiteam-seed.example.json`. El fitxer real no s'ha de commitear si
+conté tokens de producció.
+
+| Mètode | Ruta | Rol | Comportament |
+|---|---|---|---|
+| `POST` | `/teams` | A global | Crea un equip i genera un token d'administrador si no se'n proporciona. |
+| `GET` | `/teams` | A/P | A global veu tots els equips; A d'equip només el propi; P només els equips assignats. |
+| `PATCH` | `/teams/{team_id}/admin-token` | A global | Crea o rota el token de l'equip. |
+| `GET` | `/teams/{team_id}/players` | A/P autoritzat | Consulta la plantilla de l'equip autoritzat sense tokens. |
+| `PUT` | `/teams/{team_id}/players/{player_id}` | A global | Vincula un jugador; és idempotent. |
+| `DELETE` | `/teams/{team_id}/players/{player_id}` | A global | Desvincula un jugador sense esborrar el seu historial. |
+| `GET` | `/players?team={slug}` | A | Filtra la plantilla de l'equip actiu. |
+| `GET` | `/events?team={slug}` | A/P | Filtra el calendari de l'equip actiu. |
 
 ## Calendari, assistència i convocatòries
 

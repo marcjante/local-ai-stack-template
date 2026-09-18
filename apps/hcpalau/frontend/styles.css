@@ -29,6 +29,10 @@ label.checkbox input { width: auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .topbar { background: linear-gradient(135deg, var(--wine-dark), var(--wine)); color: white; border-bottom: 5px solid var(--gold); padding: 1.5rem max(1.25rem, calc((100vw - 70rem) / 2)); display: flex; justify-content: space-between; align-items: center; gap: 1.25rem; }
+.admin-team-picker { display: inline-flex; align-items: center; gap: .5rem; margin-top: .45rem; color: #ddd; font-size: .8rem; font-weight: 750; }
+.admin-team-picker select { min-width: 12rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: .45rem; background: #fff; font: inherit; }
+.admin-team-tools { display: flex; align-items: end; flex-wrap: wrap; gap: .6rem; }
+.admin-team-tools .action { padding: .45rem .65rem; font-size: .78rem; }
 .topbar h1 { margin: .15rem 0 0; font-size: clamp(1.6rem, 4vw, 2.4rem); }
 .eyebrow { margin: 0; text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; font-weight: 800; color: var(--wine); }
 .topbar .eyebrow { color: var(--gold); }
@@ -195,7 +199,7 @@ video { width: 100%; max-height: 360px; border-radius: .75rem; background: #111;
 @media (max-width: 34rem) {
   .calendar-heading { align-items: flex-start; flex-direction: column; }
   .topbar { align-items: flex-start; flex-direction: column; }
-  .topbar .sponsors { width: 100%; justify-content: flex-start; }
+.topbar .sponsors { width: 100%; justify-content: flex-start; }
   .section-heading { align-items: flex-start; }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .wide { grid-column: auto; }

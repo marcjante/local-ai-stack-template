@@ -13,6 +13,14 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class Team(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    slug: str = Field(index=True, unique=True, max_length=64)
+    name: str = Field(max_length=160)
+    admin_token: Optional[str] = Field(default=None, index=True, unique=True, max_length=255)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class Player(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     slug: str = Field(index=True, unique=True, max_length=64)
@@ -22,12 +30,22 @@ class Player(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class TeamPlayer(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("team_id", "player_id"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class Event(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str = Field(max_length=160)
     starts_at: datetime = Field(index=True)
     event_type: str = Field(max_length=32)
     location: Optional[str] = Field(default=None, max_length=200)
+    team_id: Optional[int] = Field(default=None, foreign_key="team.id", index=True)
     created_at: datetime = Field(default_factory=utc_now)
 
 

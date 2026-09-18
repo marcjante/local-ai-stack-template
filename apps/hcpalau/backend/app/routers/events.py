@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
 
 from ..auth import Principal, get_current_principal, require_admin
 from ..database import get_session
-from ..models import Event
+from ..models import Event, Team
 from ..schemas import EventCreate, EventRead, EventTitleUpdate
 
 
@@ -17,10 +19,12 @@ router = APIRouter(prefix="/events", tags=["events"])
 @router.post("", response_model=EventRead, status_code=status.HTTP_201_CREATED)
 def create_event(
     body: EventCreate,
-    _: Principal = Depends(require_admin),
+    principal: Principal = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Event:
     event = Event.model_validate(body)
+    if principal.team_id is not None:
+        event.team_id = principal.team_id
     session.add(event)
     session.commit()
     session.refresh(event)
@@ -29,10 +33,17 @@ def create_event(
 
 @router.get("", response_model=list[EventRead])
 def list_events(
-    _: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(get_current_principal),
+    team: Optional[str] = Query(default=None, max_length=64),
     session: Session = Depends(get_session),
 ) -> list[Event]:
-    return list(session.exec(select(Event).order_by(Event.starts_at)))
+    statement = select(Event).order_by(Event.starts_at)
+    team_slug = team
+    if principal.role == "admin" and principal.team_id is not None:
+        team_slug = session.get(Team, principal.team_id).slug if session.get(Team, principal.team_id) else None
+    if team_slug:
+        statement = statement.join(Team, Team.id == Event.team_id).where(Team.slug == team_slug)
+    return list(session.exec(statement))
 
 
 @router.patch("/{event_id}", response_model=EventRead)

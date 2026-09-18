@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 
 from .config import get_settings
 from .database import get_session
-from .models import Player
+from .models import Player, Team
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -22,6 +22,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 class Principal:
     role: Literal["admin", "player"]
     player_id: Optional[int] = None
+    team_id: Optional[int] = None
 
 
 def get_current_principal(
@@ -37,6 +38,10 @@ def get_current_principal(
     token = credentials.credentials
     if secrets.compare_digest(token, get_settings().admin_token):
         return Principal(role="admin")
+
+    team = session.exec(select(Team).where(Team.admin_token == token)).first()
+    if team is not None:
+        return Principal(role="admin", team_id=team.id)
 
     player = session.exec(select(Player).where(Player.access_token == token)).first()
     if player is None:

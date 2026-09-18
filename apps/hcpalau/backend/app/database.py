@@ -23,12 +23,22 @@ engine = build_engine()
 
 def create_db_and_tables() -> None:
     SQLModel.metadata.create_all(engine)
-    # Keep existing deployments compatible when a new nullable field is added.
+    # Keep existing SQLite deployments compatible when nullable fields are
+    # added. Fresh databases get these columns through SQLModel metadata;
+    # ALTER is intentionally best-effort for already-created tables.
     with engine.begin() as connection:
         try:
             connection.execute(text("ALTER TABLE attendance ADD COLUMN absence_reason VARCHAR(500)"))
         except Exception:
             # The column already exists (or the table is managed by a migration).
+            pass
+        try:
+            connection.execute(text("ALTER TABLE event ADD COLUMN team_id INTEGER"))
+        except Exception:
+            pass
+        try:
+            connection.execute(text("ALTER TABLE team ADD COLUMN admin_token VARCHAR(255)"))
+        except Exception:
             pass
 
 

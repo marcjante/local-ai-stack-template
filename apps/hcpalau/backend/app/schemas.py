@@ -36,11 +36,38 @@ class SessionRead(SQLModel):
     player: Optional[PlayerRead] = None
 
 
+class TeamRead(SQLModel):
+    id: int
+    slug: str
+    name: str
+
+
+class TeamCreate(SQLModel):
+    slug: str = Field(min_length=1, max_length=64, regex=r"^[a-z0-9-]+$")
+    name: str = Field(min_length=1, max_length=160)
+    admin_token: Optional[str] = Field(default=None, min_length=16, max_length=255)
+
+
+class TeamAdminTokenUpdate(SQLModel):
+    admin_token: str = Field(min_length=16, max_length=255)
+
+
+class TeamAdminRead(TeamRead):
+    admin_token: str
+
+
+class TeamPlayerRead(SQLModel):
+    id: int
+    team_id: int
+    player_id: int
+
+
 class EventCreate(SQLModel):
     title: str = Field(min_length=1, max_length=160)
     starts_at: datetime
     event_type: Literal["training", "match", "meeting"]
     location: Optional[str] = Field(default=None, max_length=200)
+    team_id: Optional[int] = None
 
 
 class EventRead(EventCreate):

@@ -35,6 +35,7 @@ from .routers.routines import router as routines_router
 from .routers.seguiment import router as seguiment_router
 from .routers.session import router as session_router
 from .routers.standings import router as standings_router
+from .routers.teams import router as teams_router
 
 
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
@@ -50,7 +51,7 @@ async def lifespan(_: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(
-        title="HC Palau Infantil D API",
+        title="HC Palau Multi-equip API",
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     application.include_router(routines_router)
     application.include_router(exam_periods_router)
     application.include_router(standings_router)
+    application.include_router(teams_router)
     application.include_router(mvp_router)
     application.include_router(notifications_router)
     application.include_router(seguiment_router)

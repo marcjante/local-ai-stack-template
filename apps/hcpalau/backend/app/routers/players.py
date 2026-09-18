@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..auth import Principal, get_current_principal, require_admin, require_player_access
 from ..database import get_session
-from ..models import Player
+from ..models import Player, Team, TeamPlayer
 from ..schemas import PlayerAccessUpdate, PlayerAdminRead, PlayerCreate, PlayerRead
 
 
@@ -37,10 +39,17 @@ def create_player(
 
 @router.get("", response_model=list[PlayerAdminRead])
 def list_players(
-    _: Principal = Depends(require_admin),
+    principal: Principal = Depends(require_admin),
+    team: Optional[str] = Query(default=None, max_length=64),
     session: Session = Depends(get_session),
 ) -> list[Player]:
-    return list(session.exec(select(Player).order_by(Player.name)))
+    statement = select(Player).order_by(Player.name)
+    team_slug = team
+    if principal.team_id is not None:
+        team_slug = session.get(Team, principal.team_id).slug if session.get(Team, principal.team_id) else None
+    if team_slug:
+        statement = statement.join(TeamPlayer, TeamPlayer.player_id == Player.id).join(Team, Team.id == TeamPlayer.team_id).where(Team.slug == team_slug)
+    return list(session.exec(statement))
 
 
 @router.get("/{player_id}", response_model=PlayerRead)

@@ -148,10 +148,10 @@ def parse_standings_html(
     return candidates
 
 
-def fetch_standings(url: str = SOURCE_URL) -> list[Standing]:
+def fetch_standings(url: str = SOURCE_URL, *, team_name: str = DEFAULT_TEAM, group_name: str = DEFAULT_GROUP) -> list[Standing]:
     request = Request(url, headers={"User-Agent": "HC-Palau-FECAPA-Sync/1.0"})
     with urlopen(request, timeout=20) as response:
-        return parse_standings_html(response.read().decode("utf-8", errors="replace"))
+        return parse_standings_html(response.read().decode("utf-8", errors="replace"), team_name=team_name, group_name=group_name)
 
 
 def fetch_acta_links(url: str = SOURCE_URL) -> list[str]:
@@ -190,6 +190,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=SOURCE_URL)
     parser.add_argument("--season", default="2026-27")
+    parser.add_argument("--team-name", default=DEFAULT_TEAM, help="team name as published by FECAPA")
+    parser.add_argument("--group-name", default=DEFAULT_GROUP, help="competition group as published by FECAPA")
     parser.add_argument("--persist", action="store_true", help="persist standings in the configured database")
     parser.add_argument(
         "--actas-only",
@@ -200,7 +202,7 @@ def main() -> None:
     if args.actas_only:
         payload = fetch_acta_links(args.url)
     else:
-        rows = fetch_standings(args.url)
+        rows = fetch_standings(args.url, team_name=args.team_name, group_name=args.group_name)
         if args.persist:
             from backend.app.database import engine
 

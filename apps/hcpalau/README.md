@@ -1,6 +1,6 @@
-# HC Palau Infantil D
+# HC Palau · Gestió multi-equip
 
-Aplicació independent per a la gestió esportiva de l'equip Infantil D.
+Aplicació independent per a la gestió esportiva de diversos equips.
 Viu sota `apps/hcpalau/` per no barrejar el domini del club amb la
 infraestructura genèrica de Local AI Studio.
 
@@ -59,6 +59,16 @@ Per aplicar les migracions explícitament:
 ```bash
 alembic upgrade head
 ```
+
+Per importar una semilla multi-equip (després de migrar):
+
+```bash
+python -m backend.import_multiteam /ruta/equips_hcpalau_2026_27.json
+```
+
+L'importador és idempotent, conserva els tokens existents i associa l'històric
+que encara no tingui equip a `infantil-d`. Consulta
+`docs/multiteam-seed.example.json` per a l'estructura esperada.
 
 El worker FECAPA de la temporada 2026/27 usa per defecte el grup Infantil OR
 9 i es pot executar així:

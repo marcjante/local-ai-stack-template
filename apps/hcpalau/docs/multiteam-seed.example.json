@@ -1,0 +1,16 @@
+{
+  "teams": [
+    {
+      "slug": "infantil-d",
+      "name": "Infantil D",
+      "admin_token": "replace-with-a-secret-token",
+      "players": [
+        {
+          "slug": "player-slug",
+          "name": "Nom del jugador",
+          "access_token": "replace-with-player-token"
+        }
+      ]
+    }
+  ]
+}
