@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY alembic.ini ./
 COPY backend ./backend
 COPY frontend ./frontend
+COPY equips_hcpalau_2026_27.json ./equips_hcpalau_2026_27.json
 
 EXPOSE 8000
 
