@@ -167,9 +167,20 @@ function renderTeamMembershipPlayers(players) {
 }
 
 function renderAdminEvents(events) {
-  document.querySelector("#admin-events").innerHTML = events.length ? events.map(event => `<article class="card deletable-card">
-    <button class="delete-x" type="button" data-delete="/events/${event.id}" data-label="${escapeHtml(event.title)}" aria-label="Esborrar ${escapeHtml(event.title)}">×</button><p class="meta">${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</p><h4>${escapeHtml(event.title)}</h4><p>${escapeHtml(event.location || "Sense ubicació")}</p>
-  </article>`).join("") : empty("No hi ha esdeveniments.");
+  const groups = new Map();
+  [...events].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)).forEach(event => {
+    const date = new Date(event.starts_at);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(event);
+  });
+  const monthLabel = new Intl.DateTimeFormat("ca-ES", { month: "long", year: "numeric" });
+  document.querySelector("#admin-events").innerHTML = groups.size ? [...groups.entries()].map(([key, monthEvents], index) => `<details class="month-group" ${index === 0 ? "open" : ""}>
+    <summary><span>${escapeHtml(monthLabel.format(new Date(`${key}-01T12:00:00`)))}</span><strong>${monthEvents.length} activitats</strong></summary>
+    <div class="card-list compact month-events">${monthEvents.map(event => `<article class="card deletable-card">
+      <button class="delete-x" type="button" data-delete="/events/${event.id}" data-label="${escapeHtml(event.title)}" aria-label="Esborrar ${escapeHtml(event.title)}">×</button><p class="meta">${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</p><h4>${escapeHtml(event.title)}</h4><p>${escapeHtml(event.location || "Sense ubicació")}</p>
+    </article>`).join("")}</div>
+  </details>`).join("") : empty("No hi ha esdeveniments.");
   document.querySelector("#event-video-form select[name=event_id]").innerHTML = events.map(event => `<option value="${event.id}">${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("");
 }
 

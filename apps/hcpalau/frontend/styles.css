@@ -127,6 +127,13 @@ tbody tr:last-child td { border-bottom: 0; }
 .linked-player h3 { color: var(--success); }
 .linked-badge { display: inline-block; vertical-align: middle; margin-left: .35rem; padding: .2rem .45rem; border-radius: 999px; background: var(--success); color: white; font-size: .68rem; letter-spacing: .02em; }
 .deletable-card { position: relative; padding-right: 3rem; }
+.month-group { margin-bottom: .8rem; background: #ffffffb8; border: 1px solid var(--line); border-radius: 1rem; padding: 0 1rem 1rem; }
+.month-group > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; color: var(--wine); font-size: 1.1rem; font-weight: 850; text-transform: capitalize; }
+.month-group > summary::-webkit-details-marker { display: none; }
+.month-group > summary::after { content: "＋"; font-size: 1.25rem; }
+.month-group[open] > summary::after { content: "−"; }
+.month-group > summary strong { margin-left: auto; color: var(--muted); font-size: .78rem; font-weight: 700; }
+.month-events { margin-top: .15rem; }
 .delete-x { position: absolute; top: .55rem; right: .65rem; width: 2rem; height: 2rem; border: 0; border-radius: 50%; background: #111; color: #ffd400; font-size: 1.35rem; line-height: 1; cursor: pointer; }
 .delete-x:hover { background: #d21f3c; color: white; }
 .delete-x:disabled { opacity: .5; cursor: wait; }
