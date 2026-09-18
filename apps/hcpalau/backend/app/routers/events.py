@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from ..auth import Principal, get_current_principal, require_admin
 from ..database import get_session
-from ..models import Attendance, Convocation, Event, EventVideo, Team
+from ..models import Attendance, Convocation, Event, EventVideo, MvpRecognition, Reinforcement, Team
 from ..schemas import EventCreate, EventRead, EventTeamUpdate, EventTitleUpdate
 
 
@@ -82,6 +82,10 @@ def clear_team_events(
         for row in session.exec(select(Convocation).where(Convocation.event_id == event_id)).all():
             session.delete(row)
         for row in session.exec(select(EventVideo).where(EventVideo.event_id == event_id)).all():
+            session.delete(row)
+        for row in session.exec(select(MvpRecognition).where(MvpRecognition.event_id == event_id)).all():
+            session.delete(row)
+        for row in session.exec(select(Reinforcement).where(Reinforcement.event_id == event_id)).all():
             session.delete(row)
     for event in events:
         session.delete(event)
