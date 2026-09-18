@@ -79,6 +79,10 @@ class EventTitleUpdate(SQLModel):
     title: str = Field(min_length=1, max_length=160)
 
 
+class EventTeamUpdate(SQLModel):
+    team_id: Optional[int] = None
+
+
 class EventVideoRead(SQLModel):
     id: int
     event_id: int

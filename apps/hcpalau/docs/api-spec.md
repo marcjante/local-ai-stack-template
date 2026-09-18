@@ -65,6 +65,7 @@ conté tokens de producció.
 | `POST` | `/events` | A | Crea `training`, `match` o `meeting`. |
 | `GET` | `/events` | A/P | Llista cronològicament els esdeveniments. |
 | `GET` | `/events/{event_id}` | A/P | Retorna un esdeveniment. |
+| `PATCH` | `/events/{event_id}/team` | A global | Assigna o desassigna l'equip d'un esdeveniment històric. |
 | `GET` | `/attendance/{player_id}` | A/P propi | Llista l'assistència individual. |
 | `PATCH` | `/attendance/{event_id}/{player_id}` | A/P propi | Crea o actualitza `{ "attending": bool }`. |
 | `PUT` | `/convocations/{event_id}/{player_id}` | A | Convoca individualment amb `selected`, `reserve` o `not_selected`; només per a partits. |
