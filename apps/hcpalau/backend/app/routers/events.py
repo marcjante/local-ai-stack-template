@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from ..auth import Principal, get_current_principal, require_admin
@@ -74,23 +75,14 @@ def clear_team_events(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the global administrator can clear a team calendar")
     if session.get(Team, team_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-    events = session.exec(select(Event).where(Event.team_id == team_id)).all()
-    event_ids = [event.id for event in events]
-    for event_id in event_ids:
-        for row in session.exec(select(Attendance).where(Attendance.event_id == event_id)).all():
-            session.delete(row)
-        for row in session.exec(select(Convocation).where(Convocation.event_id == event_id)).all():
-            session.delete(row)
-        for row in session.exec(select(EventVideo).where(EventVideo.event_id == event_id)).all():
-            session.delete(row)
-        for row in session.exec(select(MvpRecognition).where(MvpRecognition.event_id == event_id)).all():
-            session.delete(row)
-        for row in session.exec(select(Reinforcement).where(Reinforcement.event_id == event_id)).all():
-            session.delete(row)
-    for event in events:
-        session.delete(event)
+    event_count = session.exec(select(Event).where(Event.team_id == team_id)).all()
+    # Use SQL deletes in dependency order: this also works on PostgreSQL,
+    # where an ORM flush may otherwise try to remove the parent first.
+    for table in ("attendance", "convocation", "eventvideo", "mvprecognition", "reinforcement"):
+        session.execute(text(f"DELETE FROM {table} WHERE event_id IN (SELECT id FROM event WHERE team_id = :team_id)"), {"team_id": team_id})
+    session.execute(text("DELETE FROM event WHERE team_id = :team_id"), {"team_id": team_id})
     session.commit()
-    return {"events_deleted": len(events), "team_id": team_id}
+    return {"events_deleted": len(event_count), "team_id": team_id}
 
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
