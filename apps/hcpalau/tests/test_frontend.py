@@ -2,7 +2,7 @@ def test_player_frontend_is_served(client) -> None:
     response = client.get("/app/")
 
     assert response.status_code == 200
-    assert "HC Palau · Infantil D" in response.text
+    assert "HC Palau · Equip" in response.text
     assert "Accés desactivat" in response.text
 
 

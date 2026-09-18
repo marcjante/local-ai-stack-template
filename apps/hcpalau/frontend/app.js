@@ -4,7 +4,9 @@ const params = new URLSearchParams(window.location.search);
 const jugador = params.get("jugador") || "";
 // La pestaña de l'entrenador és una entrada directa de l'equip. Els enllaços
 // de jugador continuen exigint el seu token individual.
-const token = params.get("token") || (jugador ? "" : "3304e472fc3051b2dd90d292a1e2e50f4f625d65941b7db7764c60ad653779fb");
+// Admin and player links must carry their token explicitly; never ship a
+// production administrator token inside the public JavaScript bundle.
+const token = params.get("token") || "";
 let activeTeamSlug = params.get("team") || "";
 let activeTeamId = null;
 const API_BASE = (params.get("api") || window.location.origin).replace(/\/$/, "");

@@ -17,12 +17,12 @@ from .app.models import Event, Exercise, ExerciseAssignment, Goal, Player, Routi
 
 
 PLAYERS = (
-    ("biel", "Biel", "biel-demo-token-2026"),
-    ("pau", "Pau", "pau-demo-token-2026"),
-    ("arnau", "Arnau", "arnau-demo-token-2026"),
-    ("marti", "Martí", "marti-demo-token-2026"),
-    ("pol", "Pol", "pol-demo-token-2026"),
-    ("nil", "Nil", "nil-demo-token-2026"),
+    ("biel", "Biel", "biel-local-token-2026"),
+    ("pau", "Pau", "pau-local-token-2026"),
+    ("arnau", "Arnau", "arnau-local-token-2026"),
+    ("marti", "Martí", "marti-local-token-2026"),
+    ("pol", "Pol", "pol-local-token-2026"),
+    ("nil", "Nil", "nil-local-token-2026"),
 )
 EXERCISES = (
     "Frenada en paral·lel", "Creuats endavant", "Creuats enrere",
@@ -111,7 +111,7 @@ def main() -> None:
         summary = populate(session)
     print("HC Palau demo seeded:", summary)
     print("Admin URL: http://127.0.0.1:8000/app/?token=dev-admin-token")
-    print("Biel URL:  http://127.0.0.1:8000/app/?jugador=biel&token=biel-demo-token-2026")
+    print("Biel URL:  http://127.0.0.1:8000/app/?jugador=biel&token=biel-local-token-2026")
 
 
 if __name__ == "__main__":
