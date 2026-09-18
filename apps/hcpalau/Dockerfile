@@ -12,6 +12,7 @@ COPY alembic.ini ./
 COPY backend ./backend
 COPY frontend ./frontend
 COPY equips_hcpalau_2026_27.json ./equips_hcpalau_2026_27.json
+COPY equips_hcpalau_2026_27.csv ./equips_hcpalau_2026_27.csv
 
 EXPOSE 8000
 

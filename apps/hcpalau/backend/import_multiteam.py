@@ -9,6 +9,7 @@ Run it after applying the multi-team Alembic migration.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
 import secrets
@@ -20,6 +21,42 @@ from sqlmodel import Session, SQLModel, select
 from .app.config import get_settings
 from .app.database import build_engine
 from .app.models import Event, Player, Team, TeamPlayer
+
+
+# The first PDF-derived seed used longer competition labels.  Keep those
+# slugs as aliases so importing the authoritative CSV never creates duplicate
+# teams or breaks links already distributed to coaches and players.
+LEGACY_TEAM_SLUGS = {
+    "prebe-iniciacio": "prebenjami-d-plata",
+    "prebe-b": "prebenjami-b-plata",
+    "prebe-a": "prebenjami-a-or",
+    "benjami-d": "benjami-d-plata",
+    "benjami-c": "benjami-c-or",
+    "benjami-b": "benjami-b-or",
+    "benjami-a": "benjami-a-or",
+    "alevi-d": "alevi-d-plata",
+    "alevi-c": "alevi-c-or",
+    "alevi-b": "alevi-b-or",
+    "alevi-a": "alevi-a-s55c",
+    "infantil-e": "infantil-e-plata",
+    "infantil-c": "infantil-c-or",
+    "infantil-b": "infantil-b-or",
+    "infantil-a": "infantil-a-ssp",
+    "juvenil-c": "juvenil-c-plata",
+    "juvenil-b": "juvenil-b-ssp",
+    "juvenil-a": "juvenil-a-ssp",
+    "junior": "junior-ssp",
+    "fem11-b": "fem-11-b-plata",
+    "fem11-a": "fem-11-a-or",
+    "fem13-b": "fem-13-b-or",
+    "fem13-a": "fem-13-a-or",
+    "fem15-b": "fem-15-b-or",
+    "fem15-a": "fem-15-a-or",
+    "fem17-b": "fem-17-b-pss",
+    "fem17-a": "fem-17-a-sss",
+    "fem19-b": "fem-19-b-pss",
+    "fem19-a": "fem-19-a-pss",
+}
 
 
 def _slug(value: str) -> str:
@@ -40,7 +77,32 @@ def _players(team: dict[str, Any]) -> list[Any]:
     return rows if isinstance(rows, list) else []
 
 
-def import_seed(session: Session, payload: Any) -> dict[str, int]:
+def csv_seed(path: Path) -> dict[str, Any]:
+    """Convert the club roster CSV into the importer's normalised payload."""
+    grouped: dict[str, dict[str, Any]] = {}
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            raw_slug = str(row.get("equip_id") or row.get("equip") or "").strip()
+            player_name = str(row.get("jugador") or "").strip()
+            if not raw_slug or not player_name:
+                continue
+            team = grouped.setdefault(raw_slug, {
+                "slug": raw_slug,
+                "name": str(row.get("equip") or raw_slug).strip(),
+                "players": [],
+            })
+            player = {"name": player_name}
+            role = str(row.get("rol") or "").strip()
+            if role:
+                player["role"] = role
+            note = str(row.get("nota") or "").strip()
+            if note:
+                player["note"] = note
+            team["players"].append(player)
+    return {"season": "2026-27", "teams": list(grouped.values())}
+
+
+def import_seed(session: Session, payload: Any, *, attach_legacy: bool = True) -> dict[str, int]:
     teams_created = players_created = memberships_created = 0
     imported_team_ids: list[int] = []
     for row in _teams(payload):
@@ -49,6 +111,10 @@ def import_seed(session: Session, payload: Any) -> dict[str, int]:
         if not name:
             raise ValueError("Every team needs name/nom")
         team = session.exec(select(Team).where(Team.slug == slug)).first()
+        if team is None:
+            legacy_slug = LEGACY_TEAM_SLUGS.get(slug)
+            if legacy_slug:
+                team = session.exec(select(Team).where(Team.slug == legacy_slug)).first()
         if team is None:
             team = Team(slug=slug, name=name, admin_token=row.get("admin_token") or row.get("token_admin") or secrets.token_urlsafe(24))
             session.add(team)
@@ -81,7 +147,7 @@ def import_seed(session: Session, payload: Any) -> dict[str, int]:
                 session.add(TeamPlayer(team_id=team.id, player_id=player.id))
                 memberships_created += 1
 
-    legacy = session.exec(select(Team).where(Team.slug == "infantil-d")).first()
+    legacy = session.exec(select(Team).where(Team.slug == "infantil-d")).first() if attach_legacy else None
     if legacy is not None:
         existing_players = session.exec(select(Player)).all()
         for player in existing_players:
@@ -100,12 +166,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Import HC Palau multi-team seed")
     parser.add_argument("seed", type=Path)
     args = parser.parse_args()
-    payload = json.loads(args.seed.read_text(encoding="utf-8"))
+    is_csv = args.seed.suffix.lower() == ".csv"
+    if is_csv:
+        payload = csv_seed(args.seed)
+    else:
+        payload = json.loads(args.seed.read_text(encoding="utf-8"))
     settings = get_settings()
     engine = build_engine(settings.database_url)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
-        print(import_seed(session, payload))
+        print(import_seed(session, payload, attach_legacy=not is_csv))
 
 
 if __name__ == "__main__":

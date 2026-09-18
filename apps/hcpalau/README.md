@@ -66,6 +66,17 @@ Per importar una semilla multi-equip (després de migrar):
 python -m backend.import_multiteam /ruta/equips_hcpalau_2026_27.json
 ```
 
+La plantilla real de la temporada también se puede importar directamente
+desde el CSV del club:
+
+```bash
+python -m backend.import_multiteam /ruta/equips_hcpalau_2026_27.csv
+```
+
+El CSV contiene los 37 equipos y 250 jugadores. La importación conserva los
+slugs y tokens ya existentes, evita duplicados y añade cada jugador a todos
+los equipos donde aparece.
+
 L'importador és idempotent, conserva els tokens existents i associa l'històric
 que encara no tingui equip a `infantil-d`. Consulta
 `docs/multiteam-seed.example.json` per a l'estructura esperada.
