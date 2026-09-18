@@ -26,6 +26,12 @@ label.checkbox input { width: auto; }
 .state-card { max-width: 28rem; background: var(--card); border: 1px solid var(--line); border-radius: 1.5rem; padding: 2.5rem; box-shadow: 0 1rem 3rem #4d14231a; }
 .state-icon { font-size: 2.5rem; }
 .spinner { width: 2.5rem; height: 2.5rem; border: .25rem solid #dccbd1; border-top-color: var(--wine); border-radius: 50%; animation: spin .8s linear infinite; }
+.spinner.small { width: 1.35rem; height: 1.35rem; border-width: .18rem; }
+.busy-indicator { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; gap: .65rem; flex-wrap: wrap; align-content: center; background: #fffbeaE8; color: var(--ink); }
+.busy-indicator.hidden { display: none; }
+.busy-indicator strong, .busy-indicator span:last-child { flex-basis: 100%; text-align: center; }
+.busy-indicator strong { font-size: 1.2rem; }
+body.is-busy { cursor: wait; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .topbar { background: linear-gradient(135deg, var(--wine-dark), var(--wine)); color: white; border-bottom: 5px solid var(--gold); padding: 1.5rem max(1.25rem, calc((100vw - 70rem) / 2)); display: flex; justify-content: space-between; align-items: center; gap: 1.25rem; }

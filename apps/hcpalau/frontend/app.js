@@ -26,21 +26,51 @@ let adminLoadInFlight = false;
 let adminActivityItems = [];
 let adminExportRows = [];
 let calendarWeekOffset = 0;
+let busyRequests = 0;
 const dateFormat = new Intl.DateTimeFormat("ca-ES", { dateStyle: "medium", timeStyle: "short" });
 
+function setBusy(busy) {
+  busyRequests = Math.max(0, busyRequests + (busy ? 1 : -1));
+  const active = busyRequests > 0;
+  document.body.classList.toggle("is-busy", active);
+  const indicator = document.querySelector("#busy-indicator");
+  if (indicator) indicator.classList.toggle("hidden", !active);
+  document.querySelectorAll("button, input, select, textarea").forEach(control => {
+    if (active) {
+      if (!control.disabled) control.dataset.wasEnabled = "true";
+      control.disabled = true;
+      if (control.tagName === "BUTTON" && !control.dataset.busyLabel) {
+        control.dataset.busyLabel = control.textContent;
+        control.textContent = "Espera…";
+      }
+    } else if (control.dataset.wasEnabled === "true") {
+      control.disabled = false;
+      delete control.dataset.wasEnabled;
+      if (control.dataset.busyLabel) {
+        control.textContent = control.dataset.busyLabel;
+        delete control.dataset.busyLabel;
+      }
+    }
+  });
+}
+
 async function api(path, options = {}) {
+  const { busy: forceBusy = false, ...fetchOptions } = options;
+  const requestBusy = forceBusy || String(fetchOptions.method || "GET").toUpperCase() !== "GET";
+  if (requestBusy) setBusy(true);
   const headers = new Headers(options.headers || {});
-  headers.set("Authorization", `Bearer ${token}`);
-  if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
-  let response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  } catch (_) {
-    throw new Error("access");
+    headers.set("Authorization", `Bearer ${token}`);
+    if (fetchOptions.body && !(fetchOptions.body instanceof FormData)) headers.set("Content-Type", "application/json");
+    let response;
+    try { response = await fetch(`${API_BASE}${path}`, { ...fetchOptions, headers }); }
+    catch (_) { throw new Error("access"); }
+    if (!response.ok) throw new Error("access");
+    if (response.status === 204) return null;
+    return response.json();
+  } finally {
+    if (requestBusy) setBusy(false);
   }
-  if (!response.ok) throw new Error("access");
-  if (response.status === 204) return null;
-  return response.json();
 }
 
 function escapeHtml(value) {
