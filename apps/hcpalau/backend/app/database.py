@@ -28,16 +28,17 @@ def create_db_and_tables() -> None:
     # ALTER is intentionally best-effort for already-created tables.
     with engine.begin() as connection:
         try:
-            connection.execute(text("ALTER TABLE attendance ADD COLUMN absence_reason VARCHAR(500)"))
+            connection.execute(text("ALTER TABLE attendance ADD COLUMN IF NOT EXISTS absence_reason VARCHAR(500)"))
         except Exception:
             # The column already exists (or the table is managed by a migration).
             pass
         try:
-            connection.execute(text("ALTER TABLE event ADD COLUMN team_id INTEGER"))
+            connection.execute(text("ALTER TABLE event ADD COLUMN IF NOT EXISTS team_id INTEGER"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_event_team_id ON event (team_id)"))
         except Exception:
             pass
         try:
-            connection.execute(text("ALTER TABLE team ADD COLUMN admin_token VARCHAR(255)"))
+            connection.execute(text("ALTER TABLE team ADD COLUMN IF NOT EXISTS admin_token VARCHAR(255)"))
         except Exception:
             pass
 
