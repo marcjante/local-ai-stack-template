@@ -620,7 +620,14 @@ function renderEventVideos(videosByEvent, events) {
 
 function renderEvents(events) {
   const target = document.querySelector("#events-list");
-  target.innerHTML = events.length ? events.map(event => {
+  const groups = new Map();
+  events.forEach(event => {
+    const date = new Date(event.starts_at);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(event);
+  });
+  const renderCards = monthEvents => monthEvents.map(event => {
     const attendance = state.attendance.get(event.id);
     const convocation = state.convocations.get(event.id);
     const team = state.teamConvocations.get(event.id) || [];
@@ -643,7 +650,9 @@ function renderEvents(events) {
         <button class="action" data-attendance-save="${event.id}">Desar motiu</button>
       </div>
     </article>`;
-  }).join("") : empty("No hi ha esdeveniments programats.");
+  }).join("");
+  const monthLabel = new Intl.DateTimeFormat("ca-ES", { month: "long", year: "numeric" });
+  target.innerHTML = groups.size ? [...groups.entries()].map(([key, monthEvents], index) => `<details class="month-group" ${index === 0 ? "open" : ""}><summary><span>${escapeHtml(monthLabel.format(new Date(`${key}-01T12:00:00`)))}</span><strong>${monthEvents.length} activitats</strong></summary><div class="month-events">${renderCards(monthEvents)}</div></details>`).join("") : empty("No hi ha esdeveniments programats.");
   const absences = events.filter(event => state.attendance.get(event.id)?.attending === false);
   if (absences.length) target.insertAdjacentHTML("afterbegin", `<div class="absence-alert" role="alert"><strong>Avís d'assistència</strong><span>${absences.map(event => `${escapeHtml(event.title)}: ${escapeHtml(state.attendance.get(event.id).absence_reason || "No assistiré")}`).join(" · ")}</span></div>`);
 
