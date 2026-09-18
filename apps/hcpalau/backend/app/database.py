@@ -41,6 +41,10 @@ def create_db_and_tables() -> None:
             connection.execute(text("ALTER TABLE team ADD COLUMN IF NOT EXISTS admin_token VARCHAR(255)"))
         except Exception:
             pass
+        try:
+            connection.execute(text("ALTER TABLE player ADD COLUMN IF NOT EXISTS linked BOOLEAN NOT NULL DEFAULT FALSE"))
+        except Exception:
+            pass
 
 
 def get_session():

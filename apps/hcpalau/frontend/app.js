@@ -101,8 +101,8 @@ function playerLink(player) {
 
 function renderAdminPlayers(players) {
   const target = document.querySelector("#admin-players");
-  target.innerHTML = players.length ? players.map(player => `<article class="card player-card">
-    <div><p class="meta">${player.access_active ? "Accés actiu" : "Accés desactivat"}</p><h3>${escapeHtml(player.name)}</h3><p>@${escapeHtml(player.slug)}</p></div>
+  target.innerHTML = players.length ? players.map(player => `<article class="card player-card ${player.linked ? "linked-player" : ""}">
+    <div><p class="meta">${player.access_active ? "Accés actiu" : "Accés desactivat"}</p><h3>${escapeHtml(player.name)}${player.linked ? ' <span class="linked-badge">Vinculada</span>' : ""}</h3><p>@${escapeHtml(player.slug)}</p></div>
     <div class="actions">
       <a class="action link" href="${escapeHtml(playerLink(player))}" target="_blank" rel="noopener">Obrir enllaç</a>
       <button class="action" type="button" data-copy-link="${escapeHtml(playerLink(player))}">Copiar enllaç</button>

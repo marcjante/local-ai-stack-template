@@ -76,6 +76,8 @@ def update_player_access(
     if player is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")
     player.access_active = body.access_active
+    if body.linked is not None:
+        player.linked = body.linked
     session.add(player)
     session.commit()
     session.refresh(player)

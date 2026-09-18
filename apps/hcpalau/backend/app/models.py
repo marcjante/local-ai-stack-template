@@ -27,6 +27,7 @@ class Player(SQLModel, table=True):
     name: str = Field(max_length=120)
     access_token: str = Field(index=True, unique=True, max_length=255)
     access_active: bool = True
+    linked: bool = False
     created_at: datetime = Field(default_factory=utc_now)
 
 

@@ -91,7 +91,7 @@ def csv_seed(path: Path) -> dict[str, Any]:
                 "name": str(row.get("equip") or raw_slug).strip(),
                 "players": [],
             })
-            player = {"name": player_name}
+            player = {"name": player_name, "linked": str(row.get("vinculat") or "").strip().lower() in {"si", "sí", "yes", "true", "1"}}
             role = str(row.get("rol") or "").strip()
             if role:
                 player["role"] = role
@@ -127,21 +127,25 @@ def import_seed(session: Session, payload: Any, *, attach_legacy: bool = True) -
         imported_team_ids.append(team.id)
         for raw_player in _players(row):
             if isinstance(raw_player, str):
-                player_name, player_slug, token = raw_player, _slug(raw_player), None
+                player_name, player_slug, token, linked = raw_player, _slug(raw_player), None, False
             elif isinstance(raw_player, dict):
                 player_name = str(raw_player.get("name") or raw_player.get("nom") or "").strip()
                 player_slug = _slug(str(raw_player.get("slug") or raw_player.get("id") or player_name))
                 token = raw_player.get("access_token") or raw_player.get("token")
+                linked = bool(raw_player.get("linked", False))
             else:
                 continue
             if not player_name:
                 raise ValueError(f"Player without name in team {slug}")
             player = session.exec(select(Player).where(Player.slug == player_slug)).first()
             if player is None:
-                player = Player(slug=player_slug, name=player_name, access_token=str(token or secrets.token_urlsafe(24)))
+                player = Player(slug=player_slug, name=player_name, access_token=str(token or secrets.token_urlsafe(24)), linked=linked)
                 session.add(player)
                 session.flush()
                 players_created += 1
+            elif linked and not player.linked:
+                player.linked = True
+                session.add(player)
             membership = session.exec(select(TeamPlayer).where(TeamPlayer.team_id == team.id, TeamPlayer.player_id == player.id)).first()
             if membership is None:
                 session.add(TeamPlayer(team_id=team.id, player_id=player.id))

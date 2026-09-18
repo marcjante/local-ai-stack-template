@@ -13,6 +13,7 @@ class PlayerCreate(SQLModel):
     slug: str = Field(min_length=1, max_length=64, regex=r"^[a-z0-9-]+$")
     name: str = Field(min_length=1, max_length=120)
     access_token: str = Field(min_length=16, max_length=255)
+    linked: bool = False
 
 
 class PlayerRead(SQLModel):
@@ -20,6 +21,7 @@ class PlayerRead(SQLModel):
     slug: str
     name: str
     access_active: bool
+    linked: bool
     created_at: datetime
 
 
@@ -29,6 +31,7 @@ class PlayerAdminRead(PlayerRead):
 
 class PlayerAccessUpdate(SQLModel):
     access_active: bool
+    linked: Optional[bool] = None
 
 
 class SessionRead(SQLModel):

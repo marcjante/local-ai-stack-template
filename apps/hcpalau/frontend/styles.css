@@ -117,6 +117,9 @@ tbody tr:last-child td { border-bottom: 0; }
 .exercise-option input { width: auto; }
 .standings-form { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
 .player-card { display: grid; gap: .7rem; }
+.player-card.linked-player { border-color: var(--success); box-shadow: 0 0 0 .12rem #247a5233, 0 .35rem 1.2rem #247a5214; }
+.linked-player h3 { color: var(--success); }
+.linked-badge { display: inline-block; vertical-align: middle; margin-left: .35rem; padding: .2rem .45rem; border-radius: 999px; background: var(--success); color: white; font-size: .68rem; letter-spacing: .02em; }
 .deletable-card { position: relative; padding-right: 3rem; }
 .delete-x { position: absolute; top: .55rem; right: .65rem; width: 2rem; height: 2rem; border: 0; border-radius: 50%; background: #111; color: #ffd400; font-size: 1.35rem; line-height: 1; cursor: pointer; }
 .delete-x:hover { background: #d21f3c; color: white; }
