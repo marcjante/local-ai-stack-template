@@ -181,7 +181,15 @@ function renderAdminEvents(events) {
       <button class="delete-x" type="button" data-delete="/events/${event.id}" data-label="${escapeHtml(event.title)}" aria-label="Esborrar ${escapeHtml(event.title)}">×</button><p class="meta">${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</p><h4>${escapeHtml(event.title)}</h4><p>${escapeHtml(event.location || "Sense ubicació")}</p>
     </article>`).join("")}</div>
   </details>`).join("") : empty("No hi ha esdeveniments.");
-  document.querySelector("#event-video-form select[name=event_id]").innerHTML = events.map(event => `<option value="${event.id}">${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("");
+  const videoSelect = document.querySelector("#event-video-form select[name=event_id]");
+  if (videoSelect) {
+    videoSelect.innerHTML = events.length
+      ? events.map((event, index) => `<option value="${event.id}"${index === 0 ? " selected" : ""}>${escapeHtml(event.title)} · ${escapeHtml(dateFormat.format(new Date(event.starts_at)))}</option>`).join("")
+      : `<option value="" selected disabled>No hi ha partits ni entrenaments per aquest equip</option>`;
+    videoSelect.disabled = !events.length;
+    const submit = document.querySelector("#event-video-form button[type=submit]");
+    if (submit) submit.disabled = !events.length;
+  }
 }
 
 function renderAdminGoals(goalsByPlayer, players) {
